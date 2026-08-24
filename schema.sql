@@ -28,6 +28,24 @@ create table if not exists purchases(
   pay_method text default 'cash',
   note text
 );
+create table if not exists coffee_types(
+  id text primary key,
+  created_at timestamptz default now(),
+  name text not null,
+  alert_min numeric default 0,
+  active boolean default true
+);
+create table if not exists transformations(
+  id text primary key,
+  created_at timestamptz default now(),
+  date date not null,
+  roasted_used numeric not null,
+  lines jsonb default '[]',
+  operator text,
+  note text,
+  source text,
+  status text default 'validated'
+);
 create table if not exists roastings(
   id text primary key,
   created_at timestamptz default now(),
@@ -236,6 +254,8 @@ alter table pay_slips add column if not exists cout_employeur numeric default 0;
 alter table settings        enable row level security;
 alter table products        enable row level security;
 alter table purchases       enable row level security;
+alter table coffee_types     enable row level security;
+alter table transformations  enable row level security;
 alter table roastings       enable row level security;
 alter table productions     enable row level security;
 alter table adjustments     enable row level security;
@@ -257,7 +277,7 @@ alter table assets          enable row level security;
 do $$
 declare t text;
 begin
-  foreach t in array array['settings','products','purchases','roastings','productions','adjustments','sales_agents','sales','cash_entries','employees','advances','pay_runs','pay_slips','pending_entries','form_tokens','packaging_items','packaging_entries','email_log','assets']
+  foreach t in array array['settings','products','coffee_types','purchases','roastings','transformations','productions','adjustments','sales_agents','sales','cash_entries','employees','advances','pay_runs','pay_slips','pending_entries','form_tokens','packaging_items','packaging_entries','email_log','assets']
   loop
     execute format('drop policy if exists "gestionnaire_full" on %I;', t);
     execute format('create policy "gestionnaire_full" on %I for all to authenticated using (true) with check (true);', t);

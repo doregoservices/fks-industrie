@@ -253,6 +253,15 @@ CNPS retraite 6,30 % / 7,70 % (plafond 3 375 000 F) ; prestations familiales 5 %
 - **Quota localStorage** : repli mémoire + avertissement unique en console.
 - **Preuves « années illimitées »** : tests/tyears.js (18/18) et tests/treview.js (40/40) — mois 1998→2100, amortissement 96 mois, ventes datées 2031, moisUI sans bornes.
 
+## 🆕 Étape Machines de transformation (V5)
+**Processus corrigé** : achat vert → torréfaction → **machines de transformation** → conditionnement. Les types de produits se forment à l'étape machines.
+- **2 nouvelles tables** (21 au total, incluses dans la sauvegarde/restauration et le RLS) : `coffee_types` (nom, alerte, actif) et `transformations` (date, roasted_used, lines [{type_id,name,qty}], opérateur, statut).
+- **Écran Production** : onglet **⚙️ Transformation** (kg torréfiés consommés, kg obtenus par type, perte + rendement machines en direct, garde-fous entrée ≥ sortie et stock) ; le stock de torréfié est déduit des transformations ; l'onglet Conditionnement consomme les **types** selon la recette de chaque produit (plus de pesée) et bloque si stock insuffisant.
+- **Écran Produits** : carte « Types de café transformés » (CRUD + stock fait/conditionné/restant) ; chaque produit porte sa recette (`type_id`, `type_kg`, `recipes`) ; les conditionnements héritent déduction automatique `type_lines` arrondis à 3 décimales.
+- **Formulaires terrain** : 3ᵉ onglet Machines (fonctionne hors-ligne, passe par `pending_entries` → `applyPending` branche `transformation`).
+- **Exploitation & exports** : coût semi-fini = CMP vert × torréfié consommé ÷ kg obtenus ; coût des produits finis = vert + semi-finis + emballages ; `produitsTot = ventes + ΔPF + Δsemi-finis` ; annexe stocks et feuille « Mouv. stocks » enrichies (torréfié SI/SF + un bloc par type) ; ajustements niveau `type` pris en compte ; KPI « Rendement machines » dans l'historique ; dashboard affiche les kg à transformer.
+- **Compatibilité** : si aucun type n'est défini, l'app fonctionne exactement comme avant (conditionnement direct torréfié → produits). Tests : `tests/ttrans.js` (9/9) + régressions complètes.
+
 ## 🆕 Passe UX (mobile-first)
 
 - `NAV_ITEMS`/`BTAB_IC`/`BTAB_PRI` + `bottomHtml()` : barre d'onglets fixe ≤768px (4 écrans du rôle + Menu), nav haute masquée sur mobile, safe-area iOS, toast remonté, main padding 128px, impression sans barre.

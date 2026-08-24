@@ -62,14 +62,14 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 
 1. **Matin** : ouvrez **À valider** (badge rouge) → examinez les saisies de la veille → **Valider** ou **Rejeter**.
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
-3. **Production** : écran **Production** (ou le lien atelier) → kg verts → kg torréfiés ; kg torréfiés → unités produites. *Pertes et rendements réels se calculent seuls — aucun barème fixe nécessaire.*
+3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (marquées « OD », elles ne polluent pas Sage).
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
 
 ### Exports Excel (écran **Exports**)
 | Export | Contenu |
 |---|---|
-| **Point complet des stocks** | Café vert, torréfié, produits finis, **emballages**, rendements, mouvements détaillés |
+| **Point complet des stocks** | Café vert, torréfié, **types de café transformés**, produits finis, **emballages**, rendements (torréfaction + machines), mouvements détaillés |
 | **Journal de caisse — Sage 100** | Feuille `SAGE` équilibrée Débit/Crédit (`Date/Journal/Compte/Libellé/Débit/Crédit`) + feuille `OD Mobile Money` séparée + détail. Fourni en **.xlsx et .csv** |
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
@@ -82,12 +82,20 @@ Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne
 
 ### 📈 Compte d'exploitation par grandes masses
 Chaque mois, l'écran **Exploitation** présente :
-- **Produits** : ventes + variation de stock de produits finis
+- **Produits** : ventes + variation de stock de produits finis + variation du café transformé (semi-finis des machines)
 - **Charges — 5 grandes masses** : ① achats consommés (café vert, emballages) ② services externes (loyer, transport, carburant, électricité, entretien, divers) ③ charges de personnel (bruts + CNPS patronal + CMU + FDFP) ④ impôts et taxes (patente, TOM…) ⑤ dotations aux amortissements
 - **Résultat d'exploitation → − impôt sur les bénéfices (taux paramétrable, 25 % par défaut) → résultat net**
 - **CAF / cash-flow** = résultat net + dotations (non décaissées)
 - **Flux de trésorerie réel du mois** (encaissements − décaissements, OD direction isolées) et écart résultat ↔ trésorerie expliqué (créances, stocks, dotations)
 - Chaque catégorie de dépense est **affectable à sa grande masse** dans Réglages → Correspondance des comptes.
+
+### ⚙️ Machines de transformation (types de café)
+Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin, assembleuse…) produisent les différents **types de café** :
+1. **Réglages d'abord** : écran **Produits** → carte *Types de café transformés* → créez vos types (« Moulu premium », « Moulu standard », « Grains (non moulu) »…).
+2. **Sur chaque produit fini**, choisissez le **type** et les **kg consommés par unité** (ex. sachet 1 kg → 1 kg de « Moulu premium » ; 500 g → 0,5 kg).
+3. **Chaque jour/lot** : onglet **⚙️ Transformation** → kg torréfiés consommés par les machines + kg **réellement obtenus** par type. Perte et rendement machines s'affichent instantanément.
+4. Le **conditionnement** n'a plus rien à peser : il déduit les types selon les recettes (et refuse si le stock d'un type est insuffisant) ; les **ajustements** acceptent aussi le niveau « Café transformé » pour les recomptes.
+5. L'**exploitation** valorise ces semi-finis au coût moyen du vert consommé et leur variation entre dans les produits du mois ; l'export « Mouv. stocks » détaille vert → torréfié → types → produits finis.
 
 ### 🏷️ Emballages
 Écran **Emballages** : articles (sachets, étiquettes, cartons…), achats (avec sortie de caisse automatique optionnelle), sorties/pertes, valeur du stock au coût moyen. Sur chaque **produit**, définissez la **nomenclature** (ex. 1 sachet + 1 étiquette par unité) : chaque conditionnement consomme alors les emballages **automatiquement**.

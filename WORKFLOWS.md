@@ -33,7 +33,7 @@
 | Acteur | Reçoit | Saisit | Contraintes |
 |---|---|---|---|
 | **Commerciale** | Lien personnel + QR (écran Commerciaux) | Son point du jour : produits, quantités, mode de paiement (espèces / MoMo / **crédit + nom du client**) | 1 point/jour ; rattrapage **7 jours** en arrière ; fonctionne **hors réseau** (envoi auto au retour du réseau) |
-| **Chef production** | Lien production + QR (écran Réglages → liens) | **Torréfaction** : kg vert entrés, kg torréfiés sortis (perte/rendement calculés) · **Conditionnement** : quantités par produit fini | Emballages déduits automatiquement selon la nomenclature |
+| **Chef production** | Lien production + QR (écran Réglages → liens) | **Torréfaction** : kg vert entrés, kg torréfiés sortis (perte/rendement calculés) · **Machines / transformation** : kg torréfiés consommés → kg obtenus par type de café · **Conditionnement** : quantités par produit fini | Types de café et emballages déduits automatiquement selon les recettes et nomenclatures |
 | **Caissier** | Lien caisse + QR | Entrées / sorties Espèces ou MoMo, catégorie, libellé | Les opérations avec la direction partent en **OD** (non imputables) |
 
 - Un lien peut être **révoqué ou désactivé** à tout moment (plus personne ne saisit avec).
@@ -49,17 +49,20 @@
 ## Niveau 3 — Le processus physique de l'usine
 
 ```
-ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFIÉ ──▶ CONDITIONNEMENT ──▶ PRODUITS FINIS
-(fournisseur,   (kg, coût      (rendement       (kg)              (par produit,       (5 produits,
- kg, prix F)     moyen pondéré)  RÉEL mesuré)                        emballages auto)   extensibles)
-                                                                                          │
-                                                                            VENTES (comptant / crédit)
-                                                                                          │
-                                                                              IMPAYÉS → Encaisser → Caisse
+ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFIÉ ──▶ MACHINES DE TRANSFORMATION ──▶ CONDITIONNEMENT ──▶ PRODUITS FINIS
+(fournisseur,   (kg, coût      (rendement       (kg)              (broyage, mouture…) :      (par produit,       (5 produits,
+ kg, prix F)     moyen pondéré)  RÉEL mesuré)                       TYPES de café obtenus      recette auto :      extensibles)
+                                                                  (moulu premium, grains…)   type + emballages)
+                                                                                                                          │
+                                                                                                            VENTES (comptant / crédit)
+                                                                                                                          │
+                                                                                                              IMPAYÉS → Encaisser → Caisse
 ```
 
 - **Achats consommés** du mois = stock initial + achats − stock final (coût moyen pondéré) : pas de charges faussées par le stock dormant.
-- **Rendement réel** de torréfaction calculé à chaque lot (pas de barème théorique).
+- **Rendement réel** de torréfaction **ET de transformation machines** calculés à chaque lot (pas de barème théorique).
+- **Étape machines (transformation)** : après torréfaction, les machines (broyeur, moulin…) transforment le torréfié en **types de café** (« Moulu premium », « Grains »…), pesés réellement — c'est là que les types de produits se forment. Chaque **produit fini** déclare ensuite sa **recette** (ex. café 1 kg = 1 kg de « Moulu premium ») : le conditionnement déduit automatiquement les types et les emballages, sans nouvelle pesée.
+- Les stocks de semi-finis (types) sont valorisés au coût moyen du vert consommé par les machines et leur variation alimente les produits du mois.
 - Alertes automatiques quand un produit fini ou un emballage passe sous son seuil.
 - **Immobilisations** : registre + dotation mensuelle automatique (linéaire, plafonnée, soldée seule).
 
@@ -68,7 +71,7 @@ ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFI
 - Deux caisses suivies en parallèle : **Espèces** et **Mobile Money**.
 - Chaque sortie est **catégorisée** (transport, électricité, loyer, impôts…) → mappée vers les **grandes masses** de l'exploitation et les **comptes Sage** (n° pré-remplissables dans Réglages).
 - **Opérations avec la direction (MoMo)** : tracées mais **non imputables** → feuille **OD** séparée, prête pour virement interne (58x) — jamais dans le journal Sage.
-- **Exports** (écran Exports) : journal **SAGE** `Date|Journal|Compte|Libellé|Débit|Crédit` équilibré (CSV point-virgule, il ne reste que les n° de comptes), mouvements de stocks, ventes, paie, exploitation, **sauvegarde complète 19 tables** (+ restauration).
+- **Exports** (écran Exports) : journal **SAGE** `Date|Journal|Compte|Libellé|Débit|Crédit` équilibré (CSV point-virgule, il ne reste que les n° de comptes), mouvements de stocks, ventes, paie, exploitation, **sauvegarde complète 21 tables** (+ restauration).
 
 ## Niveau 5 — La paie (mensuelle, taux officiels CI)
 

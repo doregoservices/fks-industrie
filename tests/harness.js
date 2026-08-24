@@ -10,7 +10,7 @@ global.document={getElementById(id){if(!__els[id])__els[id]=mkEl(id);return __el
  querySelector(sel){if(sel&&sel.charAt(0)==='#')return this.getElementById(sel.slice(1));return mkEl('q');},querySelectorAll(){return[]},createElement(){return mkEl('c')},
  addEventListener(){},body:mkEl('body'),head:mkEl('head'),documentElement:mkEl('html'),title:''};
 global.addEventListener=()=>{};global.removeEventListener=()=>{};global.dispatchEvent=()=>{};global.postMessage=()=>{};global.window=global;global.self=global;
-global.location={hash:'',href:'https://fks.example/'};
+global.location={hash:'',href:'https://fks.example/',protocol:'https:'};
 global.navigator={userAgent:'node',language:'fr',onLine:true,serviceWorker:{register(){return Promise.resolve({});}}};
 global.localStorage={_d:{},getItem(k){return this._d[k]??null},setItem(k,v){this._d[k]=String(v)},removeItem(k){delete this._d[k]},clear(){this._d={}}};
 global.sessionStorage={_d:{},getItem(){return null},setItem(){},removeItem(){}};
