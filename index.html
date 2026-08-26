@@ -29,7 +29,7 @@ small,.mut{color:var(--mut)}
 .brand .sub{font-size:10px;font-weight:600;color:var(--mut);display:block;margin-top:-3px}
 .spacer{flex:1}
 .userchip{font-size:13px;color:var(--mut);white-space:nowrap;display:flex;align-items:center;gap:8px}
-.nav{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px;max-width:1060px;margin:0 auto;scrollbar-width:none}
+.nav{display:flex;gap:6px;flex-wrap:wrap;overflow-x:auto;padding:0 14px 10px;max-width:1060px;margin:0 auto;scrollbar-width:none}
 .nav::-webkit-scrollbar{display:none}
 .nav a{flex-shrink:0;text-decoration:none;color:var(--mut);font-size:13.5px;font-weight:600;padding:7px 13px;border-radius:99px;background:#f4ece2;border:1px solid transparent;white-space:nowrap}
 .nav a.on{background:var(--pri);color:#fff}
@@ -1710,7 +1710,7 @@ async function prodAdjTab(){
   const adj=(await DB.list('adjustments')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
-  return '<div class="alert al-info">Ajustez un stock en cas de casse, don, perte, retour client ou erreur d\'inventaire.</div>'
+  return '<div class="alert al-info">💡 <b>Stocks de départ</b> : c\'est ici — choisissez le niveau, une quantité <b>positive</b>, motif « Stock initial ». Sinon : casse, don, perte ou erreur d\'inventaire → quantité négative (positive pour un retour).</div>'
   +'<div class="row">'+fld('Date','<input id="jD" type="date" value="'+todayISO()+'">')
   +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="type">Café transformé — semi-fini (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
   +'<div class="field" id="jP" style="display:none"><span>Produit</span><select>'+prods.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select></div>'
