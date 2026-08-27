@@ -63,6 +63,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 1. **Matin** : ouvrez **À valider** (badge rouge) → examinez les saisies de la veille → **Valider** ou **Rejeter**.
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
 3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
+3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, types de café, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (marquées « OD », elles ne polluent pas Sage).
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
 
@@ -88,6 +89,7 @@ Chaque mois, l'écran **Exploitation** présente :
 - **CAF / cash-flow** = résultat net + dotations (non décaissées)
 - **Flux de trésorerie réel du mois** (encaissements − décaissements, OD direction isolées) et écart résultat ↔ trésorerie expliqué (créances, stocks, dotations)
 - Chaque catégorie de dépense est **affectable à sa grande masse** dans Réglages → Correspondance des comptes.
+- **🔬 Analyse par produit (comptabilité analytique)** : pour chaque produit — quantités vendues, CA, coût unitaire (recette café au coût semi-fini + emballages au CMP), coût vendu, **marge brute et % marge**, part du CA. Incluse dans le rapport mensuel Excel (feuille « Analyse produits ») et l'email au boss.
 
 ### ⚙️ Machines de transformation (types de café)
 Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin, assembleuse…) produisent les différents **types de café** :

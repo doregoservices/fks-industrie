@@ -1264,7 +1264,7 @@ async function seedDemo(){
 }
 
 /* ================= ROUTEUR ================= */
-const ROLE_SCREENS={caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes','produits'],production:['dashboard','achats','production','produits','emballages','immobilisations']};
+const ROLE_SCREENS={caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes','produits'],production:['dashboard','achats','production','stocks','produits','emballages','immobilisations']};
 const ROLE_LBL={manager:'Manager',caissier:'Caissier',commercial:'Chef commercial',production:'Chef production'};
 function roleAllowed(r){const a=ROLE_SCREENS[(S.user&&S.user.role)||'manager'];return !a||a.indexOf(r)>=0;}
 function roleHome(){const a=ROLE_SCREENS[(S.user&&S.user.role)||'manager'];return (a&&a[0])||'dashboard';}
@@ -1282,7 +1282,7 @@ async function render(){
   if(S.user&&!roleAllowed(S.route))S.route=roleHome();
   if(S.route==='f')return scForm(decodeURIComponent(parts[1]||''));
   if(S.route==='login'||!S.user)return scLogin();
-  const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets};
+  const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets};
   const app=$('#app');
   app.innerHTML=topHtml()+'<main id="main"><div class="empty">Chargement…</div></main>'+bottomHtml();
   try{await(routes[S.route]||scDashboard)();}catch(e){console.error(e);$('#main').innerHTML='<div class="card"><div class="alert al-bad">Erreur : '+esc(e.message)+'</div><button class="btn sec" onclick="render()">Réessayer</button></div>';}
@@ -1290,7 +1290,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages']];
+const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
 function bottomHtml(){
@@ -1377,6 +1377,7 @@ async function scDashboard(){
    +(roleAllowed('achats')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="App.achatForm()">🛁 Acheter du vert</button>':'')
    +(roleAllowed('caisse')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="App.cashForm()">💰 Caisse</button>':'')
    +(roleAllowed('production')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="go(\'production\')">🏭 Produire</button>':'')
+   +(roleAllowed('stocks')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="go(\'stocks\')">📦 Stocks</button>':'')
    +'</div>'
    +'<div class="grid g2" style="margin-top:12px">'
    +'<div class="kpi"><div class="t">Stock café vert</div><div class="v">'+num2(st.greenStock)+' kg</div><div class="s">Achats '+num2(st.greenIn)+' kg · torréfié '+num2(st.greenUsed)+' kg</div></div>'
@@ -1550,6 +1551,37 @@ App.achatSave=async()=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT'
   closeModal();toast('Achat enregistré','ok');render();};
 
 /* ================= PRODUCTION ================= */
+async function scStocks(){
+  const st=await computeStats();
+  const [prod,sales,adj,prods,ctypesRaw,pur]=await Promise.all([DB.list('productions'),DB.list('sales'),DB.list('adjustments'),DB.list('products'),DB.list('coffee_types'),DB.list('purchases')]);
+  const purAmt=pur.reduce((a,p)=>a+Number(p.amount||0),0);
+  const cmpV=st.greenIn>0?purAmt/st.greenIn:0;
+  const units={};
+  prod.forEach(p=>(p.lines||[]).forEach(l=>{const k=l.product_id||l.name;units[k]=(units[k]||0)+Number(l.qty||0);}));
+  sales.forEach(x=>(x.lines||[]).forEach(l=>{const k=l.product_id||l.name;units[k]=(units[k]||0)-Number(l.qty||0);}));
+  adj.filter(a=>a.level==='product').forEach(a=>{const k=a.product_id||a.name;units[k]=(units[k]||0)+Number(a.qty||0);});
+  const ctypes=ctypesRaw.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const tmap={};(st.types||[]).forEach(t=>tmap[t.id]=t);
+  const alertCount=(st.packaging||[]).filter(x=>x.qty<=Number(x.alert_min||0)).length+(prods.filter(p=>p.active&&p.alert_min&&(units[p.id]||units[p.name]||0)<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
+  $('#main').innerHTML='<div class="card"><h2>📦 Tous les stocks</h2>'
+  +'<div class="grid g3" style="margin-bottom:12px">'
+  +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
+  +'<div class="kpi"><div class="t">Café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div></div>'
+  +'<div class="kpi"><div class="t">Alertes seuils</div><div class="v" style="color:'+(alertCount?'var(--bad)':'var(--ok)')+'">'+alertCount+'</div><div class="s">'+(alertCount?'sous le seuil → voir ⚠️ ci-dessous':'tout est au-dessus des seuils ✓')+'</div></div></div>'
+  +((st.types||[]).length?'<h3>☕ Café transformé (après machines)</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
+   +st.types.map(t=>{const tc=ctypes.filter(c=>c.id===t.id)[0]||{};const low=t.active&&tc.alert_min&&t.stock<=Number(tc.alert_min);
+     return '<tr'+(t.active?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(tc.alert_min)+' kg</span>':'')+'</td><td class="r">'+num2(t.made)+' kg</td><td class="r">'+num2(t.used)+' kg</td><td class="r"><b>'+num2(t.stock)+' kg</b></td></tr>';}).join('')
+   +'</tbody></table></div>':'')
+  +'<h3>📦 Produits finis</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Produits</th><th class="r">Vendus</th><th class="r">Stock</th></tr></thead><tbody>'
+  +prods.filter(p=>p.active!==false).map(p=>{const u=units[p.id]||units[p.name]||0;const low=p.active&&p.alert_min&&u<=Number(p.alert_min);
+    const soldN=sales.reduce((a,x)=>a+((x.lines||[]).filter(l=>l.product_id===p.id||l.name===p.name).reduce((b,l)=>b+Number(l.qty||0),0)),0);
+    return '<tr><td><b>'+esc(p.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(p.alert_min)+'</span>':'')+'</td><td class="r">'+num2(u+soldN)+'</td><td class="r">'+num(soldN)+'</td><td class="r"><b>'+num(u)+'</b></td></tr>';}).join('')
+  +'</tbody></table></div>'
+  +'<h3>🏷️ Emballages</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Stock</th><th class="r">Valeur</th></tr></thead><tbody>'
+  +(st.packaging||[]).map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.qty<=Number(x.alert_min||0)?' <span class="badge b-no">⚠️ seuil '+num(x.alert_min)+'</span>':'')+'</td><td class="r">'+num2(x.in)+'</td><td class="r">'+num2(x.out)+'</td><td class="r"><b>'+num2(x.qty)+'</b></td><td class="r">'+money(x.value)+'</td></tr>').join('')
+  +'</tbody></table><div class="help" style="margin-top:6px">Valeur totale emballages : <b>'+money(st.packagingValue||0)+'</b> · Café vert : <b>'+money(st.greenStock*cmpV)+'</b> au coût moyen de '+money(cmpV)+' F/kg'+(cmpV?'':' (aucun achat encore)')+'</div></div>'
+  +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn" onclick="App.expStocks()">📥 Point complet des stocks (Excel)</button><button class="btn sec" onclick="go(\'production\')">🏭 Saisir une production</button></div></div>';
+}
 async function scProduction(){
   const tab=S.tab.production||'roast';
   const m=$('#main');
@@ -2922,7 +2954,20 @@ async function computeIncome(period){
   const creances=sales.filter(s2=>inM(s2.date)&&s2.pay_mode==='credit'&&s2.credit_status==='due').reduce((a,x)=>a+Number(x.total||0),0);
   const roastIn=roast.filter(r=>inM(r.date)).reduce((a,r)=>a+Number(r.green_in||0),0);
   const roastOut=roast.filter(r=>inM(r.date)).reduce((a,r)=>a+Number(r.roasted_out||0),0);
-  return{period:period,ventes:ventes,dPF:dPF,produitsTot:produitsTot,
+  /* --- ANALYTIQUE PAR PRODUIT --- */
+  const roastCostKg=roastOut>0?cmpVertAt(end)*roastIn/roastOut:cmpVertAt(end);
+  const unitCostOf=p=>{let c=0;
+    if((p.recipes||[]).length)(p.recipes).forEach(r=>c+=Number(r.qty||0)*semiCost);
+    else c+=Number(p.weight_g||0)/1000*roastCostKg;
+    (p.packaging||[]).forEach(b=>c+=Number(b.qty||0)*cmpPkAt(b.pack_id,end));
+    return c;};
+  const soldBy={};
+  sales.filter(s3=>inM(s3.date)).forEach(s3=>(s3.lines||[]).forEach(l=>{const k=l.product_id||l.name;if(!soldBy[k])soldBy[k]={name:l.name,qty:0,ca:0};soldBy[k].qty+=Number(l.qty||0);soldBy[k].ca+=Number(l.qty||0)*Number(l.price||0);}));
+  const prodAnalysis=prods.map(p=>{const sl=soldBy[p.id]||soldBy[p.name]||{qty:0,ca:0};
+    const cu=unitCostOf(p);const cost=sl.qty*cu;
+    return{name:p.name,qty:sl.qty,ca:Math.round(sl.ca),cu:cu,cost:Math.round(cost),marge:Math.round(sl.ca-cost)};});
+  const paTot=prodAnalysis.reduce((a,r)=>({q:a.q+r.qty,ca:a.ca+r.ca,cost:a.cost+r.cost,m:a.m+r.marge}),{q:0,ca:0,cost:0,m:0});
+  return{period:period,ventes:ventes,dPF:dPF,produitsTot:produitsTot,prodAnalysis:prodAnalysis,paTot:paTot,
     achVertAmt:achVertAmt,achVertKg:achVertKg,achEmb:achEmb,
     gSI:gSI,gSF:gSF,gSIv:gSIv,gSFv:gSFv,cmpVertSI:cmpVertAt(prevStart),cmpVertSF:cmpVertAt(end),consVert:consVert,
     embSIv:embSIv,embSFv:embSFv,consEmb:consEmb,
@@ -3038,6 +3083,13 @@ function monthlySheets(inc){
     ['CAFÉ TRANSFORMÉ (semi-finis, kg)','Stock initial','Obtenu (machines)','Conditionné','Stock final']];
   (inc.typeRows||[]).forEach(r=>mv.push([r.name,{v:r.si||0,__style:1},{v:r.mMade||0,__style:1},{v:r.mUsed||0,__style:1},{v:r.sf||0,__style:1}]));
   sh.push({name:'Mouv. stocks',rows:mv,widths:[30,16,16,20,16]});
+  const pa=(inc.prodAnalysis||[]);
+  if(pa.length){const paT=inc.paTot||{q:0,ca:0,cost:0,m:0};
+    const rows=[['ANALYSE PAR PRODUIT — '+monthLabel(inc.period)],[],
+      ['Produit','Qté vendue','CA (FCFA)','Coût/unité','Coût vendu','Marge brute','% marge','Part du CA']];
+    pa.forEach(r=>rows.push([r.name,r.qty,r.ca,Math.round(r.cu),r.cost,r.marge,r.ca>0?Math.round(100*r.marge/r.ca)+' %':'',inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'']));
+    rows.push([{v:'TOTAL',__style:1},{v:paT.q,__style:1},{v:paT.ca,__style:1},'',{v:paT.cost,__style:1},{v:paT.m,__style:1},{v:paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'',__style:1},{v:'100 %',__style:1}]);
+    sh.push({name:'Analyse produits',rows:rows,widths:[26,11,14,12,14,14,9,10]});}
   return sh;
 }
 async function monthlyWorkbook(inc){
@@ -3143,6 +3195,7 @@ async function monthlyDue(){
 async function scExploitation(){
   const period=S.expPeriod||monthISO();
   const inc=await computeIncome(period);
+  const paT=inc.paTot||{q:0,ca:0,cost:0,m:0};
   const logs=(await DB.list('email_log')).sort((a,b)=>(b.sent_at||b.created_at||'').localeCompare(a.sent_at||a.created_at||'')).slice(0,12);
   const sent=logs.some(l=>l.kind==='monthly'&&l.ref===period&&l.status==='sent');
   const Li=(lbl,v)=>'<tr style="opacity:.6"><td>'+lbl+'</td><td class="r">'+money(v)+'</td></tr>';
@@ -3200,6 +3253,10 @@ async function scExploitation(){
   +L('Flux net de trésorerie réel du mois',inc.fluxTreso,inc.fluxTreso<0)
   +L('Écart expliqué : créances en cours '+money(inc.creances)+' · dotations '+money(inc.dotations)+' · stocks '+money((inc.achVertAmt+inc.achEmb)-(inc.consVert+inc.consEmb)),0)
   +'</tbody></table>'
+  +((inc.prodAnalysis||[]).length?'<div class="hr"></div><h3>🔬 Analyse par produit — marge brute</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Qté vendue</th><th class="r">CA</th><th class="r">Coût/unité</th><th class="r">Coût vendu</th><th class="r">Marge brute</th><th class="r">% marge</th><th class="r">Part CA</th></tr></thead><tbody>'
+   +inc.prodAnalysis.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td class="r">'+num(r.qty)+'</td><td class="r">'+money(r.ca)+'</td><td class="r">'+money(Math.round(r.cu))+'</td><td class="r">'+money(r.cost)+'</td><td class="r" style="color:'+(r.marge>=0?'var(--ok)':'var(--bad)')+'"><b>'+money(r.marge)+'</b></td><td class="r">'+(r.ca>0?Math.round(100*r.marge/r.ca)+' %':'—')+'</td><td class="r">'+(inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'—')+'</td></tr>').join('')
+   +'<tr class="tot"><td>TOTAL</td><td class="r">'+num(paT.q)+'</td><td class="r">'+money(paT.ca)+'</td><td></td><td class="r">'+money(paT.cost)+'</td><td class="r"><b>'+money(paT.m)+'</b></td><td class="r">'+(paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'—')+'</td><td class="r">100 %</td></tr></tbody></table>'
+   +'<div class="help" style="margin-top:6px">Coût unitaire = recette café (kg de type × coût du semi-fini) + emballages au coût moyen. Produit sans recette : café torréfié valorisé au coût moyen du vert corrigé du rendement du mois.</div>':'')
   +'<div class="hr"></div>'
   +histBlock
   +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="App.expExploitation()">📥 Télécharger (Excel)</button>'

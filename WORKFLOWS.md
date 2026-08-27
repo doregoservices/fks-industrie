@@ -63,6 +63,7 @@ ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFI
 - **Rendement réel** de torréfaction **ET de transformation machines** calculés à chaque lot (pas de barème théorique).
 - **Étape machines (transformation)** : après torréfaction, les machines (broyeur, moulin…) transforment le torréfié en **types de café** (« Moulu premium », « Grains »…), pesés réellement — c'est là que les types de produits se forment. Chaque **produit fini** déclare ensuite sa **recette** (ex. café 1 kg = 1 kg de « Moulu premium ») : le conditionnement déduit automatiquement les types et les emballages, sans nouvelle pesée.
 - Les stocks de semi-finis (types) sont valorisés au coût moyen du vert consommé par les machines et leur variation alimente les produits du mois.
+- **Écran 📦 Stocks** : vue consolidée temps réel (vert, torréfié, types, produits finis, emballages + valeurs + alertes seuils).
 - Alertes automatiques quand un produit fini ou un emballage passe sous son seuil.
 - **Immobilisations** : registre + dotation mensuelle automatique (linéaire, plafonnée, soldée seule).
 
@@ -71,6 +72,7 @@ ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFI
 - Deux caisses suivies en parallèle : **Espèces** et **Mobile Money**.
 - Chaque sortie est **catégorisée** (transport, électricité, loyer, impôts…) → mappée vers les **grandes masses** de l'exploitation et les **comptes Sage** (n° pré-remplissables dans Réglages).
 - **Opérations avec la direction (MoMo)** : tracées mais **non imputables** → feuille **OD** séparée, prête pour virement interne (58x) — jamais dans le journal Sage.
+- **Rapport mensuel enrichi** : le classeur Excel (et l'email au boss) comprend la **feuille « Analyse produits »** — comptabilité analytique : qtés vendues, CA, coût unitaire (recette café + emballages au CMP), coût vendu, **marge brute**, % marge, part du CA.
 - **Exports** (écran Exports) : journal **SAGE** `Date|Journal|Compte|Libellé|Débit|Crédit` équilibré (CSV point-virgule, il ne reste que les n° de comptes), mouvements de stocks, ventes, paie, exploitation, **sauvegarde complète 21 tables** (+ restauration).
 
 ## Niveau 5 — La paie (mensuelle, taux officiels CI)

@@ -253,6 +253,11 @@ CNPS retraite 6,30 % / 7,70 % (plafond 3 375 000 F) ; prestations familiales 5 %
 - **Quota localStorage** : repli mémoire + avertissement unique en console.
 - **Preuves « années illimitées »** : tests/tyears.js (18/18) et tests/treview.js (40/40) — mois 1998→2100, amortissement 96 mois, ventes datées 2031, moisUI sans bornes.
 
+## 🆕 V6 — Écran Stocks consolidé + comptabilité analytique par produit
+- **Écran « 📦 Stocks »** (route `stocks`, nav + bouton rapide accueil) : café vert (kg + valorisation CMP), torréfié, types de café (machines/conditionné/restant + seuils), produits finis (produits/vendus/stock + alertes), emballages (entrées/sorties/stock/valeur + total). Visible : manager + chef production.
+- **Analytique par produit** (`inc.prodAnalysis` + `inc.paTot`) : qté vendue, CA, coût unitaire = recette (`recipes×semiCost`) ou torréfié valorisé (CMP vert ÷ rendement du mois) + emballages au CMP ; coût vendu, marge brute, % marge, part du CA. Affichée dans l'écran Exploitation et ajoutée au **classeur mensuel** (feuille « Analyse produits », ligne TOTAL) → email au boss. Aucun calcul existant modifié.
+- Tests : `tests/tanalyt.js` (8/8).
+
 ## 🆕 Étape Machines de transformation (V5)
 **Processus corrigé** : achat vert → torréfaction → **machines de transformation** → conditionnement. Les types de produits se forment à l'étape machines.
 - **2 nouvelles tables** (21 au total, incluses dans la sauvegarde/restauration et le RLS) : `coffee_types` (nom, alerte, actif) et `transformations` (date, roasted_used, lines [{type_id,name,qty}], opérateur, statut).
