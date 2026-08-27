@@ -2481,7 +2481,7 @@ async function scParametres(){
   +'</tbody></table></div>'
   +'<div class="row" style="margin-top:8px">'
   +fld('Nom','<input id="uName" placeholder="Ex. Awa">')
-  +fld('Rôle','<select id="uRole">'+Object.keys(ROLE_LBL).filter(r=>r!=='manager').map(r=>'<option value="'+r+'">'+ROLE_LBL[r]+'</option>').join('')+'</select>')
+  +fld('Rôle','<select id="uRole">'+Object.keys(ROLE_LBL).filter(r=>r!=='manager').map(r=>'<option value="'+r+'">'+ROLE_LBL[r]+'</option>').join('')+'<option value="manager">Manager (tout voir)</option>'+'</select>')
   +fld('Code PIN','<input id="uPin" inputmode="numeric" placeholder="ex. 2468">')
   +(CFG.mode==='supabase'?fld('E-mail (optionnel)','<input id="uMail" placeholder="awa@fks.com">'):'')
   +'<button class="btn sm" style="align-self:flex-end" onclick="App.userAdd()">＋ Créer le compte</button></div>'
