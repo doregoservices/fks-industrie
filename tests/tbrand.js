@@ -45,5 +45,14 @@ if(!saved)throw new Error('aucun xlsx généré');
 const fs=require('fs');
 fs.writeFileSync('/tmp/test-brand.xlsx',Buffer.from(await saved.arrayBuffer()));
 console.log('✓ Point complet des stocks généré ('+fs.statSync('/tmp/test-brand.xlsx').size+' octets) — validation XML à suivre');
-console.log('TBRAND: 4/4 OK');
+/* ===== 5. Écran Support & À propos (ordinateur + mobile) ===== */
+location.hash='#/apropos';S.route='apropos';await render();
+const ap=$('#main').innerHTML;
+if(!ap.includes('07 17 57 95 56'))throw new Error('écran support sans contact');
+if(!ap.includes('Doregoservices'))throw new Error('écran support sans marque');
+if(!ap.includes('data:image/png;base64,'))throw new Error('écran support sans logo');
+if(!NAV_ITEMS.filter(i=>i[0]==='apropos').length)throw new Error('nav support absent');
+console.log('✓ Écran 🛟 Support dans le menu (ordinateur ET mobile) : logo + contact cliquable Doregoservices');
+
+console.log('TBRAND: 5/5 OK');
 })().catch(e=>{console.error('ÉCHEC TBRAND:',e.message);process.exit(1);});
