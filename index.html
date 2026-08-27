@@ -1440,6 +1440,7 @@ async function scValidation(){
 }
 App.pendOK=async id=>{
   const p=(await DB.list('pending_entries',{eq:{id:id}}))[0];if(!p)return;
+  if(p.status!=='pending')return toast('Saisie déjà traitée','bad');
   try{
     await applyPending(p);
     await DB.update('pending_entries',id,{status:'validated',reviewed_at:nowISO()});
@@ -2183,6 +2184,7 @@ function zipStore(files){
 function colRef(i){let s='';i++;while(i>0){i--;s=String.fromCharCode(65+(i%26))+s;i=Math.floor(i/26);}return s;}
 const HD=v=>({v:v,__style:1});
 function sheetXml(rows,widths){
+  rows=(rows||[]).map(r=>Array.isArray(r)?r:(r===null||r===undefined?[]:[r]));
   const maxCols=Math.max.apply(null,[6].concat(widths&&widths.length?[widths.length]:[],rows.map(r=>r?r.length:0)));
   let headerIdx=-1;
   for(let ri=0;ri<rows.length;ri++){const r=rows[ri]||[];const ne=r.filter(c=>c!==null&&c!==undefined&&c!=='');
