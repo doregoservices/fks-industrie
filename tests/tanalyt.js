@@ -77,6 +77,7 @@ console.log('✓ Compteurs : Café grain 1 kg → produits '+madeGrain+' · vend
 await scExploitation();
 html=$('#main').innerHTML;
 if(!html.includes('Analyse par produit'))throw new Error('section analytique absente');
+if(!html.includes('Coût de revient complet'))throw new Error('section quote-part absente');
 if(!html.includes('Part CA'))throw new Error('colonnes analytique incomplètes');
 if(html.includes('NaN'))throw new Error('NaN en exploitation');
 console.log('✓ Écran Exploitation : section « Analyse par produit — marge brute » avec totaux et %');
@@ -100,5 +101,20 @@ eq(inc.produitsTot,inc.ventes+inc.dPF+inc.dSemi,'total produits');
 eq(inc.resultat,inc.produitsTot-inc.chargesTot,'résultat');
 console.log('✓ Rien de cassé : charges, produits (avec semi-finis) et résultat identiques à avant');
 
-console.log('TANALYT: 8/8 OK');
+/* ===== 9. COÛT DE REVIENT COMPLET : quote-part des charges indirectes ===== */
+const inc3=await computeIncome(per);
+const prodAll=await DB.list('productions');
+const unitsM=prodAll.filter(p=>p.date>=per+'-01'&&p.date<monthAdd(per,1)+'-01').reduce((a,p)=>a+((p.lines||[]).reduce((b,l)=>b+Number(l.qty||0),0)),0);
+const indM=(inc3.personnel.total||0)+(inc3.servicesTot||0)+(inc3.impotsTot||0)+(inc3.dotations||0);
+eq(inc3.unitsProduced,unitsM,'unités produites');
+eq(inc3.indirectTot,indM,'charges indirectes');
+eq(inc3.qpUnit,unitsM>0?indM/unitsM:0,'quote-part/u');
+inc3.prodAnalysis.forEach(r=>{eq(r.cuFull,r.cu+inc3.qpUnit,'cuFull '+r.name);eq(r.margeNette,r.ca-Math.round(r.qty*r.cuFull),'margeNette '+r.name);});
+eq(inc3.paTot.mN,inc3.prodAnalysis.reduce((a,r)=>a+r.margeNette,0),'Σ marge nette');
+const ash2=sheets.filter(x=>x.name==='Analyse produits')[0];
+const txt2=JSON.stringify(ash2.rows);
+if(!txt2.includes('Quote-part/u')||!txt2.includes('Marge nette'))throw new Error('feuille Excel sans colonnes quote-part');
+console.log('✓ Coût de revient complet : quote-part '+money(Math.round(inc3.qpUnit))+' /u ('+money(indM)+' de charges indirectes ÷ '+num(unitsM)+' u produites) · marges nettes par produit et dans l\'Excel');
+
+console.log('TANALYT: 9/9 OK');
 })().catch(e=>{console.error('ÉCHEC TANALYT:',e.message);process.exit(1);});

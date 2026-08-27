@@ -91,6 +91,7 @@ Chaque mois, l'écran **Exploitation** présente :
 - Chaque catégorie de dépense est **affectable à sa grande masse** dans Réglages → Correspondance des comptes.
 - **🔬 Analyse par produit (comptabilité analytique)** : pour chaque produit — quantités vendues, CA, coût unitaire (recette café au coût semi-fini + emballages au CMP), coût vendu, **marge brute et % marge**, part du CA. Incluse dans le rapport mensuel Excel (feuille « Analyse produits ») et l'email au boss.
 
+- **💰 Coût de revient complet** : les charges indirectes du mois (personnel, services, impôts, amortissements) sont réparties au prorata des unités produites → chaque produit affiche son coût de revient complet et sa **marge nette** (en plus de la marge brute matière), à l'écran et dans la feuille Excel « Analyse produits ».
 ### ⚙️ Machines de transformation (types de café)
 Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin, assembleuse…) produisent les différents **types de café** :
 1. **Réglages d'abord** : écran **Produits** → carte *Types de café transformés* → créez vos types (« Moulu premium », « Moulu standard », « Grains (non moulu) »…).

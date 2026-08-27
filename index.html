@@ -2970,7 +2970,16 @@ async function computeIncome(period){
     const cu=unitCostOf(p);const cost=sl.qty*cu;
     return{name:p.name,qty:sl.qty,ca:Math.round(sl.ca),cu:cu,cost:Math.round(cost),marge:Math.round(sl.ca-cost)};});
   const paTot=prodAnalysis.reduce((a,r)=>({q:a.q+r.qty,ca:a.ca+r.ca,cost:a.cost+r.cost,m:a.m+r.marge}),{q:0,ca:0,cost:0,m:0});
+  /* --- COÛT DE REVIENT COMPLET : quote-part des charges indirectes --- */
+  const producedBy={};prod.filter(x=>inM(x.date)).forEach(x=>(x.lines||[]).forEach(l=>{const k=l.product_id||l.name;producedBy[k]=(producedBy[k]||0)+Number(l.qty||0);}));
+  const unitsProduced=Object.keys(producedBy).reduce((a,k)=>a+producedBy[k],0);
+  const indirectTot=(personnel.total||0)+(servicesTot||0)+(impotsTot||0)+(dotations||0);
+  const qpUnit=unitsProduced>0?indirectTot/unitsProduced:0;
+  prodAnalysis.forEach(r=>{r.qp=qpUnit;r.cuFull=r.cu+qpUnit;r.costFull=Math.round(r.qty*r.cuFull);r.margeNette=r.ca-r.costFull;});
+  paTot.costFull=prodAnalysis.reduce((a,r)=>a+r.costFull,0);
+  paTot.mN=prodAnalysis.reduce((a,r)=>a+r.margeNette,0);
   return{period:period,ventes:ventes,dPF:dPF,produitsTot:produitsTot,prodAnalysis:prodAnalysis,paTot:paTot,
+    indirectTot:indirectTot,qpUnit:qpUnit,unitsProduced:unitsProduced,
     achVertAmt:achVertAmt,achVertKg:achVertKg,achEmb:achEmb,
     gSI:gSI,gSF:gSF,gSIv:gSIv,gSFv:gSFv,cmpVertSI:cmpVertAt(prevStart),cmpVertSF:cmpVertAt(end),consVert:consVert,
     embSIv:embSIv,embSFv:embSFv,consEmb:consEmb,
@@ -3089,10 +3098,10 @@ function monthlySheets(inc){
   const pa=(inc.prodAnalysis||[]);
   if(pa.length){const paT=inc.paTot||{q:0,ca:0,cost:0,m:0};
     const rows=[['ANALYSE PAR PRODUIT — '+monthLabel(inc.period)],[],
-      ['Produit','Qté vendue','CA (FCFA)','Coût/unité','Coût vendu','Marge brute','% marge','Part du CA']];
-    pa.forEach(r=>rows.push([r.name,r.qty,r.ca,Math.round(r.cu),r.cost,r.marge,r.ca>0?Math.round(100*r.marge/r.ca)+' %':'',inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'']));
-    rows.push([{v:'TOTAL',__style:1},{v:paT.q,__style:1},{v:paT.ca,__style:1},'',{v:paT.cost,__style:1},{v:paT.m,__style:1},{v:paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'',__style:1},{v:'100 %',__style:1}]);
-    sh.push({name:'Analyse produits',rows:rows,widths:[26,11,14,12,14,14,9,10]});}
+      ['Produit','Qté vendue','CA (FCFA)','Coût matière/u','+ Quote-part/u','Coût revient/u','Coût vendu complet','Marge brute','% marge','Marge nette','% nette','Part du CA']];
+    pa.forEach(r=>rows.push([r.name,r.qty,r.ca,Math.round(r.cu),Math.round(r.qp||0),Math.round(r.cuFull||r.cu),r.costFull||r.cost,r.marge,r.ca>0?Math.round(100*r.marge/r.ca)+' %':'',r.margeNette!=null?r.margeNette:r.marge,r.ca>0&&r.margeNette!=null?Math.round(100*r.margeNette/r.ca)+' %':'',inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'']));
+    rows.push([{v:'TOTAL',__style:1},{v:paT.q,__style:1},{v:paT.ca,__style:1},'','','',{v:paT.costFull!=null?paT.costFull:paT.cost,__style:1},{v:paT.m,__style:1},{v:paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'',__style:1},{v:paT.mN!=null?paT.mN:paT.m,__style:1},{v:paT.ca>0&&paT.mN!=null?Math.round(100*paT.mN/paT.ca)+' %':'',__style:1},{v:'100 %',__style:1}]);
+    sh.push({name:'Analyse produits',rows:rows,widths:[26,10,13,12,12,13,13,13,8,13,8,9]});}
   return sh;
 }
 async function monthlyWorkbook(inc){
@@ -3259,7 +3268,11 @@ async function scExploitation(){
   +((inc.prodAnalysis||[]).length?'<div class="hr"></div><h3>🔬 Analyse par produit — marge brute</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Qté vendue</th><th class="r">CA</th><th class="r">Coût/unité</th><th class="r">Coût vendu</th><th class="r">Marge brute</th><th class="r">% marge</th><th class="r">Part CA</th></tr></thead><tbody>'
    +inc.prodAnalysis.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td class="r">'+num(r.qty)+'</td><td class="r">'+money(r.ca)+'</td><td class="r">'+money(Math.round(r.cu))+'</td><td class="r">'+money(r.cost)+'</td><td class="r" style="color:'+(r.marge>=0?'var(--ok)':'var(--bad)')+'"><b>'+money(r.marge)+'</b></td><td class="r">'+(r.ca>0?Math.round(100*r.marge/r.ca)+' %':'—')+'</td><td class="r">'+(inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'—')+'</td></tr>').join('')
    +'<tr class="tot"><td>TOTAL</td><td class="r">'+num(paT.q)+'</td><td class="r">'+money(paT.ca)+'</td><td></td><td class="r">'+money(paT.cost)+'</td><td class="r"><b>'+money(paT.m)+'</b></td><td class="r">'+(paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'—')+'</td><td class="r">100 %</td></tr></tbody></table>'
-   +'<div class="help" style="margin-top:6px">Coût unitaire = recette café (kg de type × coût du semi-fini) + emballages au coût moyen. Produit sans recette : café torréfié valorisé au coût moyen du vert corrigé du rendement du mois.</div>':'')
+   +'<div class="help" style="margin-top:6px">Coût unitaire = recette café (kg de type × coût du semi-fini) + emballages au coût moyen. Produit sans recette : café torréfié valorisé au coût moyen du vert corrigé du rendement du mois.</div>'
+   +((inc.prodAnalysis||[]).length?'<div class="hr"></div><h3>💰 Coût de revient complet — marge nette par produit</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Coût matière/u</th><th class="r">+ Quote-part/u</th><th class="r">Coût revient/u</th><th class="r">Marge nette</th><th class="r">% nette</th></tr></thead><tbody>'
+   +inc.prodAnalysis.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td class="r">'+money(Math.round(r.cu))+'</td><td class="r">'+money(Math.round(r.qp))+'</td><td class="r"><b>'+money(Math.round(r.cuFull))+'</b></td><td class="r" style="color:'+(r.margeNette>=0?'var(--ok)':'var(--bad)')+'"><b>'+money(r.margeNette)+'</b></td><td class="r">'+(r.ca>0?Math.round(100*r.margeNette/r.ca)+' %':'—')+'</td></tr>').join('')
+   +'<tr class="tot"><td>TOTAL</td><td></td><td></td><td></td><td class="r"><b>'+money(paT.mN)+'</b></td><td class="r">'+(paT.ca>0?Math.round(100*paT.mN/paT.ca)+' %':'—')+'</td></tr></tbody></table>'
+   +'<div class="help" style="margin-top:6px">Quote-part = charges indirectes du mois — '+money(inc.indirectTot)+' (personnel '+money(inc.personnel.total)+' + services '+money(inc.servicesTot)+' + impôts '+money(inc.impotsTot)+' + amortissements '+money(inc.dotations)+') — réparties au prorata des <b>unités produites</b> ('+num(inc.unitsProduced)+' u → '+money(Math.round(inc.qpUnit))+' /u). Marge nette par produit = CA − (coût matière + quote-part) × quantités vendues.</div>':''):'')
   +'<div class="hr"></div>'
   +histBlock
   +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" onclick="App.expExploitation()">📥 Télécharger (Excel)</button>'
