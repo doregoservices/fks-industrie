@@ -75,6 +75,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
 | **Compte d'exploitation mensuel** | Écran **Exploitation** : résultat, ventes, achats consommés, charges par nature, personnel, annexes stocks + trésorerie. S'ouvre dans Excel **et** Google Sheets |
+| **Design des fichiers** | Tous les exports Excel sont mis en forme automatiquement : bandeau de titre brun café, en-têtes de colonnes colorées et figées au défilement, lignes zébrées, totaux encadrés, nombres formatés — avec la signature « Réalisé par Doregoservices » en pied de chaque feuille |
 
 Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne **Compte** puis importer le CSV (séparateur `;`).
 

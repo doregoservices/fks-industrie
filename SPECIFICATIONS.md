@@ -253,6 +253,11 @@ CNPS retraite 6,30 % / 7,70 % (plafond 3 375 000 F) ; prestations familiales 5 %
 - **Quota localStorage** : repli mémoire + avertissement unique en console.
 - **Preuves « années illimitées »** : tests/tyears.js (18/18) et tests/treview.js (40/40) — mois 1998→2100, amortissement 96 mois, ventes datées 2031, moisUI sans bornes.
 
+## 🆕 Design PRO des exports + marque Doregoservices
+- **Moteur XLSX enrichi** (`STYLES_XML` + `sheetXml` réécrits) : titre fusionné sur bandeau brun café (#6F4E37) texte blanc, sous-titre beige, **en-têtes colorées figées** (volets), **zébrures** et bordures fines, totaux encadrés + format `#,##0`, pied « Réalisé par Doregoservices · 07 17 57 95 56 » fusionné sur chaque feuille. Détection automatique de la ligne d'en-tête (≥ 3 libellés texte suivis de données). Rétro-compatible : les marqueurs `{__style:1}` existants deviennent le style « total ».
+- **Marque** : logo (PNG optimisé 110 px en data-URI, ~13 Ko) + contact « Conçu et maintenu par Doregoservices · 07 17 57 95 56 » sur l'écran de connexion et dans le Menu (avec lien `tel:`), signature dans chaque feuille Excel et dans le README du dépôt.
+- Tests : `tests/tbrand.js` (4/4) + validation ZIP/XML du fichier réel généré.
+
 ## 🆕 V6 — Écran Stocks consolidé + comptabilité analytique par produit
 **Ultrareview V6 (5 correctifs, `tests/tuv6.js` 6/6)** : ① `computeStats` comptait les ajustements « café vert/torréfié » nulle part → stocks de départ désormais visibles partout ; ② export « Point complet des stocks » : ligne torréfié = conditionné **+ machines**, types de café ajoutés à la synthèse, ajustements filtrés sur la période ; ③ historique : rendement machines « — » si entrée 0 (plus de NaN %) ; ④ écran Stocks lisait le mauvais champ emballages (stock affiché 0) ; ⑤ analytique : coût de secours (torréfié au CMP vert/rendement) les mois sans lot machines.
 - **Écran « 📦 Stocks »** (route `stocks`, nav + bouton rapide accueil) : café vert (kg + valorisation CMP), torréfié, types de café (machines/conditionné/restant + seuils), produits finis (produits/vendus/stock + alertes), emballages (entrées/sorties/stock/valeur + total). Visible : manager + chef production.

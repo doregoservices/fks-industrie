@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/logo-dorego.png" alt="Doregoservices" width="110"></p>
+
 # ☕ FKS Industrie — Gestion d'usine de café (Côte d'Ivoire)
 
 Application web **installable (PWA)** : achats de café vert → torréfaction → conditionnement → ventes, caisse (Espèces + Mobile Money), paie ivoirienne officielle, compte d'exploitation mensuel, exports Excel/Sage 100, rapports par email.
@@ -42,3 +44,6 @@ Le premier compte connecté devient le gestionnaire ; les comptes restreints (ca
 ## ⚖️ Licence & crédits
 
 Code applicatif : réalisé pour FKS Industrie. Génération de QR codes : bibliothèque [QR Code Generator](https://www.nayuki.io/page/qr-code-generator-library) de Project Nayuki (MIT), incluse dans `index.html`.
+---
+
+🏭 **Conçu, déployé et maintenu par Doregoservices** — 📞 07 17 57 95 56 (Côte d'Ivoire)
