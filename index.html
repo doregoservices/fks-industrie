@@ -2536,8 +2536,14 @@ App.xlSave=async(sec,per)=>{const lbl=$('#xlLbl').value.trim(),amt=Number($('#xl
   await setSetting('extra_lines',arr);closeModal();toast('Ligne ajoutée','ok');render();};
 App.xlDel=async id=>{await setSetting('extra_lines',(SETS.extra_lines||[]).filter(x=>x.id!==id));toast('Ligne supprimée','ok');render();};
 App.saveExpl=async()=>{await setSetting('exploitation',{is_rate:Number($('#xpIs').value)||0});toast('Enregistré','ok');};
-App.resetAll=()=>confirmBox('Tout réinitialiser ?','Toutes les données locales (démo ou saisies hors-ligne) seront effacées. Les données Supabase ne sont pas touchées.','Réinitialiser',()=>{
-  if(LS.ok){try{Object.keys(localStorage).filter(k=>k.indexOf('cafepro_')===0).forEach(k=>localStorage.removeItem(k));}catch(e){}}LS.mem={};try{location.reload();}catch(e){render();}});
+App.resetAll=()=>confirmBox('Tout réinitialiser ?','Toutes les données locales (démo ou saisies hors-ligne) seront effacées. La connexion Supabase, votre session et la file d\'envoi hors-ligne sont conservées. Les données Supabase ne sont pas touchées.','Réinitialiser',()=>{
+  const KEEP=['cafepro_cfg','cafepro_session','cafepro_outbox'];
+  const DATA_KEYS=['cafepro_settings','cafepro_seeded'].concat(['products','coffee_types','packaging_items','packaging_entries','purchases','roastings','transformations','productions','adjustments','assets','sales_agents','sales','cash_entries','employees','advances','pay_runs','pay_slips','pending_entries','form_tokens','email_log','supabase_cache','local_cache'].map(t=>'cafepro_'+t));
+  const wipe=k=>k.indexOf('cafepro_')===0&&KEEP.indexOf(k)<0;
+  if(LS.ok){try{Object.keys(localStorage).filter(wipe).forEach(k=>localStorage.removeItem(k));}catch(e){}}
+  DATA_KEYS.forEach(k=>{if(KEEP.indexOf(k)<0){try{localStorage.removeItem(k);}catch(e){}}});
+  Object.keys(LS.mem).filter(wipe).forEach(k=>delete LS.mem[k]);
+  try{location.reload();}catch(e){render();}});
 
 /* ================= FORMULAIRES PUBLICS (par lien) ================= */
 function formShell(title,sub,inner,icon){

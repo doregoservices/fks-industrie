@@ -258,6 +258,8 @@ CNPS retraite 6,30 % / 7,70 % (plafond 3 375 000 F) ; prestations familiales 5 %
 - **Marque** : logo (PNG optimisé 110 px en data-URI, ~13 Ko) + contact « Conçu et maintenu par Doregoservices · 07 17 57 95 56 » sur l'écran de connexion et dans le Menu (avec lien `tel:`), signature dans chaque feuille Excel et dans le README du dépôt.
 - Tests : `tests/tbrand.js` (4/4) + validation ZIP/XML du fichier réel généré.
 
+**Ultrareview n°3 — pré-livraison** : ① « Réinitialiser les données locales » effaçait AUSSI la connexion Supabase, la session et la file hors-ligne → désormais préservées (effacement déterministe par liste de tables) ; ② audit anti-corruption Postgres (les `numeric` arrivent en texte) : toutes les agrégations passent par `Number()` — conforme ; ③ écran Réglages vérifié en mode Supabase (sections complètes, e-mail utilisateur, PIN local masqué) et 8 écrans rendus sans NaN — `tests/tdeliver.js` (3/3). 13 suites au vert.
+
 **Ultrareview complète n°2 (toute l'application)** : ① crash de l'export **Bulletins de paie** avec le nouveau moteur (ligne chaîne au lieu de tableau) → normalisation robuste de toutes les lignes dans `sheetXml` ; ② **garde anti-double-validation** dans `pendOK` (status re-vérifié avant application — impossible de comptabiliser 2× une saisie terrain) ; ③ service worker : cache passé en `cafepro-v2` (stratégie network-first conservée → mises à jour automatiques) ; ④ smoke test exhaustif : les 5 exports (22 feuilles au total) + 16 écrans rendus sans NaN — `tests/texp.js` (5/5). 11 suites au vert.
 
 ## 🆕 V6 — Écran Stocks consolidé + comptabilité analytique par produit
