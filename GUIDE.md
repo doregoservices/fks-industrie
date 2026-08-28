@@ -138,6 +138,12 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 
 > Sans cette configuration, les boutons **« ✉️ Préparer l'email »** téléchargent le fichier Excel et ouvrent votre messagerie avec un brouillon prêt à envoyer.
 
+**Dépannage (l'app affiche toujours la cause exacte)** :
+- « fonction NON DÉPLOYÉE » → l'étape 2 (Edge Functions) n'a pas été faite ;
+- « REPORT_KEY invalide » → le mot de passe diffère entre les Secrets Supabase et Réglages → 📧 ;
+- « projet en pause » → les projets gratuits Supabase se mettent en pause après ~1 semaine d'inactivité : relancez-le (bouton *Restore*) dans la console Supabase ;
+- **Réglages → 🔍 Vérifier la base** teste directement les 21 tables : si des tables manquent, il fournit le SQL de réparation tout prêt à copier-coller.
+
 ### 👥 Paie — taux Côte d'Ivoire en vigueur (réforme ITS du 1<sup>er</sup> janvier 2024)
 Préconfigurés dans l'application (modifiables dans Réglages, **à faire valider par votre comptable**) :
 
