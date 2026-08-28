@@ -15,7 +15,12 @@ create table if not exists products(
   unit text default 'sachet',
   price numeric default 0,
   alert_min numeric default 0,
-  active boolean default true
+  active boolean default true,
+  packaging jsonb,
+  type_id text,
+  type_name text,
+  type_kg numeric,
+  recipes jsonb
 );
 create table if not exists purchases(
   id text primary key,
@@ -62,6 +67,7 @@ create table if not exists productions(
   date date not null,
   roasted_used numeric not null,
   lines jsonb default '[]',
+  type_lines jsonb,
   operator text,
   note text,
   source text default 'admin'
@@ -74,7 +80,8 @@ create table if not exists adjustments(
   product_id text,
   name text,
   qty numeric not null,
-  reason text
+  reason text,
+  type_id text
 );
 create table if not exists sales_agents(
   id text primary key,

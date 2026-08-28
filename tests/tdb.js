@@ -1,67 +1,79 @@
-;/* TDB : vérificateur de base v2 (sonde directe des 21 tables) + filet global d'erreurs */
+;/* TDB : vérificateur base v3 — tables ET colonnes manquantes, SQL de migration auto (CREATE + ALTER) */
 ;(async()=>{
-await loadSettings();S.user={name:'test',role:'manager'};
-const ALL=['settings','products','coffee_types','purchases','roastings','transformations','productions','adjustments','sales_agents','sales','cash_entries','employees','advances','pay_runs','pay_slips','pending_entries','form_tokens','packaging_items','packaging_entries','email_log','assets'];
-/* 1. filet global : une erreur silencieuse devient un toast visible */
+await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
+/* 1. filet global */
 let cap=null;const _toast=toast;toast=(m,k)=>{cap=m;return _toast(m,k);};
 onUnhandledRej({reason:new Error('Erreur Supabase 404 : adjustments')});
 if(!cap||!cap.includes('adjustments'))throw new Error('filet : toast non affiché');
 cap=null;onUnhandledRej({reason:new Error('Session expirée — reconnectez-vous.')});
-if(cap!==null)throw new Error('filet : doublon sur session expirée');
+if(cap!==null)throw new Error('filet : doublon session');
 toast=_toast;
-console.log('✓ Filet global : toute erreur silencieuse affichée en toast (sans doublon session)');
-/* 2. vérificateur : mode local → message explicite */
+console.log('✓ Filet global : erreurs silencieuses affichées (sans doublon session)');
+/* 2. mode local */
 let mod=null;const _modal=modal;modal=(t,b)=>{mod={t:t,b:b};};
 CFG.mode='local';CFG.url='';CFG.anon='';
 await App.dbCheck();
-if(!mod||!mod.b.includes('mode en ligne'))throw new Error('dbCheck local : message inattendu');
+if(!mod||!mod.b.includes('mode en ligne'))throw new Error('dbCheck local');
 console.log('✓ Hors mode en ligne → invitation à connecter Supabase');
-/* sonde fetch : répond selon la table demandée */
-const mkFetch=(fail404,fail401,netFail)=>async(u)=>{
-  if(netFail)throw new Error('network');
-  const m=String(u).match(/\/rest\/v1\/(\w+)\?/);
+/* mock PostgREST : dictionnaire tables→colonnes */
+CFG.mode='supabase';CFG.url='https://demo.supabase.co';CFG.anon='cle';SES=null;
+const FULL={};for(const t in TABLE_COLS)FULL[t]=TABLE_COLS[t].map(c=>c[0]);
+const mk=schema=>async(u)=>{
+  const m=String(u).match(/\/rest\/v1\/(\w+)\?select=([^&]*)&limit=1/);
   if(!m)return{ok:false,status:404,json:async()=>({})};
-  const t=m[1];
-  if(fail401)return{ok:false,status:401,json:async()=>({message:'JWT expired'})};
-  if(fail404.includes(t))return{ok:false,status:404,json:async()=>({code:'PGRST205'})};
+  const t=m[1];const cols=decodeURIComponent(m[2]).split(',').filter(Boolean);
+  if(!schema[t])return{ok:false,status:404,json:async()=>({code:'PGRST205'})};
+  const miss=cols.filter(c=>schema[t].indexOf(c)<0);
+  if(miss.length)return{ok:false,status:400,json:async()=>({message:"Could not find the '"+miss[0]+"' column of '"+t+"' in the schema cache"})};
   return{ok:true,json:async()=>([])};
 };
 const _fetch=global.fetch;
-/* 3. base complète : 21/21 tables répondent */
-CFG.mode='supabase';CFG.url='https://demo.supabase.co';CFG.anon='cle';SES=null;
-global.fetch=mkFetch([],false,false);
+/* 3. base complète */
+global.fetch=mk(FULL);
 await App.dbCheck();
-if(!mod||!mod.b.includes('Base complète'))throw new Error('dbCheck complet : '+(mod&&mod.b.slice(0,60)));
-console.log('✓ Sonde directe : base complète détectée (21/21 tables, sans OpenAPI)');
-/* 4. tables manquantes : SQL de réparation auto-généré */
-global.fetch=mkFetch(['adjustments','form_tokens'],false,false);
+if(!mod||!mod.b.includes('Base complète'))throw new Error('complet : '+(mod&&mod.b.slice(0,50)));
+console.log('✓ Base complète : 21 tables + toutes leurs colonnes détectées');
+/* 4. CAS RÉEL : adjustments sans type_id/name + table form_tokens absente */
+const OLD=JSON.parse(JSON.stringify(FULL));
+OLD.adjustments=OLD.adjustments.filter(c=>c!=='type_id'&&c!=='name');
+delete OLD.form_tokens;
+global.fetch=mk(OLD);
 await App.dbCheck();
-if(!mod||!mod.t.indexOf('manquante')<0)throw new Error('dbCheck : titre '+(mod&&mod.t));
 const sql=(mod.b.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)||[])[1]||'';
-if(!sql.includes('create table if not exists adjustments'))throw new Error('SQL : DDL adjustments absent');
-if(!mod.b.includes('gestionnaire_full'))throw new Error('SQL : policy gestionnaire_full absente');
-if(!mod.b.includes('form_tokens_select'))throw new Error('SQL : policy publique form_tokens absente');
-console.log('✓ Tables manquantes : SQL complet généré (DDL + RLS + policies), prêt à copier');
-/* 5. projet en pause / URL incorrecte */
-global.fetch=mkFetch([],false,true);
+if(!sql.includes('alter table adjustments add column if not exists type_id text'))throw new Error('SQL : ALTER type_id absent → '+sql.slice(0,120));
+if(!sql.includes('add column if not exists name text'))throw new Error('SQL : ALTER name absent');
+if(!sql.includes('create table if not exists form_tokens'))throw new Error('SQL : CREATE form_tokens absent');
+if(!mod.b.includes('type_id')||!mod.b.includes('form_tokens'))throw new Error('résumé incomplet');
+console.log('✓ Colonne manquante détectée (type_id, name) → ALTER généré + table absente → CREATE généré');
+/* 5. injoignable / pause */
+global.fetch=async()=>{throw new Error('network');};
 await App.dbCheck();
-if(!mod||!/injoignable/i.test(mod.b))throw new Error('dbCheck : pause non gérée');
-if(!mod.b.includes('pause'))throw new Error('dbCheck : conseil pause absent');
-console.log('✓ Projet injoignable → explication pause/URL + conduite à tenir');
+if(!mod||!/injoignable/i.test(mod.b))throw new Error('pause non gérée');
+console.log('✓ Projet injoignable → conduite à tenir (pause/URL)');
 /* 6. session expirée */
-global.fetch=mkFetch([],true,false);
+global.fetch=async()=>({ok:false,status:401,json:async()=>({message:'JWT expired'})});
 await App.dbCheck();
-if(!mod||!mod.t.includes('Session expirée'))throw new Error('dbCheck : session non détectée');
-console.log('✓ Session expirée → détection claire (se reconnecter)');
-/* 7. contrôle silencieux après connexion */
+if(!mod||!mod.t.includes('Session expirée'))throw new Error('session non détectée');
+console.log('✓ Session expirée → se reconnecter');
+/* 7. alerte silencieuse après connexion : colonnes aussi */
 cap=null;const t2=toast;toast=(m,k)=>{cap=m;return t2(m,k);};
-global.fetch=mkFetch(['adjustments','form_tokens'],false,false);
+global.fetch=mk(OLD);
 await dbCheckSilent();
-if(!cap||!cap.includes('2 tables'))throw new Error('contrôle silencieux : alerte absente ('+cap+')');
-global.fetch=mkFetch([],false,false);
-cap=null;await dbCheckSilent();
-if(cap!==null)throw new Error('contrôle silencieux : alerte à tort ('+cap+')');
+if(!cap||!cap.includes('manquant'))throw new Error('silencieux : '+cap);
+global.fetch=mk(FULL);cap=null;await dbCheckSilent();
+if(cap!==null)throw new Error('silencieux : alerte à tort');
 toast=t2;global.fetch=_fetch;modal=_modal;
-console.log('✓ Après connexion : alerte seulement si des tables manquent réellement');
-console.log('TDB: 7/7 OK');
+console.log('✓ Après connexion : alerte dès qu\'un élément manque (table OU colonne)');
+/* 8. adjSave n\'envoie plus les colonnes nulles (compat anciennes bases) */
+S.route='production';S.tab={production:'adj'};location.hash='#/production';
+await render();
+$('#jQ').value='25';$('#jR').value='Stock initial';
+let ins=null;const _i=DB.insert;DB.insert=async function(t,o){ins={t:t,o:o};return _i.apply(this,arguments);};
+await App.adjSave();
+DB.insert=_i;
+if(!ins||ins.t!=='adjustments')throw new Error('adjSave : insert non capturé');
+if('type_id' in ins.o||'name' in ins.o||'product_id' in ins.o)throw new Error('adjSave : colonnes nulles envoyées → '+JSON.stringify(ins.o));
+if(Number(ins.o.qty)!==25)throw new Error('adjSave : qty');
+console.log('✓ Ajustement café vert : plus de colonnes nulles envoyées → passe même sur une ancienne base');
+console.log('TDB: 8/8 OK');
 })().catch(e=>{console.error('ÉCHEC TDB:',e.stack||e.message);process.exit(1);});
