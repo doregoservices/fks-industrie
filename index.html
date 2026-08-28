@@ -1073,31 +1073,30 @@ function defaultSettings(){
   return{
     company:{name:'FKS Industrie',logo:''},
     admin_pin:'1234',
-    journal_code:'CA',
     sage_accounts:[
-      {key:'ventes',label:'Ventes de produits',account:'701000',group:'produits'},
-      {key:'achat_vert',label:'Achat café vert (stock — via inventaire)',account:'601000',group:'achats'},
-      {key:'emballages',label:'Emballages / conditionnement (stock — via inventaire)',account:'602600',group:'achats'},
-      {key:'loyer',label:'Loyer',account:'613000',group:'services'},
-      {key:'transport',label:'Transport',account:'624000',group:'services'},
-      {key:'carburant',label:'Carburant',account:'606100',group:'services'},
-      {key:'electricite',label:'Électricité / eau',account:'606000',group:'services'},
-      {key:'entretien',label:'Entretien / réparations',account:'615000',group:'services'},
-      {key:'divers',label:'Achats et charges diverses',account:'608000',group:'services'},
-      {key:'salaires',label:'Salaires',account:'661000',group:'personnel'},
-      {key:'charges_sociales',label:'Charges sociales (CNPS employeur)',account:'664000',group:'personnel'},
-      {key:'impots_taxes',label:'Impôts et taxes (patente, TOM, vignettes…)',account:'640000',group:'impots'},
-      {key:'treso_caisse',label:'Caisse (espèces)',account:'571000',group:'treso'},
-      {key:'treso_momo',label:'Mobile Money',account:'572200',group:'treso'},
-      {key:'apport',label:'Apport / capital',account:'101000',group:'treso'},
-      {key:'clients',label:'Clients (créances — ventes à crédit)',account:'411000',group:'tiers'},
-      {key:'fournisseurs',label:'Fournisseurs (achats à crédit)',account:'401000',group:'tiers'},
-      {key:'personnel_net',label:'Personnel — nets à payer',account:'421000',group:'tiers'},
-      {key:'personnel_avances',label:'Personnel — avances',account:'425000',group:'tiers'},
-      {key:'cnps',label:'CNPS / organismes sociaux',account:'431000',group:'tiers'},
-      {key:'etat',label:'État — ITS et retenues',account:'444000',group:'tiers'},
-      {key:'fdfp',label:'FDFP (formation professionnelle)',account:'647100',group:'impots'},
-      {key:'virement_interne',label:'Virements internes (585)',account:'585000',group:'treso'}
+      {key:'ventes',label:'Ventes de produits finis (702)',account:'702000',group:'produits'},
+      {key:'achat_vert',label:'Achat café vert — matière première (6021)',account:'602100',group:'achats'},
+      {key:'emballages',label:'Emballages perdus (6081)',account:'608100',group:'achats'},
+      {key:'loyer',label:'Locations et charges locatives (622)',account:'622000',group:'services'},
+      {key:'transport',label:'Transports sur ventes (612 — sur achats : 611)',account:'612000',group:'services'},
+      {key:'carburant',label:'Carburant — matières combustibles (6042)',account:'604200',group:'services'},
+      {key:'electricite',label:'Électricité (6052 — eau : 6051)',account:'605200',group:'services'},
+      {key:'entretien',label:'Entretien, réparations et maintenance (624)',account:'624000',group:'services'},
+      {key:'divers',label:'Achats divers — travaux, matériels (6058)',account:'605800',group:'services'},
+      {key:'salaires',label:'Salaires et rémunérations (661)',account:'661000',group:'personnel'},
+      {key:'charges_sociales',label:'Charges sociales CNPS employeur (6641)',account:'664100',group:'personnel'},
+      {key:'impots_taxes',label:'Impôts et taxes — patente et licences (6412 — vignettes : 6463)',account:'641200',group:'impots'},
+      {key:'treso_caisse',label:'Caisse espèces (571)',account:'571000',group:'treso'},
+      {key:'treso_momo',label:'Mobile Money — monnaie électronique (5521)',account:'552100',group:'treso'},
+      {key:'apport',label:'Capital / apports (101)',account:'101000',group:'treso'},
+      {key:'clients',label:'Clients locaux — créances (4111)',account:'411100',group:'tiers'},
+      {key:'fournisseurs',label:'Fournisseurs locaux — dettes (4011)',account:'401100',group:'tiers'},
+      {key:'personnel_net',label:'Personnel — rémunérations dues (422)',account:'422000',group:'tiers'},
+      {key:'personnel_avances',label:'Personnel — avances et acomptes (4211)',account:'421100',group:'tiers'},
+      {key:'cnps',label:'CNPS — sécurité sociale (431)',account:'431000',group:'tiers'},
+      {key:'etat',label:'État — impôts sur salaires ITS (4472)',account:'447200',group:'tiers'},
+      {key:'fdfp',label:'FDFP — taxe d’apprentissage (6414) + formation continue (6415)',account:'641400',group:'impots'},
+      {key:'virement_interne',label:'Virements de fonds — compte de passage (585)',account:'585000',group:'treso'}
     ],
     journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
     exploitation:{
@@ -1143,6 +1142,9 @@ async function loadSettings(){const d=defaultSettings();try{const rows=await DB.
   SETS.sage_accounts=d.sage_accounts.map(def=>{const st=storedAcc.filter(x=>x.key===def.key)[0];
     return st?Object.assign({},def,{label:st.label||def.label,account:st.account!=null?st.account:def.account,group:st.group||def.group}):def;})
     .concat(storedAcc.filter(x=>!d.sage_accounts.some(def=>def.key===x.key)));
+  const OLDDEF={'ventes':'701000','achat_vert':'601000','emballages':'602600','loyer':'613000','transport':'624000','carburant':'606100','electricite':'606000','entretien':'615000','divers':'608000','salaires':'661000','charges_sociales':'664000','impots_taxes':'640000','treso_caisse':'571000','treso_momo':'572200','apport':'101000','clients':'411000','fournisseurs':'401000','personnel_net':'421000','personnel_avances':'425000','cnps':'431000','etat':'444000','fdfp':'647100','virement_interne':'585000'};
+  SETS.sage_accounts=SETS.sage_accounts.map(a=>{const nd=d.sage_accounts.filter(x=>x.key===a.key)[0];
+    return (nd&&String(a.account||'').trim()===String(OLDDEF[a.key]||'\u0000'))?Object.assign({},a,{account:nd.account,label:nd.label}):a;});
   return SETS;}
 async function setSetting(k,v){
   if(CFG.mode==='local'){const a=await Local.list('settings');const i=a.findIndex(x=>x.key===k);
@@ -1301,7 +1303,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
+const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
 function bottomHtml(){
@@ -2260,10 +2262,15 @@ function sheetXml(rows,widths){
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+views+cols+'<sheetData>'+body+'</sheetData>'+(merges.length?'<mergeCells count="'+merges.length+'">'+merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>':'')+'</worksheet>';
 }
 const STYLES_XML='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="200" formatCode="#,##0"/></numFmts><fonts count="6"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><i/><sz val="9"/><color rgb="FF8A7A66"/><name val="Calibri"/></font><font><b/><sz val="12"/><color rgb="FF5A4632"/><name val="Calibri"/></font></fonts><fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF6F4E37"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF4ECE2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFAF7F2"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF0E6D6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"><color rgb="FFD5C9BB"/></left><right style="thin"><color rgb="FFD5C9BB"/></right><top style="thin"><color rgb="FFD5C9BB"/></top><bottom style="thin"><color rgb="FFD5C9BB"/></bottom></border></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="11"><xf/><xf fontId="1" fillId="5" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf fontId="2" fillId="2" borderId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf fontId="5" fillId="3" borderId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf><xf fontId="3" fillId="2" borderId="1" applyFont="1" applyFill="1" applyBorder="1"/><xf borderId="1" applyBorder="1"/><xf fillId="4" borderId="1" applyFill="1" applyBorder="1"/><xf borderId="1" numFmtId="200" applyNumberFormat="1" applyBorder="1"/><xf fillId="4" borderId="1" numFmtId="200" applyNumberFormat="1" applyFill="1" applyBorder="1"/><xf fontId="4" applyFont="1"/><xf fontId="1" fillId="5" borderId="1" numFmtId="200" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1"/></cellXfs></styleSheet>';
+function logoImg(){try{const l=(SETS.company||{}).logo||'';const m=/^data:image\/(png|jpe?g);base64,(.+)$/.exec(l);if(!m)return null;
+  const bin=atob(m[2]);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+  let w=0,h=0;if(m[1]==='png'&&u.length>24){w=(u[16]<<24|u[17]<<16|u[18]<<8|u[19])>>>0;h=(u[20]<<24|u[21]<<16|u[22]<<8|u[23])>>>0;}
+  return{u:u,ext:m[1]==='png'?'png':'jpeg',w:w,h:h};}catch(e){return null;}}
 function buildXlsx(sheets){
   const enc=new TextEncoder();
   const files=[];
-  const CT='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>';
+  const lg=logoImg();
+  const CT='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'+(lg?'<Default Extension="'+lg.ext+'" ContentType="image/'+(lg.ext==='png'?'png':'jpeg')+'"/><Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>':'')+'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+sheets.map((s,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join('')+'</Types>';
   const RELS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
   const WB='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'+sheets.map((s,i)=>'<sheet name="'+esc(String(s.name).slice(0,31))+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join('')+'</sheets></workbook>';
   const WBRELS='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+sheets.map((s,i)=>'<Relationship Id="rId'+(i+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join('')+'<Relationship Id="rId'+(sheets.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
@@ -2272,7 +2279,20 @@ function buildXlsx(sheets){
   files.push({name:'xl/workbook.xml',data:enc.encode(WB)});
   files.push({name:'xl/_rels/workbook.xml.rels',data:enc.encode(WBRELS)});
   files.push({name:'xl/styles.xml',data:enc.encode(STYLES_XML)});
-  sheets.forEach((s,i)=>files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml',data:enc.encode(sheetXml(s.rows,s.widths))}));
+  sheets.forEach((s,i)=>{
+    let xml=sheetXml(s.rows,s.widths);
+    if(i===0&&lg){
+      xml=xml.replace('<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">','<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">').replace('</worksheet>','<drawing r:id="rId1"/></worksheet>');
+      const EMU=9525;const hpx=Math.min(lg.h||64,72)||64;const wpx=(lg.w&&lg.h)?Math.max(16,Math.round(hpx*lg.w/lg.h)):hpx;
+      const cx=wpx*EMU,cy=hpx*EMU;const col0=Math.max(0,((s.widths&&s.widths.length)||6)-1);
+      const DR='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>'+col0+'</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="'+cx+'" cy="'+cy+'"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="'+cx+'" cy="'+cy+'"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>';
+      files.push({name:'xl/drawings/drawing1.xml',data:enc.encode(DR)});
+      files.push({name:'xl/drawings/_rels/drawing1.xml.rels',data:enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.'+lg.ext+'"/></Relationships>')});
+      files.push({name:'xl/worksheets/_rels/sheet1.xml.rels',data:enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>')});
+      files.push({name:'xl/media/image1.'+lg.ext,data:lg.u});
+    }
+    files.push({name:'xl/worksheets/sheet'+(i+1)+'.xml',data:enc.encode(xml)});
+  });
   return zipStore(files);
 }
 function makeXlsx(sheets,filename){download(filename,buildXlsx(sheets));}
@@ -2350,7 +2370,7 @@ App.expCaisse=async()=>{
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const J=(SETS.journals||{});
   const jl=k=>(J[k]||k);
-  const DEF={clients:'411000',fournisseurs:'401000',personnel_net:'421000',personnel_avances:'425000',cnps:'431000',etat:'444000',fdfp:'647100',virement_interne:'585000'};
+  const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',cnps:'431000',etat:'447200',fdfp:'641400',virement_interne:'585000'};
   const acc=k=>sagAcc(k)||DEF[k]||'';
   const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
   const L={VE:[],AC:[],CA:[],BQ:[],PA:[],OD:[]};
@@ -2550,7 +2570,7 @@ async function scParametres(){
   +'</div><span class="help">PNG/JPG, idéalement carré, < 300 Ko.</span></div>'
   +'<button class="btn sm" onclick="App.setCo()">Enregistrer</button>'
   +'<div class="hr"></div><h3>📗 Correspondance des comptes (Sage 100)</h3>'
-  +'<div class="help" style="margin-bottom:8px">Ces numéros alimentent l\'export « Journal de caisse ». Laissez vide si vous préférez les ajouter plus tard dans Excel.</div>'
+  +'<div class="help" style="margin-bottom:8px">Numéros conformes au <b>SYSCOHADA révisé</b> (AUDCIF) — ils alimentent l\'export Sage 100 en 6 journaux. Modifiables librement selon votre plan de comptes.</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Catégorie</th><th>Compte Sage</th><th>Grande masse (exploitation)</th></tr></thead><tbody id="stAcc">'
   +accts.map(a=>'<tr><td>'+esc(a.label)+' <code class="k">'+a.key+'</code></td><td><input style="max-width:110px" data-k="'+a.key+'" value="'+esc(a.account||'')+'"></td>'
    +'<td><select data-g="'+a.key+'">'+[['','— automatique —'],['services','Services externes'],['personnel','Personnel'],['impots','Impôts et taxes'],['hors','Hors exploitation (non déduit)']].map(g=>'<option value="'+g[0]+'"'+((a.group||'')===g[0]?' selected':'')+'>'+g[1]+'</option>').join('')+'</select></td></tr>').join('')
@@ -2600,11 +2620,18 @@ async function scParametres(){
   +'</div>';
 }
 App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
-App.logoSave=async()=>{const f=$('#stLogo').files&&$('#stLogo').files[0];if(!f)return toast('Choisissez d\'abord une image','bad');
-  if(f.size>400000)return toast('Image trop lourde ('+Math.round(f.size/1000)+' Ko) — réduisez-la à moins de 300 Ko','bad');
-  const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(f);});
+App.logoSave=async()=>{const f=$('#stLogo').files&&$('#stLogo').files[0];if(!f)return toast('Choisissez d’abord une image','bad');
+  const shrink=dUrl=>new Promise(res=>{try{const img=new Image();img.onload=()=>{try{const sc=Math.min(1,256/Math.max(1,img.height||256));
+    const c=document.createElement('canvas');c.width=Math.max(1,Math.round((img.width||256)*sc));c.height=Math.max(1,Math.round((img.height||256)*sc));
+    const g=c.getContext&&c.getContext('2d');if(!g)return res(dUrl);g.drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/png'));}catch(e){res(dUrl);}};
+    img.onerror=()=>res(dUrl);img.src=dUrl;}catch(e){res(dUrl);}});
+  let dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(f);});
+  if(!/^data:image\/(png|jpe?g);base64,/.test(dataUrl||''))return toast('Format non supporté — utilisez PNG ou JPG','bad');
+  if(f.size>300000||dataUrl.length>420000)dataUrl=await shrink(dataUrl);
+  if(dataUrl.length>420000)return toast('Image trop lourde même après réduction — essayez un logo plus simple','bad');
   await setSetting('company',{name:(SETS.company||{}).name||'FKS Industrie',logo:dataUrl});
-  toast('Logo enregistré ✅','ok');render();};
+  toast('Logo enregistré ✅ (visible dans l’app, les emails et les exports Excel)','ok');render();};
+
 App.logoDel=async()=>{await setSetting('company',{name:(SETS.company||{}).name||'FKS Industrie',logo:''});toast('Logo retiré','ok');render();};
 App.saveAccs=async()=>{const list=(SETS.sage_accounts||[]).slice();
   $$('#stAcc input').forEach(i=>{const k=i.getAttribute('data-k');const a=list.filter(x=>x.key===k)[0];if(a)a.account=i.value.trim();});

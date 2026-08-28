@@ -1,4 +1,4 @@
-;/* TSAGE : export Sage 100 en 6 journaux — équilibre D/C, classement strict, zéro double comptage */
+;/* TSAGE : export Sage 100 en 6 journaux SYSCOHADA RÉVISÉ — équilibre D/C, classement strict, zéro double comptage */
 ;(async()=>{
 await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
 const num=x=>(x&&typeof x==='object')?Number(x.v||0):Number(x||0);
@@ -46,34 +46,34 @@ if(String(num(gen[5]))!=='✔'&&!String(gen[5].v||'').includes('✔'))throw new 
 if(gD<=0)throw new Error('montants nuls : rien à exporter');
 console.log('✓ Contrôle global : '+Math.round(gD)+' F débit = '+Math.round(gC)+' F crédit — synthèse ✔');
 
-/* 5. Journal VE : ventes au comptant ET à crédit, créance 411 */
+/* 5. Journal VE : ventes au comptant ET à crédit, créance 4111 */
 const has=(k,a)=>rowsOf(k).some(r=>String(r[2])===a&&(num(r[4])+num(r[5]))>0);
-if(!has('VE','411000'))throw new Error('VE : créance client 411000 absente');
-if(!has('VE','701000'))throw new Error('VE : compte ventes 701000 absent');
-if(!has('VE','571000')&&!has('VE','572200'))throw new Error('VE : encaissement comptant absent');
-console.log('✓ VE : 701 ventes + 411 créances clients + 571/572 encaissements');
+if(!has('VE','411100'))throw new Error('VE : créance client 411100 absente');
+if(!has('VE','702000'))throw new Error('VE : compte ventes 702000 (produits finis) absent');
+if(!has('VE','571000')&&!has('VE','552100'))throw new Error('VE : encaissement comptant absent');
+console.log('✓ VE : 702 produits finis + 4111 créances clients + 571/5521 encaissements');
 
 /* 6. Aucun double comptage dans CA */
-['701000','601000','602600','661000','664000'].forEach(a=>{if(has('CA',a))throw new Error('CA : compte '+a+' présent en double (déjà dans VE/AC/PA)');});
-if(!has('CA','411000'))throw new Error('CA : encaissement de créance 411000 absent');
-if(!has('CA','624000'))throw new Error('CA : charge transport 624000 absente');
-console.log('✓ CA : charges réglées en espèces (624…) + encaissement créance 411 — rien en double');
+['702000','602100','608100','661000','664100'].forEach(a=>{if(has('CA',a))throw new Error('CA : compte '+a+' présent en double (déjà dans VE/AC/PA)');});
+if(!has('CA','411100'))throw new Error('CA : encaissement de créance 411100 absent');
+if(!has('CA','612000'))throw new Error('CA : charge transport 612000 absente');
+console.log('✓ CA : charges réglées en espèces (612…) + encaissement créance 4111 — rien en double');
 
 /* 7. Journal AC : achats réglés et à crédit */
-if(!has('AC','601000'))throw new Error('AC : 601000 absent');
-if(!has('AC','602600'))throw new Error('AC : emballages 602600 absents');
-if(!has('AC','401000'))throw new Error('AC : fournisseur 401000 absent (achat à crédit)');
-console.log('✓ AC : café vert 601 + emballages 602 + dette fournisseur 401 (achat à crédit)');
+if(!has('AC','602100'))throw new Error('AC : matière première 602100 absente');
+if(!has('AC','608100'))throw new Error('AC : emballages 608100 absents');
+if(!has('AC','401100'))throw new Error('AC : fournisseur 401100 absent (achat à crédit)');
+console.log('✓ AC : café vert 6021 + emballages 6081 + dette fournisseur 4011 (achat à crédit)');
 
-/* 8. OD + PA : structure complète */
-if(!has('OD','585000'))throw new Error('OD : virement interne 585000 absent');
-if(!has('PA','661000'))throw new Error('PA : salaires 661000 absent');
-if(!has('PA','664000'))throw new Error('PA : charges sociales 664000 absentes');
-if(!has('PA','421000'))throw new Error('PA : net à payer 421000 absent');
-if(!has('PA','431000'))throw new Error('PA : CNPS 431000 absente');
-if(!has('PA','444000'))throw new Error('PA : ITS/État 444000 absent');
+/* 8. OD + PA : structure complète révisée */
+if(!has('OD','585000'))throw new Error('OD : virements de fonds 585000 absent');
 if(has('CA','585000'))throw new Error('OD : virement interne fuité dans CA');
-console.log('✓ OD : virements internes 585 · PA : 661 + 664 débit / 421 + 431 + 444 crédit');
+if(!has('PA','661000'))throw new Error('PA : salaires 661000 absent');
+if(!has('PA','664100'))throw new Error('PA : charges sociales 664100 absentes');
+if(!has('PA','422000'))throw new Error('PA : rémunérations dues 422000 absent');
+if(!has('PA','431000'))throw new Error('PA : CNPS 431000 absente');
+if(!has('PA','447200'))throw new Error('PA : ITS 447200 absent');
+console.log('✓ OD : virements de fonds 585 · PA : 661 + 6641 débit / 422 + 431 + 4472 crédit');
 
 /* 9. Codes journaux personnalisés (Réglages) */
 SETS.journals={VE:'VT',AC:'AC',CA:'CS',BQ:'BQ',PA:'PY',OD:'DIV'};
@@ -85,6 +85,23 @@ if(num(t2[4])<=0||Math.abs(num(t2[4])-num(t2[5]))>0.009)throw new Error('codes p
 console.log('✓ Codes journaux paramétrables (VT/CS/PY/DIV) — équilibre conservé');
 makeXlsx=_mk;dlCsv=_dl;
 
+/* 10. Migration comptes : ancien défaut -> révisé, personnalisation conservée */
+const oldStored=[{key:'ventes',label:'Ventes de produits',account:'701000'},{key:'transport',label:'Transport',account:'625000'},{key:'clients',label:'Clients',account:'411000'}];
+SETS.sage_accounts=SETS.sage_accounts.slice();
+await (async()=>{ /* simule la migration de loadSettings */
+  const d=defaultSettings();
+  const OLDDEF={'ventes':'701000','transport':'624000','clients':'411000'};
+  const merged=d.sage_accounts.map(def=>{const st=oldStored.filter(x=>x.key===def.key)[0];
+    return st?Object.assign({},def,{account:st.account!=null?st.account:def.account}):def;});
+  SETS.sage_accounts=merged.map(a=>{const nd=d.sage_accounts.filter(x=>x.key===a.key)[0];
+    return (nd&&String(a.account||'').trim()===String(OLDDEF[a.key]||'\u0000'))?Object.assign({},a,{account:nd.account,label:nd.label}):a;});
+})();
+const gA=k=>SETS.sage_accounts.filter(x=>x.key===k)[0].account;
+if(gA('ventes')!=='702000')throw new Error('migration : ventes '+gA('ventes')+' au lieu de 702000');
+if(gA('clients')!=='411100')throw new Error('migration : clients '+gA('clients')+' au lieu de 411100');
+if(gA('transport')!=='625000')throw new Error('migration : personnalisation 625000 écrasée ('+gA('transport')+')');
+console.log('✓ Migration SYSCOHADA révisé : anciens défauts remplacés, comptes personnalisés conservés');
+
 captured.sheets.forEach(s=>{const t=JSON.stringify(s.rows);if(/NaN|undefined/.test(t))throw new Error(s.name+' : NaN/undefined');});
-console.log('TSAGE: 9/9 OK');
+console.log('TSAGE: 10/10 OK');
 })().catch(e=>{console.error('ÉCHEC TSAGE:',e.stack||e.message);process.exit(1);});
