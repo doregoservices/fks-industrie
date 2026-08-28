@@ -995,7 +995,6 @@ const dFR=iso=>{if(!iso)return'';const p=String(iso).slice(0,10).split('-');retu
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const rndToken=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';for(let i=0;i<24;i++)s+=a[Math.floor(Math.random()*a.length)];return s;};
 const monthAdd=(m,k)=>{let[y,mm]=m.split('-').map(Number);mm+=k;while(mm>12){mm-=12;y++;}while(mm<1){mm+=12;y--;}return y+'-'+String(mm).padStart(2,'0');};
-function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
 function toast(msg,type){let t=document.getElementById('toast');if(t)t.remove();t=document.createElement('div');t.id='toast';if(type==='bad')t.style.background='#c0392b';if(type==='ok')t.style.background='#1d7a4f';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200);}
 function download(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},400);}
 function copyTxt(txt){if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(()=>toast('Copié !','ok')).catch(()=>fallbackCopy(txt));}else fallbackCopy(txt);}
@@ -2019,9 +2018,6 @@ function computeSlip(emp,x,P){
     bonus:bonus,ot_hours:ot,other:other,advances:adv,net:Math.round(net),
     cnps_er:er.retraite,pf:er.pf,mat:er.mat,at:er.at,cmu_er:er.cmu,fdfp:er.fdfp,
     cnps_employer:cnpsEr,cout_employeur:brutAP+cnpsEr+er.fdfp};
-}
-function slipRows(s){
-  return [['Salaire de base',s.base],['Primes récurrentes (transport, logement)',s.gross-s.base-s.bonus-(s.ot_hours?0:0)],...[]].filter(Boolean);
 }
 async function scPaie(){
   const tab=S.tab.paie||'emp';
