@@ -1089,8 +1089,17 @@ function defaultSettings(){
       {key:'impots_taxes',label:'Impôts et taxes (patente, TOM, vignettes…)',account:'640000',group:'impots'},
       {key:'treso_caisse',label:'Caisse (espèces)',account:'571000',group:'treso'},
       {key:'treso_momo',label:'Mobile Money',account:'572200',group:'treso'},
-      {key:'apport',label:'Apport / capital',account:'101000',group:'treso'}
+      {key:'apport',label:'Apport / capital',account:'101000',group:'treso'},
+      {key:'clients',label:'Clients (créances — ventes à crédit)',account:'411000',group:'tiers'},
+      {key:'fournisseurs',label:'Fournisseurs (achats à crédit)',account:'401000',group:'tiers'},
+      {key:'personnel_net',label:'Personnel — nets à payer',account:'421000',group:'tiers'},
+      {key:'personnel_avances',label:'Personnel — avances',account:'425000',group:'tiers'},
+      {key:'cnps',label:'CNPS / organismes sociaux',account:'431000',group:'tiers'},
+      {key:'etat',label:'État — ITS et retenues',account:'444000',group:'tiers'},
+      {key:'fdfp',label:'FDFP (formation professionnelle)',account:'647100',group:'impots'},
+      {key:'virement_interne',label:'Virements internes (585)',account:'585000',group:'treso'}
     ],
+    journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
     exploitation:{
       is_rate:25 // impôt sur les bénéfices (estimation CI 25 %) — 0 = ne pas déduire
     },
@@ -2275,10 +2284,10 @@ async function scExports(){
   const f=S.expFilter||{from:'',to:''};
   $('#main').innerHTML='<div class="card"><h2>📗 Exports Excel</h2>'
   +'<div class="help" style="margin-bottom:12px">Les fichiers <b>.xlsx</b> s\'ouvrent dans Excel et Google Sheets. Le journal de caisse est prêt pour Sage 100 : les comptes sont pré-remplis selon la table de correspondance (modifiable dans Réglages), sinon il suffit de les ajouter.</div>'
-  +'<div class="row">'+fld('Du','<input type="date" value="'+f.from+'" onchange="S.expFilter.from=this.value">')+fld('Au','<input type="date" value="'+f.to+'" onchange="S.expFilter.to=this.value">')+fld('Libellé dans Sage','<input value="'+esc(SETS.journal_code||'CA')+'" onchange="setSetting(\'journal_code\',this.value).then(()=>toast(\'Code journal enregistré\',\'ok\'))">')+'</div>'
+  +'<div class="row">'+fld('Du','<input type="date" value="'+f.from+'" onchange="S.expFilter.from=this.value">')+fld('Au','<input type="date" value="'+f.to+'" onchange="S.expFilter.to=this.value">')+'</div>'
   +'<div class="grid g2" style="margin-top:14px">'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expStocks()"><div class="t">📦 Point complet des stocks</div><div class="s">Café vert, torréfié, produits finis, rendements réels et mouvements détaillés</div></div>'
-  +'<div class="kpi" style="cursor:pointer" onclick="App.expCaisse()"><div class="t">💰 Journal de caisse — Sage 100</div><div class="s">Écritures équilibrées (Débit/Crédit) + feuille OD Mobile Money à part</div></div>'
+  +'<div class="kpi" style="cursor:pointer" onclick="App.expCaisse()"><div class="t">💰 Sage 100 — 6 journaux</div><div class="s">VE · AC · CA · BQ · PA · OD — écritures équilibrées Débit/Crédit, prêtes à importer (xlsx + csv)</div></div>'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expVentes()"><div class="t">🛒 Ventes</div><div class="s">Détail, synthèse par commerciale et par produit</div></div>'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
@@ -2335,34 +2344,111 @@ App.expStocks=async()=>{
     'Point_stocks_'+to+'.xlsx');
   toast('Point des stocks téléchargé ✅','ok');
 };
+const LBL6={VE:'Ventes',AC:'Achats',CA:'Caisse',BQ:'Banque/MoMo',PA:'Paie',OD:'Opérations diverses'};
 App.expCaisse=async()=>{
   const{from,to}=App.expFilterRange();
-  const J=SETS.journal_code||'CA';
-  const entries=(await DB.list('cash_entries')).filter(e=>(!from||e.date>=from)&&(!to||e.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  const sage=[['DATE','JOURNAL','COMPTE','LIBELLÉ','DÉBIT','CRÉDIT']];
-  let dTot=0,cTot=0;
-  entries.filter(e=>e.imputable!==false).forEach(e=>{
-    const treso=e.account==='momo'?sagAcc('treso_momo'):sagAcc('treso_caisse');
-    const cat=sagAcc(e.category)||'';
-    const lbl=e.label+' ('+(e.account==='momo'?'MoMo':'espèces')+')';
-    const amt=Number(e.amount);
-    if(e.type==='in'){sage.push([dFR(e.date),J,treso,lbl,amt,'']);sage.push([dFR(e.date),J,cat,lbl,'',amt]);dTot+=amt;cTot+=amt;}
-    else{sage.push([dFR(e.date),J,cat,lbl,amt,'']);sage.push([dFR(e.date),J,treso,lbl,'',amt]);dTot+=amt;cTot+=amt;}
+  const inR=d=>(!from||d>=from)&&(!to||d<=to);
+  const J=(SETS.journals||{});
+  const jl=k=>(J[k]||k);
+  const DEF={clients:'411000',fournisseurs:'401000',personnel_net:'421000',personnel_avances:'425000',cnps:'431000',etat:'444000',fdfp:'647100',virement_interne:'585000'};
+  const acc=k=>sagAcc(k)||DEF[k]||'';
+  const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
+  const L={VE:[],AC:[],CA:[],BQ:[],PA:[],OD:[]};
+  const push=(jr,dt,ct,lib,de,cr)=>{if(!de&&!cr)return;L[jr].push([dFR(dt),jl(jr),ct,lib,de||'',cr||'']);};
+  const A=e=>e.account==='momo'?acc('treso_momo'):acc('treso_caisse');
+  /* --- VE : toutes les ventes (comptant espèces/MoMo + crédit) --- */
+  sales.filter(x=>inR(x.date)).forEach(x=>{
+    const ct=x.pay_mode==='credit'?acc('clients'):(x.pay_mode==='momo'?acc('treso_momo'):acc('treso_caisse'));
+    const lib='Vente '+(x.agent_name||'')+(x.client?' — '+x.client:'');
+    push('VE',x.date,ct,lib,Number(x.total)||0,'');
+    push('VE',x.date,acc('ventes'),lib,'',Number(x.total)||0);
   });
-  sage.push([{v:'TOTAL',__style:1},'', '', '',{v:dTot,__style:1},{v:cTot,__style:1}]);
-  const od=entries.filter(e=>e.imputable===false);
-  const odSh=[['OPÉRATIONS AVEC LA DIRECTION (Mobile Money) — NON IMPUTABLES'],['(virements internes de trésorerie : à traiter en OD ou virement 58x selon votre comptable)'],[],['DATE','TYPE','MOYEN','MONTANT','NOTE']];
-  od.forEach(e=>odSh.push([dFR(e.date),e.od==='transfer'?'Envoi à la direction':'Approvisionnement direction',e.account==='momo'?'Mobile Money':'Espèces',Number(e.amount),e.label]));
-  odSh.push([{v:'NET TRANSFÉRÉ À LA DIRECTION',__style:1},'','', {v:od.reduce((s,e)=>s+(e.od==='transfer'?Number(e.amount):-Number(e.amount)),0),__style:1},'']);
-  const det=[['DATE','TYPE','CATÉGORIE','LIBELLÉ','MOYEN','ENTRÉE','SORTIE','SAGE ?']];
-  entries.forEach(e=>det.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',catLabel(e.category),e.label,e.account==='momo'?'Mobile Money':'Espèces',e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'',e.imputable===false?'OD (à part)':'Oui']));
-  makeXlsx([
-    {name:'SAGE',rows:sage,widths:[12,10,12,44,14,14]},
-    {name:'OD Mobile Money',rows:odSh,widths:[12,30,14,14,40]},
-    {name:'Mouvements',rows:det,widths:[12,10,26,38,14,14,14,14]}],
-    'Journal_caisse_'+to+'.xlsx');
-  dlCsv('Journal_caisse_SAGE_'+to+'.csv',sage);
-  toast('Journal de caisse téléchargé (xlsx + csv) ✅','ok');
+  /* --- PA : paies clôturées de la période --- */
+  const closed={};runs.filter(r=>r.status==='closed'&&inR(String(r.paid_date||r.created_at||'').slice(0,10))).forEach(r=>closed[r.id]=r);
+  const sl=slips.filter(x=>closed[x.run_id]);
+  if(sl.length){
+    const SUM=k=>sl.reduce((a,x)=>a+Number(x[k]||0),0);
+    const brut=SUM('brut_ap');
+    const pat=sl.reduce((a,x)=>a+Number(x.cnps_employer||0)+Number(x.cmu_er||0),0);
+    const fdfp=SUM('fdfp');
+    const org=SUM('cnps')+sl.reduce((a,x)=>a+Number(x.cnps_employer||0),0)+SUM('cmu')+SUM('cmu_er');
+    const etat=SUM('its')+SUM('other')+fdfp;
+    const net=SUM('net'),adv=SUM('advances');
+    const dt=closed[sl[0].run_id].paid_date||sl[0].created_at;
+    const lib='Paie '+ (sl[0].run_period||'');
+    push('PA',dt,acc('salaires'),lib,brut,'');
+    if(pat)push('PA',dt,acc('charges_sociales'),lib,pat,'');
+    if(fdfp)push('PA',dt,acc('fdfp'),lib,fdfp,'');
+    if(org)push('PA',dt,acc('cnps'),lib,'',org);
+    if(etat)push('PA',dt,acc('etat'),lib,'',etat);
+    if(adv)push('PA',dt,acc('personnel_avances'),lib,'',adv);
+    if(net)push('PA',dt,acc('personnel_net'),lib,'',net);
+  }
+  /* --- CA / BQ / AC / OD depuis les écritures de caisse --- */
+  const saleById={};sales.forEach(x=>saleById[x.id]=x);
+  cash.filter(e=>inR(e.date)).forEach(e=>{
+    const amt=Number(e.amount)||0,lib=e.label,d=e.date,cat=e.category;
+    if(e.imputable===false){
+      if(e.od==='transfer'){push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);}
+      else{push('OD',d,A(e),lib,amt,'');push('OD',d,acc('virement_interne'),lib,'',amt);}
+      return;}
+    if(cat==='ventes'){
+      const ref=String(e.ref||'');
+      const src=ref.indexOf('sale:')===0?saleById[ref.slice(5)]:null;
+      if(src&&src.pay_mode==='credit'){const jr=e.account==='momo'?'BQ':'CA';
+        push(jr,d,A(e),lib,amt,'');push(jr,d,acc('clients'),lib,'',amt);}
+      return;}
+    if(cat==='achat_vert'||cat==='emballages'){
+      push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,A(e),lib,'',amt);return;}
+    if(cat==='salaires'){const jr=e.account==='momo'?'BQ':'CA';
+      push(jr,d,acc('personnel_net'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
+    if(cat==='apport'){push('OD',d,A(e),lib,amt,'');push('OD',d,sagAcc('apport')||'101000',lib,'',amt);return;}
+    if(cat==='treso_caisse'||cat==='treso_momo'){
+      push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);return;}
+    const jr=e.account==='momo'?'BQ':'CA';
+    const cc=sagAcc(cat)||'';
+    if(e.type==='in'){push(jr,d,A(e),lib,amt,'');push(jr,d,cc,lib,'',amt);}
+    else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
+  });
+  /* --- achats non encore réglés → AC crédit fournisseurs --- */
+  const paidPur={};cash.forEach(e=>{const r=String(e.ref||'');if(r.indexOf('purchase:')===0)paidPur[r.slice(9)]=1;});
+  pur.filter(p=>inR(p.date)&&!paidPur[p.id]).forEach(p=>{
+    const lib='Achat café vert — '+p.supplier+' (à crédit)';
+    push('AC',p.date,sagAcc('achat_vert')||'',lib,Number(p.amount)||0,'');
+    push('AC',p.date,acc('fournisseurs'),lib,'',Number(p.amount)||0);
+  });
+  /* --- feuilles --- */
+  const HEAD=['DATE','JOURNAL','COMPTE','LIBELLÉ','DÉBIT','CRÉDIT'];
+  const sheetOf=k=>{const rows=[['JOURNAL '+jl(k)+' — '+(SETS.company&&SETS.company.name||'')],[ 'Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to) ],[],HEAD];
+    let dd=0,cc2=0;L[k].forEach(r=>{rows.push(r);dd+=Number(r[4])||0;cc2+=Number(r[5])||0;});
+    rows.push([{v:'TOTAL '+jl(k),__style:1},'', '', '',{v:Math.round(dd*100)/100,__style:1},{v:Math.round(cc2*100)/100,__style:1}]);
+    return{rows:rows,tot:dd,totC:cc2,n:L[k].length};};
+  const KS=['VE','AC','CA','BQ','PA','OD'];
+  const SH={};KS.forEach(k=>SH[k]=sheetOf(k));
+  const syn=[['EXPORT SAGE 100 — 6 JOURNAUX'],[esc((SETS.company&&SETS.company.name)||'')],['Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to)],[],
+    ['JOURNAL','Code','Écritures','Total DÉBIT','Total CRÉDIT','ÉQUILIBRE']];
+  KS.forEach(k=>syn.push([{v:(LBL6[k]||k),__style:1},jl(k),SH[k].n,Math.round(SH[k].tot),Math.round(SH[k].totC),Math.abs(SH[k].tot-SH[k].totC)<0.01?'✔':'✘ ÉCART']));
+  const gD=KS.reduce((a,k)=>a+SH[k].tot,0),gC=KS.reduce((a,k)=>a+SH[k].totC,0);
+  syn.push([{v:'TOTAL GÉNÉRAL',__style:1},'',{v:'',__style:1},{v:Math.round(gD),__style:1},{v:Math.round(gC),__style:1},{v:Math.abs(gD-gC)<0.01?'✔':'✘',__style:1}]);
+  const det=[['DATE','TYPE','CATÉGORIE','LIBELLÉ','MOYEN','ENTRÉE','SORTIE','JOURNAL SAGE']];
+  cash.filter(e=>inR(e.date)).forEach(e=>{
+    let jr='—';
+    if(e.imputable===false)jr=jl('OD');
+    else if(e.category==='ventes'){const ref=String(e.ref||'');const src=ref.indexOf('sale:')===0?saleById[ref.slice(5)]:null;jr=(src&&src.pay_mode==='credit')?(e.account==='momo'?jl('BQ'):jl('CA')):jl('VE');}
+    else if(e.category==='achat_vert'||e.category==='emballages')jr=jl('AC');
+    else if(e.category==='salaires')jr=e.account==='momo'?jl('BQ'):jl('CA');
+    else if(e.category==='apport')jr=jl('OD');
+    else jr=e.account==='momo'?jl('BQ'):jl('CA');
+    det.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',catLabel(e.category),e.label,e.account==='momo'?'Mobile Money':'Espèces',e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'',jr]);});
+  makeXlsx(
+    [{name:'Synthèse',rows:syn,widths:[30,8,12,16,16,12]}]
+    .concat(KS.map(k=>({name:jl(k)+' — '+LBL6[k],rows:SH[k].rows,widths:[12,9,12,44,14,14]})))
+    .concat([{name:'Mouvements',rows:det,widths:[12,10,26,38,14,14,14,12]}]),
+    'Sage_6_journaux_'+to+'.xlsx');
+  const csv=[HEAD].concat(KS.reduce((a,k)=>a.concat(L[k]),[]));
+  csv.push([{v:'TOTAL',__style:1},'','','',{v:Math.round(gD),__style:1},{v:Math.round(gC),__style:1}]);
+  dlCsv('Sage_6_journaux_'+to+'.csv',csv);
+  toast('Sage 6 journaux téléchargé (xlsx + csv) ✅ '+((Math.abs(gD-gC)<0.01)?'— équilibré ✔':'— ⚠️ ÉCART')) ;
 };
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
@@ -2456,7 +2542,7 @@ async function scParametres(){
   const accts=SETS.sage_accounts||[];
   const P=SETS.payroll;
   m.innerHTML='<div class="card"><h2>⚙️ Réglages</h2>'
-  +'<h3>🏢 Société</h3><div class="row">'+fld('Nom de la société','<input id="stCo" value="'+esc((SETS.company||{}).name||'')+'">')+fld('Code journal Sage','<input id="stJ" value="'+esc(SETS.journal_code||'CA')+'">')+'</div>'
+  +'<h3>🏢 Société</h3><div class="row">'+fld('Nom de la société','<input id="stCo" value="'+esc((SETS.company||{}).name||'')+'">')+fld('Codes journaux Sage (6)', '<div class="row" style="gap:6px">'+[['VE','Ventes'],['AC','Achats'],['CA','Caisse'],['BQ','Banque/MoMo'],['PA','Paie'],['OD','OD']].map(x=>'<input id="jrn_'+x[0]+'" title="'+x[1]+'" value="'+esc(((SETS.journals||{})[x[0]])||x[0])+'" style="max-width:64px;text-align:center">').join('')+'</div><span class="help">Un code par journal Sage (modifiable)</span>')+'</div>'
   +'<div class="field"><span>Logo de la société (affiché dans l\'app et les emails au boss)</span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
   +((SETS.company||{}).logo?'<img src="'+SETS.company.logo+'" style="height:44px;object-fit:contain;border:1px solid var(--line);border-radius:8px;padding:3px">':'<span class="help">Aucun logo — ☕ affiché pour l\'instant</span>')
   +'<input type="file" id="stLogo" accept="image/*" style="max-width:230px"><button class="btn sm sec" onclick="App.logoSave()">📥 Utiliser ce logo</button>'
@@ -2513,7 +2599,7 @@ async function scParametres(){
   +'<div class="hr"></div><h3>⚠️ Zone sensible</h3><button class="btn danger sm" onclick="App.resetAll()">Réinitialiser toutes les données locales</button>'
   +'</div>';
 }
-App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});await setSetting('journal_code',$('#stJ').value||'CA');toast('Enregistré','ok');render();};
+App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
 App.logoSave=async()=>{const f=$('#stLogo').files&&$('#stLogo').files[0];if(!f)return toast('Choisissez d\'abord une image','bad');
   if(f.size>400000)return toast('Image trop lourde ('+Math.round(f.size/1000)+' Ko) — réduisez-la à moins de 300 Ko','bad');
   const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(f);});

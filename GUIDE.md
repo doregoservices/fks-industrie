@@ -71,13 +71,15 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 | Export | Contenu |
 |---|---|
 | **Point complet des stocks** | Café vert, torréfié, **types de café transformés**, produits finis, **emballages**, rendements (torréfaction + machines), mouvements détaillés |
-| **Journal de caisse — Sage 100** | Feuille `SAGE` équilibrée Débit/Crédit (`Date/Journal/Compte/Libellé/Débit/Crédit`) + feuille `OD Mobile Money` séparée + détail. Fourni en **.xlsx et .csv** |
+| **Sage 100 — 6 journaux** | **8 feuilles** : `Synthèse` (contrôle) + un feuillet par journal — **VE Ventes, AC Achats, CA Caisse, BQ Banque/Mobile Money, PA Paie, OD Opérations diverses** — écritures équilibrées `Date/Journal/Compte/Libellé/Débit/Crédit`, + `Mouvements` (détail). Fourni en **.xlsx et .csv global** prêt à importer |
+
+**Classement automatique (aucun double comptage)** : ventes (comptant + crédit → VE, créances au 411000) · encaissements de crédits → CA/BQ (411000) · achats café vert & emballages → AC · achats non réglés → AC (dette 401000) · paies clôturées → PA (661000 + 664000 / 421000 + 431000 + 444000), leur règlement en caisse passe au 421000 · transferts avec la direction et apports → OD (585000 / 101000). Les **codes journaux** se règlent dans **Réglages → Société**, les numéros de comptes dans **Réglages → Correspondance des comptes** (9 comptes tiers ajoutés : 411, 401, 421, 425, 431, 444, 647100, 585…).
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
 | **Compte d'exploitation mensuel** | Écran **Exploitation** : résultat, ventes, achats consommés, charges par nature, personnel, annexes stocks + trésorerie. S'ouvre dans Excel **et** Google Sheets |
 | **Design des fichiers** | Tous les exports Excel sont mis en forme automatiquement : bandeau de titre brun café, en-têtes de colonnes colorées et figées au défilement, lignes zébrées, totaux encadrés, nombres formatés — avec la signature « Réalisé par Doregoservices » en pied de chaque feuille |
 
-Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne **Compte** puis importer le CSV (séparateur `;`).
+Pour Sage : ouvrez le csv global `Sage_6_journaux_*.csv` (séparateur `;`), vérifiez la colonne **Compte** puis importez — chaque journal (VE, AC, CA, BQ, PA, OD) est déjà étiqueté et équilibré.
 
 ### 🏗️ Immobilisations et amortissements
 Écran **Immobili.** : enregistrez vos équipements (torréfacteur, moulin, groupe électrogène, véhicules…) avec coût, valeur résiduelle et durée. L'application calcule la **dotation mensuelle** (amortissement linéaire), le cumulé et la **valeur nette comptable**, et déduit automatiquement l'amortissement dans le compte d'exploitation.
