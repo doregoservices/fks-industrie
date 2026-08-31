@@ -1761,50 +1761,57 @@ App.roastSave=async()=>{const i=Number($('#rIn').value)||0,o=Number($('#rOut').v
   toast('Torréfaction enregistrée ✅','ok');render();};
 async function prodTransTab(){
   S.trEdit=null;S.condEdit=null;
+  const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
-  const prodsAll=(await DB.list('products')).filter(p=>p.active);
-  const prods=prodsAll.filter(p=>(p.recipes||[]).length);
-  const sansType=prodsAll.filter(p=>!(p.recipes||[]).length).map(p=>p.name);
   const st=await computeStats();
   const stock={};(st.types||[]).forEach(t=>stock[t.id]=t.stock);
   App._condCtx={prods:prods,types:ctypes,stock:stock,hasTypes:ctypes.length>0};
-  const transf=(await DB.list('transformations')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const conds=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const totTransf=t=>(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0);
+  const transf=(await DB.list('transformations')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const cafeU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
   return await prodStockHead()
-  +'<h3 style="margin:4px 0 8px">Étape 1 · ⚙️ Transformation par les machines</h3>'
-  +'<div class="alert al-info">Le café <b>torréfié</b> est passé aux <b>machines</b> (broyage, mouture, assemblage…) qui produisent les <b>types de café</b>. La <b>perte machines</b> et le rendement se mesurent ici : c\'est la quantité <b>obtenue</b> qui sera disponible au conditionnement.</div>'
-  +'<div class="row">'+fld('Date','<input id="tD" type="date" value="'+todayISO()+'">')+fld('Café torréfié consommé (kg)','<input id="tIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCalc()">')+'</div>'
-  +'<div class="field"><span>Quantités obtenues par type (kg réellement pesés)</span>'
-  +(ctypes.length?ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join(''):'<div class="alert al-bad">⚠️ Aucun <b>type de café</b> créé : les machines ne peuvent rien produire. Créez d\'abord vos types (ex : Moulu premium, Café grain, Moulu gingembre…).</div><button class="btn" onclick="closeModal();go(\'produits\')">➡️ Créer les types de café (écran Produits)</button>')
-  +'</div>'
-  +'<div class="row">'+fld('Opérateur / machine','<input id="tOp" placeholder="ex. Machine 1 — Broyage">')+fld('Note','<input id="tN" placeholder="lot, incident… (facultatif)">')+'</div>'
-  +'<div id="tCalc" class="pill" style="margin:6px 0 12px">Perte et rendement machines apparaîtront ici</div>'
-  +'<button class="btn blk" id="trBtn" onclick="App.trSave()">Enregistrer la transformation</button> <a href="javascript:void(0)" id="trCancel" onclick="App.trCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
-  +(transf.length?'<div style="height:14px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Torréfié consommé</th><th>Obtenu (par type)</th><th class="r">Perte</th><th class="r">Rendement</th><th>Machine</th><th></th></tr></thead><tbody>'
-   +transf.slice(0,10).map(t=>{const out=totTransf(t);const inn=Number(t.roasted_used)||0;
-     return '<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(inn)+' kg</td><td><b>'+num2(out)+' kg</b> '+((t.lines||[]).map(l=>num2(l.qty)+' '+esc(l.name)).join(' · ')||'')+'</td><td class="r" style="color:var(--bad)">'+num2(inn-out)+' kg</td><td class="r"><b>'+(inn>0?num2(100*out/inn)+' %':'—')+'</b></td><td>'+esc(t.operator||'')+'</td>'
-      +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.trEdit(\''+t.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>';}).join('')
-   +'</tbody></table></div>':'')
-  +'<div class="hr" style="margin:16px 0"></div>'
-  +'<h3 style="margin:4px 0 8px">Étape 2 · 📦 Conditionnement en produits finis</h3>'
-  +(prods.length
-    ?'<div class="alert al-info">Le conditionnement consomme <b>uniquement les types de café</b> issus des machines (recette de chaque produit) + les <b>emballages</b> automatiquement.</div>'
-     +'<div class="field"><span>Date</span><input id="cD" type="date" value="'+todayISO()+'"></div>'
-     +fld('Opérateur / équipe','<input id="cOp" placeholder="facultatif">')
-     +'<div class="field"><span>Quantités produites par produit</span><div class="qtygrid">'
-     +prods.map(p=>{const rec=(p.recipes||[])[0]||{};
-       return '<div class="qcard"><div class="nm">'+esc(p.name)+(rec.name?'<div class="pr">☕ '+esc(rec.name)+' · '+num2(rec.qty)+' kg/u</div>':'')+'</div><div class="qty"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',-1)">−</button><input id="cq_'+p.id+'" type="number" min="0" inputmode="numeric" value="0" oninput="App.condTot()"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',1)">+</button></div></div>';}).join('')
-     +'</div></div><div id="cTot" class="pill">Rien produit pour l\'instant</div><div style="height:12px"></div>'
-     +'<button class="btn blk" id="condBtn" onclick="App.condSave()">Enregistrer le conditionnement</button> <a href="javascript:void(0)" id="condCancel" onclick="App.condCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
-    :'<div class="alert al-bad">Aucun produit n\'a encore de <b>type de café</b> défini. Le conditionnement consomme les types issus des machines : définissez la recette de chaque produit dans l\'écran <b>🛍️ Produits</b>.'+(sansType.length?' (produits concernés : '+sansType.map(esc).join(', ')+')':'')+'</div>')
-  +(conds.length?'<div style="height:14px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Types consommés</th><th>Production</th><th>Opérateur</th><th></th></tr></thead><tbody>'
-   +conds.slice(0,10).map(p=>{
-     const types=(p.type_lines&&p.type_lines.length?p.type_lines.map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>'):(Number(p.roasted_used)>0?'<span class="mut">'+num2(p.roasted_used)+' kg torréfié (ancien)</span>':'—'));
-     return '<tr><td>'+dFR(p.date)+'</td><td>'+types+'</td><td>'+ (p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td>'+esc(p.operator||'')+'</td>'
+  +'<h3 style="margin:4px 0 8px">⚙️ Transformation &amp; Conditionnement <span class="mut">(en une seule saisie)</span></h3>'
+  +'<div class="alert al-info">Les machines transforment le torréfié et le conditionnement se fait <b>dans la foulée</b> : indiquez le <b>torréfié consommé</b> et les <b>unités produites</b> — le café conditionné, la <b>perte</b> et le <b>rendement</b> se calculent tout seuls.</div>'
+  +'<div class="row">'+fld('Date','<input id="cD" type="date" value="'+todayISO()+'">')+fld('Café torréfié consommé (kg)','<input id="cIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCondCalc()">')+'</div>'
+  +'<div class="row">'+fld('Opérateur / machine','<input id="cOp" placeholder="ex. Machine 1 — Broyage">')+fld('Note','<input id="cN" placeholder="lot, incident… (facultatif)">')+'</div>'
+  +'<div class="field"><span>Unités produites par produit</span><div class="qtygrid">'
+  +prods.map(p=>{const kg=cafeU(p);
+    return '<div class="qcard"><div class="nm">'+esc(p.name)+(kg?'<div class="pr">☕ '+num2(kg)+' kg café/u</div>':'')+'</div><div class="qty"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',-1)">−</button><input id="cq_'+p.id+'" type="number" min="0" inputmode="numeric" value="0" oninput="App.trCondCalc()"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',1)">+</button></div></div>';}).join('')
+  +'</div></div><div id="cTot" class="pill" style="margin:6px 0 12px">Café conditionné, perte et rendement apparaîtront ici</div>'
+  +'<button class="btn blk" id="condBtn" onclick="App.condSave()">Enregistrer la transformation &amp; conditionnement</button> <a href="javascript:void(0)" id="condCancel" onclick="App.condCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
+  +(ctypes.length?'<details style="margin-top:14px"><summary style="cursor:pointer;font-size:13.5px;color:#8a6a4f">Option : peser le café en vrac avant conditionnement (transformation seule)</summary><div style="height:10px"></div>'
+    +'<div class="row">'+fld('Date','<input id="tD" type="date" value="'+todayISO()+'">')+fld('Torréfié consommé (kg)','<input id="tIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCalc()">')+'</div>'
+    +'<div class="field"><span>Quantités obtenues par type (kg pesés)</span>'
+    +ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join('')
+    +'</div>'
+    +'<div class="row">'+fld('Opérateur / machine','<input id="tOp">')+fld('Note','<input id="tN">')+'</div>'
+    +'<div id="tCalc" class="pill" style="margin:6px 0 10px">Perte et rendement machines apparaîtront ici</div>'
+    +'<button class="btn" id="trBtn" onclick="App.trSave()">Enregistrer la transformation seule (vrac en stock)</button></details>':'')
+  +'<div style="height:16px"></div>'
+  +(conds.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Torréfié consommé</th><th>Production</th><th class="r">Café conditionné</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
+   +conds.slice(0,12).map(p=>{const x=Number(p.roasted_used)||0;
+     const cafe=(p.lines||[]).reduce((a,l)=>{const pp=prods.filter(y=>y.id===l.product_id)[0];return a+Number(l.qty||0)*cafeU(pp||{});},0);
+     const typesH=(p.type_lines||[]).length?' + '+p.type_lines.map(l=>num2(l.qty)+' kg '+esc(l.name)).join(' · '):'';
+     return '<tr><td>'+dFR(p.date)+'</td><td class="r">'+num2(x)+' kg</td><td>'+(p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td class="r"><b>'+num2(cafe)+' kg</b>'+typesH+'</td><td class="r" style="color:var(--bad)">'+(x>0?num2(x-cafe)+' kg':'—')+'</td><td class="r"><b>'+(x>0?num2(100*cafe/x)+' %':'—')+'</b></td><td>'+esc(p.operator||'')+'</td>'
       +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.condEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>';}).join('')
+   +'</tbody></table></div>':'')
+  +(transf.length?'<div style="height:8px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Transformations seules (vrac)</th><th class="r">Torréfié</th><th>Obtenu</th><th class="r">Perte</th><th></th></tr></thead><tbody>'
+   +transf.slice(0,6).map(t=>{const out=(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0);const inn=Number(t.roasted_used)||0;
+     return '<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(inn)+' kg</td><td>'+num2(out)+' kg '+((t.lines||[]).map(l=>esc(l.name)).join(', ')||'')+'</td><td class="r">'+num2(inn-out)+' kg</td>'
+      +'<td><button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>';}).join('')
    +'</tbody></table></div>':'');
 }
+App.trCondCalc=()=>{const x=Number(($('#cIn')||{value:0}).value)||0;
+  const ctx=App._condCtx||{};const prods=ctx.prods||[];
+  let cafe=0,units=0;$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=prods.filter(y=>'cq_'+y.id===i.id)[0];if(!p)return;units+=q;
+    const r=(p.recipes||[])[0]||{};cafe+=q*(Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0);});
+  const pkUse={};$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=prods.filter(y=>'cq_'+y.id===i.id)[0];if(!p)return;
+    (p.packaging||[]).forEach(b=>{pkUse[b.name||b.pack_id]=(pkUse[b.name||b.pack_id]||0)+Number(b.qty||0)*q;});});
+  const pkParts=Object.keys(pkUse).map(k=>num(pkUse[k])+' '+esc(k));
+  const c=$('#cTot');if(!c)return;
+  if(units<=0){c.innerHTML='Café conditionné, perte et rendement apparaîtront ici';return;}
+  const perte=x-cafe;
+  c.innerHTML='<b>'+num(units)+'</b> unité(s) · café conditionné <b>'+num2(cafe)+' kg</b>'+(x>0?' · perte <b>'+num2(perte)+' kg</b> · rendement <b>'+num2(100*cafe/x)+' %</b>'+(perte<0?' ⚠️ conditionné supérieur au consommé !':''):'')+(pkParts.length?'<br>Emballages : '+pkParts.join(' · '):'');};
 App.trCancel=()=>{S.trEdit=null;render();};
 App.condCancel=()=>{S.condEdit=null;render();};
 App.trEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];
@@ -1817,11 +1824,11 @@ App.trEdit=async function(){const args=[].slice.call(arguments);const id=args.le
   const c=$('#trCancel');if(c)c.style.display='inline';
   App.trCalc();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
 App.condEdit=async id=>{const p=(await DB.list('productions',{eq:{id:id}}))[0];if(!p)return;
-  if(!(p.type_lines||[]).length&&Number(p.roasted_used)>0)return toast('Ancien conditionnement (torréfié direct) — modifiez-le en le supprimant puis en le ressaisissant','bad');
   S.condEdit=id;
-  $('#cD').value=p.date;$('#cOp').value=p.operator||'';
+  $('#cD').value=p.date||todayISO();$('#cIn').value=Number(p.roasted_used)||'';
+  $('#cOp').value=p.operator||'';$('#cN').value=p.note||'';
   (p.lines||[]).forEach(l=>{const inp=$('#cq_'+l.product_id);if(inp)inp.value=Number(l.qty)||'';});
-  App.condTot();
+  App.trCondCalc();
   const b=$('#condBtn');if(b)b.textContent='💾 Enregistrer la modification';
   const c=$('#condCancel');if(c)c.style.display='inline';
   try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
@@ -1887,24 +1894,25 @@ async function consumePackagingForProduction(pr){
 App.condSave=async()=>{
   const ctx=App._condCtx||{};
   const prods=await DB.list('products');
-  const lines=[];$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q>0){const p=prods.filter(x=>x.id===i.id.slice(3))[0];if(p)lines.push({product_id:p.id,name:p.name,qty:q,price:Number(p.price)||0});}});
-  if(!lines.length)return toast('Choisissez au moins un produit à conditionner','bad');
-  const noType=lines.filter(l=>{const p=prods.filter(x=>x.id===l.product_id)[0];return !(p&&p.recipes&&p.recipes.length);});
-  if(noType.length)return toast('Produits sans type de café défini : '+noType.map(l=>l.name).join(', ')+' — à régler dans l\'écran Produits','bad');
-  const use={};lines.forEach(l=>{const p=prods.filter(x=>x.id===l.product_id)[0];(p.recipes||[]).forEach(r=>use[r.type_id]=(use[r.type_id]||0)+Number(r.qty||0)*l.qty);});
-  const ctypes=await DB.list('coffee_types');const stock=ctx.stock||{};
-  const short=Object.keys(use).filter(k=>use[k]>(stock[k]!=null?stock[k]:Infinity));
-  if(short.length){const nm=short.map(k=>{const t=ctypes.filter(x=>x.id===k)[0];return t?t.name:'?';}).join(', ');return toast('Stock insuffisant de : '+nm+' — transformez d\'abord du torréfié (Étape 1)','bad');}
-  const rec={date:$('#cD').value||todayISO(),roasted_used:0,lines:lines,operator:$('#cOp').value,note:'',source:'admin'};
+  const x=Number(($('#cIn')||{value:0}).value)||0;
+  const lines=[];$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q>0){const p=prods.filter(y=>y.id===i.id.slice(3))[0];if(p)lines.push({product_id:p.id,name:p.name,qty:q,price:Number(p.price)||0});}});
+  if(!lines.length)return toast('Indiquez les unités produites (au moins un produit)','bad');
+  if(!x)return toast('Indiquez les kg de café torréfié consommés par les machines','bad');
+  const cafeU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
+  const cafe=lines.reduce((a,l)=>a+l.qty*cafeU(prods.filter(y=>y.id===l.product_id)[0]||{}),0);
+  if(cafe>x)return toast('Le café conditionné ('+num2(cafe)+' kg) dépasse le torréfié consommé ('+num2(x)+' kg) — vérifiez les quantités','bad');
+  if(cafe<x*0.5)toast('⚠️ Perte de '+num2(x-cafe)+' kg ('+num2(100*(x-cafe)/x)+' %) — rendement faible, vérifiez la saisie','bad');
+  const rec={date:$('#cD').value||todayISO(),roasted_used:x,lines:lines,operator:$('#cOp').value,note:$('#cN').value,source:'admin'};
+  const msg='✅ '+num(lines.reduce((a,l)=>a+l.qty,0))+' unités · '+num2(cafe)+' kg conditionnés · perte '+num2(x-cafe)+' kg · rendement '+num2(100*cafe/x)+' %';
   if(S.condEdit){
     await DB.update('productions',S.condEdit,rec);
     const pr=(await DB.list('productions',{eq:{id:S.condEdit}}))[0];
     const ents=await DB.list('packaging_entries');
-    for(const en of ents.filter(x=>x.ref==='production:'+S.condEdit))await DB.remove('packaging_entries',en.id);
+    for(const en of ents.filter(y=>y.ref==='production:'+S.condEdit))await DB.remove('packaging_entries',en.id);
     try{await consumePackagingForProduction(pr);}catch(e){console.warn('emballages',e);}
-    S.condEdit=null;toast('Conditionnement modifié ✅ (types + emballages recalculés)','ok');render();return;}
+    S.condEdit=null;toast('Modification enregistrée '+msg,'ok');render();return;}
   await createProduction(rec);
-  toast('Conditionnement enregistré ✅ (types de café + emballages consommés automatiquement)','ok');render();};
+  toast('Enregistré '+msg+' · emballages consommés automatiquement','ok');render();};
 async function prodHistTab(){
   const roast=(await DB.list('roastings')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prod=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
