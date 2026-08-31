@@ -116,7 +116,9 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 Écran **Emballages** : articles (sachets, étiquettes, cartons…), achats (avec sortie de caisse automatique optionnelle), sorties/pertes, valeur du stock au coût moyen. Sur chaque **produit**, définissez la **nomenclature** (ex. 1 sachet + 1 étiquette par unité) : chaque conditionnement consomme alors les emballages **automatiquement**.
 
 ### 📤 Points quotidiens & rapport mensuel par email
-- **Point quotidien** : dès que toutes les ventes d'une journée sont validées, le point part **automatiquement** sur l'email du boss (si configuré) : ventes par commerciale, encaissements, caisse du jour — avec fichier Excel joint.
+- **Point quotidien à 22h00** (programmé) : envoyé **tous les jours à 22h00**, même si des commerciales n'ont pas envoyé leurs ventes — l'email liste alors les **commerciales manquantes**. Si tout était déjà validé plus tôt dans la journée, le point était déjà parti (pas de doublon).
+- **Rapport mensuel le 3 à 10h00** (programmé) : synthèse du mois précédent (CA, production, trésorerie, résultat) envoyée automatiquement.
+- **Envoi manuel avant l'heure** : toujours possible depuis l'app (exactement pareil qu'avant) — rapport Excel complet inclus.
 - **Une commerciale en retard ?** Dans son formulaire, la date du point peut être changée (jusqu'à **7 jours en arrière**). Une nouvelle saisie pour une même journée **remplace** celle qui est encore en attente (jamais celle déjà validée — dans ce cas elle devient un « complément » à valider). Si un point déjà envoyé est complété, l'app vous le signale pour **renvoyer la version à jour**.
 - **Fin de mois** : l'écran **Exploitation** génère le rapport mensuel (compte d'exploitation par grandes masses + cash-flow + immobilisations + mouvements de TOUS les stocks + ventes + caisse + paie) et l'envoie au boss. Un rappel s'affiche en début de mois tant qu'il n'est pas envoyé.
 
@@ -133,6 +135,8 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 ---
 
 ## 6 bis. Activer l'envoi automatique des emails
+
+**Nouveau — envois à heure fixe (pg_cron)** : après avoir déployé la fonction `send-report` v2 et ajouté les secrets `BOSS_EMAIL` + `SUPABASE_SERVICE_ROLE_KEY`, collez **cron-emails.sql** dans le SQL Editor → le point part à 22h00 chaque jour et le rapport mensuel le 3 du mois à 10h00 (heure de Côte d'Ivoire). Anti-doublon automatique via la table email_log.
 
 1. Créez un compte gratuit sur [resend.com](https://resend.com) → copiez votre clé API (`re_...`). 100 emails/jour offerts — largement suffisant.
 2. Supabase → **Edge Functions** → *New Function* → nom : **send-report** → collez le fichier `supabase/functions/send-report/index.ts` → **Deploy**.

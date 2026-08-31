@@ -1,11 +1,9 @@
 -- ══════════════════════════════════════════════════════════════════
--- MIGRATION COMPLÈTE FKS Industrie — à coller dans Supabase SQL Editor
--- Sûre : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
--- Répare notamment l'erreur : Could not find the 'status' column of
--- 'purchases' (achats de café vert).
+-- MIGRATION COMPLÈTE FKS Industrie v2 — Supabase SQL Editor → Run
+-- Sûr : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
+-- Corrige : Could not find the 'status' column of 'purchases'.
 -- ══════════════════════════════════════════════════════════════════
 
--- TABLE settings
 create table if not exists settings(
   key text primary key,
   value text
@@ -13,7 +11,6 @@ create table if not exists settings(
 alter table settings add column if not exists key text;
 alter table settings add column if not exists value text;
 
--- TABLE products
 create table if not exists products(
   id text primary key,
   created_at timestamptz default now(),
@@ -43,7 +40,6 @@ alter table products add column if not exists type_name text;
 alter table products add column if not exists type_kg numeric;
 alter table products add column if not exists recipes jsonb;
 
--- TABLE purchases
 create table if not exists purchases(
   id text primary key,
   created_at timestamptz default now(),
@@ -67,7 +63,6 @@ alter table purchases add column if not exists pay_method text;
 alter table purchases add column if not exists status text;
 alter table purchases add column if not exists note text;
 
--- TABLE coffee_types
 create table if not exists coffee_types(
   id text primary key,
   created_at timestamptz default now(),
@@ -81,7 +76,6 @@ alter table coffee_types add column if not exists name text;
 alter table coffee_types add column if not exists alert_min numeric;
 alter table coffee_types add column if not exists active boolean;
 
--- TABLE transformations
 create table if not exists transformations(
   id text primary key,
   created_at timestamptz default now(),
@@ -103,7 +97,6 @@ alter table transformations add column if not exists note text;
 alter table transformations add column if not exists source text;
 alter table transformations add column if not exists status text;
 
--- TABLE roastings
 create table if not exists roastings(
   id text primary key,
   created_at timestamptz default now(),
@@ -123,7 +116,6 @@ alter table roastings add column if not exists operator text;
 alter table roastings add column if not exists note text;
 alter table roastings add column if not exists source text;
 
--- TABLE productions
 create table if not exists productions(
   id text primary key,
   created_at timestamptz default now(),
@@ -145,7 +137,6 @@ alter table productions add column if not exists operator text;
 alter table productions add column if not exists note text;
 alter table productions add column if not exists source text;
 
--- TABLE adjustments
 create table if not exists adjustments(
   id text primary key,
   created_at timestamptz default now(),
@@ -160,14 +151,13 @@ create table if not exists adjustments(
 alter table adjustments add column if not exists id text;
 alter table adjustments add column if not exists created_at timestamptz;
 alter table adjustments add column if not exists date date;
-alter table adjustments add column if not exists level text , -- green | roasted | product;
+alter table adjustments add column if not exists level text;
 alter table adjustments add column if not exists product_id text;
 alter table adjustments add column if not exists name text;
 alter table adjustments add column if not exists qty numeric;
 alter table adjustments add column if not exists reason text;
 alter table adjustments add column if not exists type_id text;
 
--- TABLE sales_agents
 create table if not exists sales_agents(
   id text primary key,
   created_at timestamptz default now(),
@@ -183,7 +173,6 @@ alter table sales_agents add column if not exists phone text;
 alter table sales_agents add column if not exists token text unique;
 alter table sales_agents add column if not exists active boolean;
 
--- TABLE sales
 create table if not exists sales(
   id text primary key,
   created_at timestamptz default now(),
@@ -213,7 +202,6 @@ alter table sales add column if not exists status text;
 alter table sales add column if not exists credit_status text;
 alter table sales add column if not exists paid_date date;
 
--- TABLE cash_entries
 create table if not exists cash_entries(
   id text primary key,
   created_at timestamptz default now(),
@@ -232,18 +220,17 @@ create table if not exists cash_entries(
 alter table cash_entries add column if not exists id text;
 alter table cash_entries add column if not exists created_at timestamptz;
 alter table cash_entries add column if not exists date date;
-alter table cash_entries add column if not exists type text , -- in | out;
+alter table cash_entries add column if not exists type text;
 alter table cash_entries add column if not exists account text;
 alter table cash_entries add column if not exists category text;
 alter table cash_entries add column if not exists label text;
 alter table cash_entries add column if not exists amount numeric;
 alter table cash_entries add column if not exists imputable boolean;
-alter table cash_entries add column if not exists od text, -- transfer | funding (direction);
+alter table cash_entries add column if not exists od text;
 alter table cash_entries add column if not exists ref text;
 alter table cash_entries add column if not exists source text;
 alter table cash_entries add column if not exists status text;
 
--- TABLE employees
 create table if not exists employees(
   id text primary key,
   created_at timestamptz default now(),
@@ -269,7 +256,6 @@ alter table employees add column if not exists transport numeric;
 alter table employees add column if not exists housing numeric;
 alter table employees add column if not exists active boolean;
 
--- TABLE advances
 create table if not exists advances(
   id text primary key,
   created_at timestamptz default now(),
@@ -289,7 +275,6 @@ alter table advances add column if not exists amount numeric;
 alter table advances add column if not exists note text;
 alter table advances add column if not exists run_id text;
 
--- TABLE pay_runs
 create table if not exists pay_runs(
   id text primary key,
   created_at timestamptz default now(),
@@ -301,13 +286,12 @@ create table if not exists pay_runs(
 );
 alter table pay_runs add column if not exists id text;
 alter table pay_runs add column if not exists created_at timestamptz;
-alter table pay_runs add column if not exists period text , -- YYYY-MM;
+alter table pay_runs add column if not exists period text;
 alter table pay_runs add column if not exists status text;
 alter table pay_runs add column if not exists paid_date date;
 alter table pay_runs add column if not exists account text;
 alter table pay_runs add column if not exists total_net numeric;
 
--- TABLE pay_slips
 create table if not exists pay_slips(
   id text primary key,
   created_at timestamptz default now(),
@@ -359,7 +343,6 @@ alter table pay_slips add column if not exists net numeric;
 alter table pay_slips add column if not exists cnps_employer numeric;
 alter table pay_slips add column if not exists paid boolean;
 
--- TABLE pending_entries
 create table if not exists pending_entries(
   id text primary key,
   created_at timestamptz default now(),
@@ -371,13 +354,12 @@ create table if not exists pending_entries(
 );
 alter table pending_entries add column if not exists id text;
 alter table pending_entries add column if not exists created_at timestamptz;
-alter table pending_entries add column if not exists source_type text , -- sales | roasting | production | caisse;
+alter table pending_entries add column if not exists source_type text;
 alter table pending_entries add column if not exists source_name text;
 alter table pending_entries add column if not exists payload jsonb;
 alter table pending_entries add column if not exists status text;
 alter table pending_entries add column if not exists reviewed_at timestamptz;
 
--- TABLE form_tokens
 create table if not exists form_tokens(
   id text primary key,
   created_at timestamptz default now(),
@@ -388,12 +370,11 @@ create table if not exists form_tokens(
 );
 alter table form_tokens add column if not exists id text;
 alter table form_tokens add column if not exists created_at timestamptz;
-alter table form_tokens add column if not exists type text , -- production | caisse;
+alter table form_tokens add column if not exists type text;
 alter table form_tokens add column if not exists name text;
 alter table form_tokens add column if not exists token text unique;
 alter table form_tokens add column if not exists active boolean;
 
--- TABLE packaging_items
 create table if not exists packaging_items(
   id text primary key,
   created_at timestamptz default now(),
@@ -409,7 +390,6 @@ alter table packaging_items add column if not exists unit text;
 alter table packaging_items add column if not exists alert_min numeric;
 alter table packaging_items add column if not exists active boolean;
 
--- TABLE packaging_entries
 create table if not exists packaging_entries(
   id text primary key,
   created_at timestamptz default now(),
@@ -428,7 +408,7 @@ create table if not exists packaging_entries(
 alter table packaging_entries add column if not exists id text;
 alter table packaging_entries add column if not exists created_at timestamptz;
 alter table packaging_entries add column if not exists date date;
-alter table packaging_entries add column if not exists type text , -- in | out;
+alter table packaging_entries add column if not exists type text;
 alter table packaging_entries add column if not exists qty numeric;
 alter table packaging_entries add column if not exists unit_cost numeric;
 alter table packaging_entries add column if not exists amount numeric;
@@ -439,7 +419,6 @@ alter table packaging_entries add column if not exists item_name text;
 alter table packaging_entries add column if not exists source text;
 alter table packaging_entries add column if not exists status text;
 
--- TABLE assets
 create table if not exists assets(
   id text primary key,
   created_at timestamptz default now(),
@@ -463,7 +442,6 @@ alter table assets add column if not exists life_years numeric;
 alter table assets add column if not exists active boolean;
 alter table assets add column if not exists note text;
 
--- TABLE email_log
 create table if not exists email_log(
   id text primary key,
   created_at timestamptz default now(),
@@ -475,10 +453,10 @@ create table if not exists email_log(
 );
 alter table email_log add column if not exists id text;
 alter table email_log add column if not exists created_at timestamptz;
-alter table email_log add column if not exists kind text , -- daily | monthly;
-alter table email_log add column if not exists ref text, -- date (YYYY-MM-DD) ou période (YYYY-MM);
+alter table email_log add column if not exists kind text;
+alter table email_log add column if not exists ref text;
 alter table email_log add column if not exists sent_at timestamptz;
-alter table email_log add column if not exists status text, -- sent | failed | update_pending;
+alter table email_log add column if not exists status text;
 alter table email_log add column if not exists detail text;
 
 -- ============================================================
