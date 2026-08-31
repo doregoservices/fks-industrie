@@ -13,6 +13,7 @@ S.route='production';S.tab={production:'trans'};location.hash='#/production';
 await render();
 const h1=$('#main').innerHTML;
 if(!h1.includes('en une seule saisie'))throw new Error('titre saisie unique absent');
+if(!h1.includes('Baromètre usine'))throw new Error('baromètre usine absent de l écran Production');
 if(!$('#cIn'))throw new Error('champ torréfié consommé absent');
 if(!h1.includes('kg café/u'))throw new Error('café par unité non affiché');
 if(!h1.includes('peser le café en vrac'))throw new Error('option vrac absente');
@@ -89,5 +90,25 @@ if(ent){const cash0=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'
   console.log('✓ Emballages : mouvement modifiable (✎)'+(cash0?' avec caisse synchronisée':''));}
 else console.log('✓ Emballages : (aucun mouvement d\’achat en démo — edit non testé ici)');
 document.querySelectorAll=_qsa;
-console.log('TFLOW: 7/7 OK');
+/* 8. torréfaction : SEUL le vert est pesé → torréfié estimé 82 % */
+S.tab={production:'roast'};await render();
+$('#rIn').value='100';$('#rOut').value='';
+await App.roastSave();
+const rr=(await DB.list('roastings')).pop();
+if(Math.abs(Number(rr.roasted_out)-82)>0.01)throw new Error('torréfié estimé incorrect ('+rr.roasted_out+')');
+if(rr.estimated!==true)throw new Error('marqueur estimated absent');
+console.log('✓ Torréfaction : 100 kg vert pesés, rien d’autre → torréfié estimé 82 kg (82 %)');
+/* 9. conditionnement sans AUCUNE pesée : torréfié déduit des produits finis */
+document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq]:_qsa(sl);
+S.tab={production:'trans'};await render();
+const n0=(await DB.list('productions')).length;
+$('#cIn').value='';stCq.value='20';
+await App.condSave();
+if((await DB.list('productions')).length!==n0+1)throw new Error('saisie sans pesée refusée');
+const pn=(await DB.list('productions')).pop();
+const cafeN=(pn.lines||[]).reduce((a,l)=>a+l.qty*cafeU(av),0);
+if(Math.abs(Number(pn.roasted_used)-cafeN)>0.01)throw new Error('roasted_used doit égaler le café conditionné ('+pn.roasted_used+' vs '+cafeN+')');
+console.log('✓ Machines sans pesée : 20 unités → '+num2(cafeN)+' kg déduits automatiquement (baromètre = produits finis)');
+document.querySelectorAll=_qsa;
+console.log('TFLOW: 9/9 OK');
 })().catch(e=>{console.error('ÉCHEC TFLOW:',e.stack||e.message);process.exit(1);});
