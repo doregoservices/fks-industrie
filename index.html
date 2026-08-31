@@ -2108,7 +2108,9 @@ App.linkModal=(token,name)=>{
   +'<div class="help">Ou envoyez-lui ce lien (WhatsApp, SMS…). Elle l\'ouvre et l\'ajoute à son écran d\'accueil : c\'est son application de saisie.</div>'
   +'<div class="linkbox" style="margin:10px 0">'+esc(url)+'</div>'
   +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="copyTxt(\''+url+'\')">📋 Copier</button>'
-  +'<a class="btn sm ok" href="'+wa+'" target="_blank" rel="noopener">💬 Envoyer par WhatsApp</a></div>');
+  +'<a class="btn sm ok" href="'+wa+'" target="_blank" rel="noopener">💬 Envoyer par WhatsApp</a> '
+  +' <a class="btn sm sec" href="'+url+'" target="_blank" rel="noopener">🔍 Tester le lien</a></div>'
+  +'<div class="help" style="margin-top:8px">Le test ouvre le lien comme la commerciale : si la page de saisie s\affiche, le lien est bon.</div>');
 };
 App.tokenModal=async t=>{
   let tk=(await DB.list('form_tokens')).filter(x=>x.type===t&&x.active)[0];
@@ -2119,7 +2121,8 @@ App.tokenModal=async t=>{
     +'<div class="help">'+(t==='production'?'À ouvrir sur le téléphone du chef de production : torréfaction et conditionnement.':'À ouvrir sur le téléphone de la caisse : entrées / sorties, y compris les opérations avec la direction.')+'</div>'
     +'<div class="linkbox" style="margin:10px 0">'+esc(url)+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="copyTxt(\''+url+'\')">📋 Copier</button>'
-    +'<button class="btn sm sec" onclick="App.tokenReset(\''+t+'\')">↻ Régénérer (coupe l\'ancien lien)</button></div>');
+    +'<button class="btn sm sec" onclick="App.tokenReset(\''+t+'\')">↻ Régénérer (coupe l\'ancien lien)</button> '
+  +' <a class="btn sm sec" href="'+url+'" target="_blank" rel="noopener">🔍 Tester</a></div>');
 };
 App.tokenReset=async t=>{const tks=await DB.list('form_tokens');for(const x of tks.filter(x=>x.type===t))await DB.update('form_tokens',x.id,{active:false});
   await DB.insert('form_tokens',{type:t,name:t==='production'?'Atelier production':'Caisse',token:rndToken(),active:true});
