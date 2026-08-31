@@ -75,7 +75,7 @@ console.log('✓ Lien terrain : onglet Machines → pending → validation → s
 
 /* ===== 6. EXPORTS : annexe stocks + feuille Mouv. stocks ===== */
 const rows=incomeRows(inc);
-const semiRow=rows.filter(r=>r[0]==='Café transformé — semi-finis (kg)')[0];
+const semiRow=rows.filter(r=>r[0]==='Café transformé par les machines (kg)')[0];
 if(!semiRow||semiRow[1]!==0||semiRow[2]!==172)throw new Error('annexe semi-finis: '+JSON.stringify(semiRow));
 /* SI mois = SF mois (tout est arrivé ce mois-ci, achats/transf de ce mois) */
 const sheets=monthlySheets(inc);

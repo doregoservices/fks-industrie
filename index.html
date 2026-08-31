@@ -1699,7 +1699,7 @@ async function scStocks(){
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Alertes seuils</div><div class="v" style="color:'+(alertCount?'var(--bad)':'var(--ok)')+'">'+alertCount+'</div><div class="s">'+(alertCount?'sous le seuil → voir ⚠️ ci-dessous':'tout est au-dessus des seuils ✓')+'</div></div></div>'
-  +((st.types||[]).length?'<h3>☕ Café transformé (après machines)</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
+  +((st.types||[]).length?'<h3>☕ Café transformé par les machines</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
    +st.types.map(t=>{const tc=ctypes.filter(c=>c.id===t.id)[0]||{};const low=t.active&&tc.alert_min&&t.stock<=Number(tc.alert_min);
      return '<tr'+(t.active?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(tc.alert_min)+' kg</span>':'')+'</td><td class="r">'+num2(t.made)+' kg</td><td class="r">'+num2(t.used)+' kg</td><td class="r"><b>'+num2(t.stock)+' kg</b></td></tr>';}).join('')
    +'</tbody></table></div>':'')
@@ -1714,7 +1714,7 @@ async function scStocks(){
   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="btn" onclick="App.expStocks()">📥 Point complet des stocks (Excel)</button><button class="btn sec" onclick="go(\'production\')">🏭 Saisir une production</button></div></div>';
 }
 async function scProduction(){
-  const tab=S.tab.production||'roast';
+  let tab=S.tab.production||'roast';if(tab==='cond')tab='trans';
   const m=$('#main');
   let body='';
   if(tab==='roast')body=await prodRoastTab();
@@ -1723,13 +1723,13 @@ async function scProduction(){
   else if(tab==='hist')body=await prodHistTab();
   else body=await prodAdjTab();
   m.innerHTML='<div class="card"><h2>🏭 Production</h2><div class="tabs">'
-  +[['roast','🔥 Torréfaction'],['trans','⚙️ Transformation'],['cond','📦 Conditionnement'],['hist','📋 Historique & rendements'],['adj','⚖️ Ajustements']].map(t=>'<button class="'+(tab===t[0]?'on':'')+'" onclick="S.tab.production=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')
+  +[['roast','🔥 Torréfaction'],['trans','⚙️ Transformation & Conditionnement'],['hist','📋 Historique & rendements'],['adj','⚖️ Ajustements']].map(t=>'<button class="'+(tab===t[0]?'on':'')+'" onclick="S.tab.production=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')
   +'</div>'+body+'</div>';
 }
 async function prodStockHead(){
   const st=await computeStats();
   return '<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Stock café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div><div class="kpi"><div class="t">Stock torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div><div class="s">'+(st.types&&st.types.length?'à transformer par les machines':'à conditionner directement')+'</div></div></div>'
-  +((st.types||[]).length?'<div class="tblwrap" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>☕ Café transformé (semi-finis, après machines)</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
+  +((st.types||[]).length?'<div class="tblwrap" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>☕ Café transformé par les machines (après torréfaction)</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
    +st.types.map(t=>'<tr'+(t.active?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b></td><td class="r">'+num2(t.made)+' kg</td><td class="r">'+num2(t.used)+' kg</td><td class="r"><b>'+num2(t.stock)+' kg</b></td></tr>').join('')
    +'</tbody></table></div>':'');
 }
@@ -1760,23 +1760,78 @@ App.roastSave=async()=>{const i=Number($('#rIn').value)||0,o=Number($('#rOut').v
   await DB.insert('roastings',Object.assign({source:'admin'},rec));
   toast('Torréfaction enregistrée ✅','ok');render();};
 async function prodTransTab(){
+  S.trEdit=null;S.condEdit=null;
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
+  const prodsAll=(await DB.list('products')).filter(p=>p.active);
+  const prods=prodsAll.filter(p=>(p.recipes||[]).length);
+  const sansType=prodsAll.filter(p=>!(p.recipes||[]).length).map(p=>p.name);
+  const st=await computeStats();
+  const stock={};(st.types||[]).forEach(t=>stock[t.id]=t.stock);
+  App._condCtx={prods:prods,types:ctypes,stock:stock,hasTypes:ctypes.length>0};
+  const transf=(await DB.list('transformations')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const conds=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const totTransf=t=>(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0);
   return await prodStockHead()
-  +'<div class="alert al-info">Après la torréfaction, les <b>machines transforment</b> le café torréfié (broyage, mouture, assemblage…) en différents <b>types de café</b> — pesés réellement ici. Le conditionnement viendra ensuite piocher dans ces types.</div>'
+  +'<h3 style="margin:4px 0 8px">Étape 1 · ⚙️ Transformation par les machines</h3>'
+  +'<div class="alert al-info">Le café <b>torréfié</b> est passé aux <b>machines</b> (broyage, mouture, assemblage…) qui produisent les <b>types de café</b>. La <b>perte machines</b> et le rendement se mesurent ici : c\'est la quantité <b>obtenue</b> qui sera disponible au conditionnement.</div>'
   +'<div class="row">'+fld('Date','<input id="tD" type="date" value="'+todayISO()+'">')+fld('Café torréfié consommé (kg)','<input id="tIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCalc()">')+'</div>'
   +'<div class="field"><span>Quantités obtenues par type (kg réellement pesés)</span>'
-  +(ctypes.length?ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b></span><input style="max-width:130px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()">').join(''):'<div class="help">Créez d\'abord vos types de café dans l\'écran <a href="#/produits">Produits</a> (ex. « Moulu premium », « Grains »…).</div>')
+  +(ctypes.length?ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join(''):'<div class="help">Aucun type — créez-les dans l\'écran Produits (section Types de café).</div>')
   +'</div>'
   +'<div class="row">'+fld('Opérateur / machine','<input id="tOp" placeholder="ex. Machine 1 — Broyage">')+fld('Note','<input id="tN" placeholder="lot, incident… (facultatif)">')+'</div>'
   +'<div id="tCalc" class="pill" style="margin:6px 0 12px">Perte et rendement machines apparaîtront ici</div>'
-  +'<button class="btn blk" onclick="App.trSave()">Enregistrer la transformation</button>';
+  +'<button class="btn blk" id="trBtn" onclick="App.trSave()">Enregistrer la transformation</button> <a href="javascript:void(0)" id="trCancel" onclick="App.trCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
+  +(transf.length?'<div style="height:14px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Torréfié consommé</th><th>Obtenu (par type)</th><th class="r">Perte</th><th class="r">Rendement</th><th>Machine</th><th></th></tr></thead><tbody>'
+   +transf.slice(0,10).map(t=>{const out=totTransf(t);const inn=Number(t.roasted_used)||0;
+     return '<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(inn)+' kg</td><td><b>'+num2(out)+' kg</b> '+((t.lines||[]).map(l=>num2(l.qty)+' '+esc(l.name)).join(' · ')||'')+'</td><td class="r" style="color:var(--bad)">'+num2(inn-out)+' kg</td><td class="r"><b>'+(inn>0?num2(100*out/inn)+' %':'—')+'</b></td><td>'+esc(t.operator||'')+'</td>'
+      +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.trEdit(\''+t.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>';}).join('')
+   +'</tbody></table></div>':'')
+  +'<div class="hr" style="margin:16px 0"></div>'
+  +'<h3 style="margin:4px 0 8px">Étape 2 · 📦 Conditionnement en produits finis</h3>'
+  +(prods.length
+    ?'<div class="alert al-info">Le conditionnement consomme <b>uniquement les types de café</b> issus des machines (recette de chaque produit) + les <b>emballages</b> automatiquement.</div>'
+     +'<div class="field"><span>Date</span><input id="cD" type="date" value="'+todayISO()+'"></div>'
+     +fld('Opérateur / équipe','<input id="cOp" placeholder="facultatif">')
+     +'<div class="field"><span>Quantités produites par produit</span><div class="qtygrid">'
+     +prods.map(p=>{const rec=(p.recipes||[])[0]||{};
+       return '<div class="qcard"><div class="nm">'+esc(p.name)+(rec.name?'<div class="pr">☕ '+esc(rec.name)+' · '+num2(rec.qty)+' kg/u</div>':'')+'</div><div class="qty"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',-1)">−</button><input id="cq_'+p.id+'" type="number" min="0" inputmode="numeric" value="0" oninput="App.condTot()"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',1)">+</button></div></div>';}).join('')
+     +'</div></div><div id="cTot" class="pill">Rien produit pour l\'instant</div><div style="height:12px"></div>'
+     +'<button class="btn blk" id="condBtn" onclick="App.condSave()">Enregistrer le conditionnement</button> <a href="javascript:void(0)" id="condCancel" onclick="App.condCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
+    :'<div class="alert al-bad">Aucun produit n\'a encore de <b>type de café</b> défini. Le conditionnement consomme les types issus des machines : définissez la recette de chaque produit dans l\'écran <b>🛍️ Produits</b>.'+(sansType.length?' (produits concernés : '+sansType.map(esc).join(', ')+')':'')+'</div>')
+  +(conds.length?'<div style="height:14px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Types consommés</th><th>Production</th><th>Opérateur</th><th></th></tr></thead><tbody>'
+   +conds.slice(0,10).map(p=>{
+     const types=(p.type_lines&&p.type_lines.length?p.type_lines.map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>'):(Number(p.roasted_used)>0?'<span class="mut">'+num2(p.roasted_used)+' kg torréfié (ancien)</span>':'—'));
+     return '<tr><td>'+dFR(p.date)+'</td><td>'+types+'</td><td>'+ (p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td>'+esc(p.operator||'')+'</td>'
+      +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.condEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>';}).join('')
+   +'</tbody></table></div>':'');
 }
+App.trCancel=()=>{S.trEdit=null;render();};
+App.condCancel=()=>{S.condEdit=null;render();};
+App.trEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];
+  const t=(await DB.list('transformations',{eq:{id:id}}))[0];if(!t)return;
+  S.trEdit=id;
+  $('#tD').value=t.date;$('#tIn').value=Number(t.roasted_used)||'';
+  (t.lines||[]).forEach(l=>{const inp=$('#tq_'+l.type_id);if(inp)inp.value=Number(l.qty)||'';});
+  $('#tOp').value=t.operator||'';$('#tN').value=t.note||'';
+  const b=$('#trBtn');if(b)b.textContent='💾 Enregistrer la modification';
+  const c=$('#trCancel');if(c)c.style.display='inline';
+  App.trCalc();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
+App.condEdit=async id=>{const p=(await DB.list('productions',{eq:{id:id}}))[0];if(!p)return;
+  if(!(p.type_lines||[]).length&&Number(p.roasted_used)>0)return toast('Ancien conditionnement (torréfié direct) — modifiez-le en le supprimant puis en le ressaisissant','bad');
+  S.condEdit=id;
+  $('#cD').value=p.date;$('#cOp').value=p.operator||'';
+  (p.lines||[]).forEach(l=>{const inp=$('#cq_'+l.product_id);if(inp)inp.value=Number(l.qty)||'';});
+  App.condTot();
+  const b=$('#condBtn');if(b)b.textContent='💾 Enregistrer la modification';
+  const c=$('#condCancel');if(c)c.style.display='inline';
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
 App.trCalc=()=>{const i=Number($('#tIn').value)||0;
   const ins=$$('input[id^=tq_]');let out=0,parts=[];ins.forEach(x=>{const v=Number(x.value)||0;out+=v;if(v>0)parts.push(num2(v)+' kg');});
   const c=$('#tCalc');
   if(i>0){const p=i-out;c.innerHTML='Obtenu : <b>'+num2(out)+' kg</b>'+(parts.length?' ('+parts.join(' + ')+')':'')+' · Perte machines : <b>'+num2(p)+' kg</b> · Rendement : <b>'+num2(100*out/i)+' %</b>'+(out>i?' ⚠️ sortie supérieure à l\'entrée !':'');}
   else c.innerHTML='Perte et rendement machines apparaîtront ici';};
 App.trSave=async()=>{const i=Number($('#tIn').value)||0;
+  const editId=S.trEdit;
   const ctypes=await DB.list('coffee_types');
   const lines=[];$$('input[id^=tq_]').forEach(x=>{const q=Number(x.value)||0;if(q>0){const t=ctypes.filter(y=>y.id===x.id.slice(3))[0];if(t)lines.push({type_id:t.id,name:t.name,qty:q});}});
   if(!i||!lines.length)return toast('Indiquez les kg consommés et au moins un type obtenu','bad');
@@ -1784,27 +1839,11 @@ App.trSave=async()=>{const i=Number($('#tIn').value)||0;
   if(out>i)return toast('La somme obtenue ('+num2(out)+' kg) dépasse l\'entrée ('+num2(i)+' kg)','bad');
   const st=await computeStats();
   if(i>st.roastedStock)toast('⚠️ Stock torréfié : '+num2(st.roastedStock)+' kg — la saisie le rendra négatif','bad');
-  await DB.insert('transformations',{date:$('#tD').value||todayISO(),roasted_used:i,lines:lines,operator:$('#tOp').value,note:$('#tN').value,source:'admin'});
+const rec2={date:$('#tD').value||todayISO(),roasted_used:i,lines:lines,operator:$('#tOp').value,note:$('#tN').value};
+  if(editId){await DB.update('transformations',editId,rec2);S.trEdit=null;toast('Transformation modifiée ✅ (perte '+num2(i-out)+' kg)','ok');render();return;}
+    await DB.insert('transformations',{date:$('#tD').value||todayISO(),roasted_used:i,lines:lines,operator:$('#tOp').value,note:$('#tN').value,source:'admin'});
   toast('Transformation enregistrée ✅ ('+num2(out)+' kg obtenus, perte '+num2(i-out)+' kg)','ok');render();};
-async function prodCondTab(){
-  const prods=(await DB.list('products')).filter(p=>p.active);
-  const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
-  const hasTypes=ctypes.length>0;
-  const st=await computeStats();
-  const stock={};(st.types||[]).forEach(t=>stock[t.id]=t.stock);
-  App._condCtx={prods:prods,types:ctypes,stock:stock,hasTypes:hasTypes};
-  return await prodStockHead()
-  +'<div class="field"><span>Date</span><input id="cD" type="date" value="'+todayISO()+'"></div>'
-  +(hasTypes?'<div class="alert al-info">Le conditionnement consomme <b>automatiquement</b> les types de café définis pour chaque produit (voir écran Produits) — plus besoin de peser le torréfié ici.</div>'
-    +((st.types||[]).length?'':'')
-   :fld('Café torréfié consommé (kg)','<input id="cKg" type="number" step="0.1" inputmode="decimal">'))
-  +fld('Opérateur / équipe','<input id="cOp" placeholder="facultatif">')
-  +'<div class="field"><span>Quantités produites par produit</span><div class="qtygrid">'
-  +prods.map(p=>{const rec=(p.recipes||[])[0]||{};
-    return '<div class="qcard"><div class="nm">'+esc(p.name)+(hasTypes&&rec.name?'<div class="pr">☕ '+esc(rec.name)+' · '+num2(rec.qty)+' kg/u</div>':'')+'</div><div class="stepper"><button onclick="App.step(\'cq_'+p.id+'\',-1)">−</button><input id="cq_'+p.id+'" type="number" inputmode="numeric" min="0" value="0" oninput="App.condTot()"><button onclick="App.step(\'cq_'+p.id+'\',1)">+</button></div></div>';}).join('')
-  +'</div></div><div id="cTot" class="pill">Rien produit pour l\'instant</div><div style="height:12px"></div>'
-  +'<button class="btn blk" onclick="App.condSave()">Enregistrer le conditionnement</button>';
-}
+function prodCondTab(){return prodTransTab();}
 App.step=(id,d)=>{const el=$('#'+id);el.value=Math.max(0,(Number(el.value)||0)+d);el.dispatchEvent(new Event('input'));};
 App.condTot=()=>{const inputs=$$('input[id^=cq_]');let n=0;inputs.forEach(i=>n+=Number(i.value)||0);
   const ctx=App._condCtx||{};
@@ -1814,7 +1853,10 @@ App.condTot=()=>{const inputs=$$('input[id^=cq_]');let n=0;inputs.forEach(i=>n+=
       (p.recipes||[]).forEach(r=>{use[r.type_id]=(use[r.type_id]||0)+Number(r.qty||0)*q;});});
     const parts=Object.keys(use).map(k=>{const t=(ctx.types||[]).filter(x=>x.id===k)[0];const nm=t?t.name:k;
       const st=stock[k]!=null?stock[k]:0;return num2(use[k])+' kg '+esc(nm)+(use[k]>st?' ⚠️ stock '+num2(st):'');});
-    $('#cTot').innerHTML='<b>'+num(n)+'</b> unité(s) → consommera '+parts.join(' · ');
+    const pkUse={};inputs.forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=(ctx.prods||[]).filter(x=>x.id===i.id.slice(3))[0];if(!p)return;
+      (p.packaging||[]).forEach(b=>{pkUse[b.name||b.pack_id]=(pkUse[b.name||b.pack_id]||0)+Number(b.qty||0)*q;});});
+    const pkParts=Object.keys(pkUse).map(k=>num(pkUse[k])+' '+esc(k));
+    $('#cTot').innerHTML='<b>'+num(n)+'</b> unité(s) → consommera '+parts.join(' · ')+(pkParts.length?' + emballages : '+pkParts.join(' · '):'');
   }else $('#cTot').innerHTML=n>0?'<b>'+num(n)+'</b> unité(s) à produire':'Rien produit pour l\'instant';};
 async function createProduction(rec){
   if(!rec.type_lines){
@@ -1841,20 +1883,26 @@ async function consumePackagingForProduction(pr){
   }
 }
 App.condSave=async()=>{
-  const ctx=App._condCtx||{};const hasTypes=!!ctx.hasTypes;
-  const kg=hasTypes?0:(Number(($('#cKg')||{value:0}).value)||0);
+  const ctx=App._condCtx||{};
   const prods=await DB.list('products');
   const lines=[];$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q>0){const p=prods.filter(x=>x.id===i.id.slice(3))[0];if(p)lines.push({product_id:p.id,name:p.name,qty:q,price:Number(p.price)||0});}});
-  if(!lines.length)return toast('Choisissez au moins un produit produit','bad');
-  if(!hasTypes&&!kg)return toast('Indiquez les kg de torréfié consommés','bad');
-  if(hasTypes){
-    const use={};lines.forEach(l=>{const p=prods.filter(x=>x.id===l.product_id)[0];(p&&p.recipes||[]).forEach(r=>use[r.type_id]=(use[r.type_id]||0)+Number(r.qty||0)*l.qty);});
-    const ctypes=await DB.list('coffee_types');const stock=ctx.stock||{};
-    const short=Object.keys(use).filter(k=>use[k]>(stock[k]!=null?stock[k]:Infinity));
-    if(short.length){const nm=short.map(k=>{const t=ctypes.filter(x=>x.id===k)[0];return t?t.name:'?';}).join(', ');return toast('Stock insuffisant de : '+nm+' — enregistrez d\'abord une transformation','bad');}
-  }
-  await createProduction({date:$('#cD').value||todayISO(),roasted_used:kg,lines:lines,operator:$('#cOp').value,note:'',source:'admin'});
-  toast('Conditionnement enregistré ✅ ('+(hasTypes?'types de café et ':'' )+'emballages consommés automatiquement)','ok');render();};
+  if(!lines.length)return toast('Choisissez au moins un produit à conditionner','bad');
+  const noType=lines.filter(l=>{const p=prods.filter(x=>x.id===l.product_id)[0];return !(p&&p.recipes&&p.recipes.length);});
+  if(noType.length)return toast('Produits sans type de café défini : '+noType.map(l=>l.name).join(', ')+' — à régler dans l\'écran Produits','bad');
+  const use={};lines.forEach(l=>{const p=prods.filter(x=>x.id===l.product_id)[0];(p.recipes||[]).forEach(r=>use[r.type_id]=(use[r.type_id]||0)+Number(r.qty||0)*l.qty);});
+  const ctypes=await DB.list('coffee_types');const stock=ctx.stock||{};
+  const short=Object.keys(use).filter(k=>use[k]>(stock[k]!=null?stock[k]:Infinity));
+  if(short.length){const nm=short.map(k=>{const t=ctypes.filter(x=>x.id===k)[0];return t?t.name:'?';}).join(', ');return toast('Stock insuffisant de : '+nm+' — transformez d\'abord du torréfié (Étape 1)','bad');}
+  const rec={date:$('#cD').value||todayISO(),roasted_used:0,lines:lines,operator:$('#cOp').value,note:'',source:'admin'};
+  if(S.condEdit){
+    await DB.update('productions',S.condEdit,rec);
+    const pr=(await DB.list('productions',{eq:{id:S.condEdit}}))[0];
+    const ents=await DB.list('packaging_entries');
+    for(const en of ents.filter(x=>x.ref==='production:'+S.condEdit))await DB.remove('packaging_entries',en.id);
+    try{await consumePackagingForProduction(pr);}catch(e){console.warn('emballages',e);}
+    S.condEdit=null;toast('Conditionnement modifié ✅ (types + emballages recalculés)','ok');render();return;}
+  await createProduction(rec);
+  toast('Conditionnement enregistré ✅ (types de café + emballages consommés automatiquement)','ok');render();};
 async function prodHistTab(){
   const roast=(await DB.list('roastings')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prod=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -1887,13 +1935,13 @@ async function prodAdjTab(){
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
   return '<div class="alert al-info">💡 <b>Stocks de départ</b> : c\'est ici — choisissez le niveau, une quantité <b>positive</b>, motif « Stock initial ». Sinon : casse, don, perte ou erreur d\'inventaire → quantité négative (positive pour un retour).</div>'
   +'<div class="row">'+fld('Date','<input id="jD" type="date" value="'+todayISO()+'">')
-  +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\';if($(\'#jT\'))$(\'#jT\').style.display=this.value===\'type\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="type">Café transformé — semi-fini (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
+  +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\';if($(\'#jT\'))$(\'#jT\').style.display=this.value===\'type\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="type">Café transformé par les machines (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
   +'<div class="field" id="jP" style="display:none"><span>Produit</span><select>'+prods.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select></div>'
   +(ctypes.length?'<div class="field" id="jT" style="display:none"><span>Type de café transformé</span><select>'+ctypes.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></div>':'')
   +'<div class="row">'+fld('Quantité (+ ou −)','<input id="jQ" type="number" inputmode="numeric" step="0.1" placeholder="ex : -5 ou 10">')+fld('Motif','<input id="jR" placeholder="casse, don, inventaire…">')+'</div>'
   +'<button class="btn blk" id="adjBtn" onclick="App.adjSave()">Enregistrer l\'ajustement</button> <a href="javascript:void(0)" id="adjCancel" onclick="App.adjCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a><div style="height:14px"></div>'
   +(adj.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Niveau</th><th class="r">Qté</th><th>Motif</th><th></th></tr></thead><tbody>'
-   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé',product:'Produit'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.adjEdit(\'adjustments\',\''+a.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
+   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé (machines)',product:'Produit fini'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.adjEdit(\'adjustments\',\''+a.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div>':'');
 }
 App.adjEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];const a=(await DB.list('adjustments',{eq:{id:id}}))[0];if(!a)return;
@@ -2991,10 +3039,29 @@ async function scEmballages(){
   +(st.packaging||[]).map(p=>'<tr><td><b>'+esc(p.name)+'</b></td><td class="r">'+num2(p.in)+'</td><td class="r">'+num2(p.out)+'</td><td class="r"><b>'+num2(p.stock)+'</b> '+esc(p.unit)+'</td><td class="r">'+money(p.cmp)+'</td><td class="r">'+money(p.value)+'</td><td><button class="btn sm sec" onclick="App.pkItemForm(\''+p.id+'\')">✎</button></td></tr>').join('')
   +'</tbody></table></div></div>'
   +'<div class="card"><h3>Journal des mouvements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Article</th><th>Type</th><th class="r">Qté</th><th class="r">Montant</th><th>Motif</th><th></th></tr></thead><tbody>'
-  +ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(e.item_name||'')+'</td><td>'+(e.type==='in'?'<span class="badge b-ok">Entrée</span>':'<span class="badge b-no">Sortie</span>')+'</td><td class="r">'+num2(e.qty)+'</td><td class="r">'+(e.amount?money(e.amount):'—')+'</td><td>'+esc(e.reason||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'packaging_entries\',\''+e.id+'\')">✕</button></td></tr>').join('')
+  +ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(e.item_name||'')+'</td><td>'+(e.type==='in'?'<span class="badge b-ok">Entrée</span>':'<span class="badge b-no">Sortie</span>')+'</td><td class="r">'+num2(e.qty)+'</td><td class="r">'+(e.amount?money(e.amount):'—')+'</td><td>'+esc(e.reason||'')+'</td><td><button class="btn sm sec" onclick="App.pkEntryEdit(\'packaging_entries\',\''+e.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'packaging_entries\',\''+e.id+'\')">✕</button></td></tr>').join('')
   +(ents.length?'':'<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>')
   +'</tbody></table></div></div>';
 }
+App.pkEntryEdit=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(!e)return;
+  const items=(await DB.list('packaging_items')).filter(x=>x.active!==false);
+  modal('Modifier le mouvement d\'emballage',
+    '<div class="row">'+fld('Date','<input id="peD" type="date" value="'+(e.date||todayISO())+'">')+fld('Type','<select id="peT"><option value="in"'+(e.type==='in'?' selected':'')+'>Entrée (achat/retour)</option><option value="out"'+(e.type!=='in'?' selected':'')+'>Sortie (perte/casse/consommation)</option></select>')+'</div>'
+    +fld('Article','<select id="peI">'+items.map(x=>'<option value="'+x.id+'"'+(x.id===e.item_id?' selected':'')+'>'+esc(x.name)+'</option>').join('')+(items.some(x=>x.id===e.item_id)?'':'<option value="'+esc(e.item_id||'')+'" selected>'+esc(e.item_name||'')+'</option>')+'</select>')
+    +'<div class="row">'+fld('Quantité','<input id="peQ" type="number" step="0.1" inputmode="decimal" value="'+(Number(e.qty)||'')+'">')+fld('Coût unitaire (FCFA)','<input id="peC" type="number" inputmode="numeric" value="'+(Number(e.unit_cost)||'')+'">')+'</div>'
+    +fld('Motif','<input id="peR" value="'+esc(e.reason||'')+'">'),
+    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.pkEntrySave(\''+id+'\')">Enregistrer</button>');
+  $('#peD').value=e.date||todayISO();$('#peT').value=e.type||'in';$('#peI').value=e.item_id||'';
+  $('#peQ').value=Number(e.qty)||'';$('#peC').value=Number(e.unit_cost)||'';$('#peR').value=e.reason||'';};
+App.pkEntrySave=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(!e)return;
+  const q=Number($('#peQ').value)||0;if(!q)return toast('Quantité obligatoire','bad');
+  const items=await DB.list('packaging_items');const it=items.filter(x=>x.id===$('#peI').value)[0];
+  const rec={date:$('#peD').value||todayISO(),type:$('#peT').value,qty:q,unit_cost:Number($('#peC').value)||0,amount:Math.round(q*(Number($('#peC').value)||0)),reason:$('#peR').value||e.reason||'',item_id:$('#peI').value,item_name:it?it.name:(e.item_name||'')};
+  await DB.update('packaging_entries',id,rec);
+  const cash=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0];
+  if(cash){ if(rec.type==='in'&&rec.amount>0)await DB.update('cash_entries',cash.id,{date:rec.date,amount:rec.amount,label:'Achat emballages — '+rec.item_name});
+    else await DB.remove('cash_entries',cash.id); }
+  closeModal();toast('Mouvement modifié ✅'+(cash?(rec.type==='in'?' — écriture de caisse synchronisée':' — écriture de caisse retirée'):''),'ok');render();};
 App.pkItemForm=async id=>{let it={name:'',unit:'unité',alert_min:100};
   if(id)it=(await DB.list('packaging_items',{eq:{id:id}}))[0]||it;
   modal(id?'Modifier l\'article':'Nouvel article d\'emballage',
@@ -3399,7 +3466,7 @@ function incomeRows(inc){
   L.push(['','Stock initial','Stock final','Détail']);
   L.push(['Café vert (kg)',Math.round(inc.gSI*100)/100,Math.round(inc.gSF*100)/100,'CMP '+money(inc.cmpVertSI)+' → '+money(inc.cmpVertSF)+' /kg']);
   L.push(['Café torréfié (kg)',Math.round((inc.roastSIM||0)*100)/100,Math.round((inc.roastSFM||0)*100)/100,'rendement du mois : '+Math.round(inc.rendement*10)/10+' % (perte '+Math.round(inc.perte*100)/100+' kg)']);
-  L.push(['Café transformé — semi-finis (kg)',(inc.typeRows||[]).reduce((a,r)=>a+(r.si||0),0),(inc.typeRows||[]).reduce((a,r)=>a+(r.sf||0),0),'machines : '+(inc.transfMade||0)+' kg obtenus / '+(inc.transfUsed||0)+' kg torréfiés']);
+  L.push(['Café transformé par les machines (kg)',(inc.typeRows||[]).reduce((a,r)=>a+(r.si||0),0),(inc.typeRows||[]).reduce((a,r)=>a+(r.sf||0),0),'machines : '+(inc.transfMade||0)+' kg obtenus / '+(inc.transfUsed||0)+' kg torréfiés']);
   (inc.typeRows||[]).forEach(r=>L.push(['  '+r.name,(r.si||0)+' kg',(r.sf||0)+' kg','obtenu machines '+(r.mMade||0)+' kg · conditionné '+(r.mUsed||0)+' kg']));
   L.push(['Produits finis (FCFA)',inc.pfSIv,inc.pfSFv,'coût matière ≈ '+money(inc.pfCost)+' /unité']);
   L.push(['Emballages (FCFA)',inc.embSIv,inc.embSFv,'']);
@@ -3421,7 +3488,7 @@ function monthlySheets(inc){
     ['CAFÉ TORRÉFIÉ (kg)','Stock initial','Produit (torréfaction)','Consommé (machines)','Stock final'],
     ['',{v:Math.round((inc.roastSIM||0)*100)/100,__style:1},{v:inc.roastMadeM||0,__style:1},{v:inc.transfUsed||0,__style:1},{v:Math.round((inc.roastSFM||0)*100)/100,__style:1}],
     [],
-    ['CAFÉ TRANSFORMÉ (semi-finis, kg)','Stock initial','Obtenu (machines)','Conditionné','Stock final']];
+    ['CAFÉ TRANSFORMÉ PAR LES MACHINES (kg)','Stock initial','Obtenu (machines)','Conditionné','Stock final']];
   (inc.typeRows||[]).forEach(r=>mv.push([r.name,{v:r.si||0,__style:1},{v:r.mMade||0,__style:1},{v:r.mUsed||0,__style:1},{v:r.sf||0,__style:1}]));
   sh.push({name:'Mouv. stocks',rows:mv,widths:[30,16,16,20,16]});
   const pa=(inc.prodAnalysis||[]);
@@ -3564,7 +3631,7 @@ async function scExploitation(){
   +'<div class="kpi"><div class="t">CAF / Cash-flow</div><div class="v">'+money(inc.caf)+'</div><div class="s">net + amortissements</div></div>'
   +'<div class="kpi"><div class="t">Flux trésorerie réel</div><div class="v">'+money(inc.fluxTreso)+'</div><div class="s">encaissé − décaissé'+(inc.odNet?(' (dont OD '+money(inc.odNet)+')'):'')+'</div></div></div>'
   +'<div class="grid g2"><div><h3>Produits</h3><table class="tbl"><tbody>'
-  +L('Ventes de produits finis',inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (semi-finis)',inc.dSemi):'')
+  +L('Ventes de produits finis',inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'
   +'<div><h3>Charges par grandes masses</h3><table class="tbl"><tbody>'
   +grpRow('1. Achats consommés',L('   Café vert (SI+achats−SF)',inc.consVert)+L('   Emballages',inc.consEmb),inc.consVert+inc.consEmb)
@@ -3597,7 +3664,7 @@ async function scExploitation(){
   +((inc.prodAnalysis||[]).length?'<div class="hr"></div><h3>🔬 Analyse par produit — marge brute</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Qté vendue</th><th class="r">CA</th><th class="r">Coût/unité</th><th class="r">Coût vendu</th><th class="r">Marge brute</th><th class="r">% marge</th><th class="r">Part CA</th></tr></thead><tbody>'
    +inc.prodAnalysis.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td class="r">'+num(r.qty)+'</td><td class="r">'+money(r.ca)+'</td><td class="r">'+money(Math.round(r.cu))+'</td><td class="r">'+money(r.cost)+'</td><td class="r" style="color:'+(r.marge>=0?'var(--ok)':'var(--bad)')+'"><b>'+money(r.marge)+'</b></td><td class="r">'+(r.ca>0?Math.round(100*r.marge/r.ca)+' %':'—')+'</td><td class="r">'+(inc.ventes>0?Math.round(100*r.ca/inc.ventes)+' %':'—')+'</td></tr>').join('')
    +'<tr class="tot"><td>TOTAL</td><td class="r">'+num(paT.q)+'</td><td class="r">'+money(paT.ca)+'</td><td></td><td class="r">'+money(paT.cost)+'</td><td class="r"><b>'+money(paT.m)+'</b></td><td class="r">'+(paT.ca>0?Math.round(100*paT.m/paT.ca)+' %':'—')+'</td><td class="r">100 %</td></tr></tbody></table>'
-   +'<div class="help" style="margin-top:6px">Coût unitaire = recette café (kg de type × coût du semi-fini) + emballages au coût moyen. Produit sans recette : café torréfié valorisé au coût moyen du vert corrigé du rendement du mois.</div>'
+   +'<div class="help" style="margin-top:6px">Coût unitaire = recette café (kg de type × coût du café transformé) + emballages au coût moyen. Produit sans recette : café torréfié valorisé au coût moyen du vert corrigé du rendement du mois.</div>'
    +((inc.prodAnalysis||[]).length?'<div class="hr"></div><h3>💰 Coût de revient complet — marge nette par produit</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Coût matière/u</th><th class="r">+ Quote-part/u</th><th class="r">Coût revient/u</th><th class="r">Marge nette</th><th class="r">% nette</th></tr></thead><tbody>'
    +inc.prodAnalysis.map(r=>'<tr><td><b>'+esc(r.name)+'</b></td><td class="r">'+money(Math.round(r.cu))+'</td><td class="r">'+money(Math.round(r.qp))+'</td><td class="r"><b>'+money(Math.round(r.cuFull))+'</b></td><td class="r" style="color:'+(r.margeNette>=0?'var(--ok)':'var(--bad)')+'"><b>'+money(r.margeNette)+'</b></td><td class="r">'+(r.ca>0?Math.round(100*r.margeNette/r.ca)+' %':'—')+'</td></tr>').join('')
    +'<tr class="tot"><td>TOTAL</td><td></td><td></td><td></td><td class="r"><b>'+money(paT.mN)+'</b></td><td class="r">'+(paT.ca>0?Math.round(100*paT.mN/paT.ca)+' %':'—')+'</td></tr></tbody></table>'
