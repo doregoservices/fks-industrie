@@ -1555,7 +1555,7 @@ App.pendKO=async id=>{confirmBox('Rejeter cette saisie ?','La saisie sera marqu�
 async function applyPending(p){
   const d=p.payload||{};
   if(p.source_type==='sales'){await createSale(Object.assign({},d,{source:'form'}));}
-  else if(p.source_type==='roasting'){await DB.insert('roastings',{date:d.date,green_in:d.green_in,roasted_out:Number(d.roasted_out)||Math.round(Number(d.green_in)*0.82*10)/10,operator:d.operator||p.source_name||'',note:'',source:'form'});}
+  else if(p.source_type==='roasting'){await DB.insert('roastings',{date:d.date,green_in:d.green_in,roasted_out:Number(d.roasted_out)||Number(d.green_in),operator:d.operator||p.source_name||'',note:'',source:'form'});}
   else if(p.source_type==='production'){await createProduction({date:d.date,roasted_used:d.roasted_used||0,lines:d.lines||[],operator:d.operator||p.source_name||'',note:'',source:'form'});}
   else if(p.source_type==='transformation'){await DB.insert('transformations',{date:d.date,roasted_used:d.roasted_used,lines:d.lines||[],operator:d.operator||p.source_name||'',note:'',source:'form'});}
   else if(p.source_type==='caisse'){await createCashEntry({date:d.date,type:d.type,account:d.account,category:d.category,label:d.label,amount:d.amount,imputable:d.imputable!==false,od:d.od||null,source:'form'});}
@@ -1753,7 +1753,7 @@ async function prodRoastTab(){
   +'<button class="btn blk" id="roastBtn" onclick="App.roastSave()">Enregistrer la torréfaction</button> <a href="javascript:void(0)" onclick="App.roastCancel()" id="roastCancel" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>';
 }
 App.roastCalc=()=>{const i=Number($('#rIn').value)||0,o=Number($('#rOut').value)||0;const c=$('#rCalc');
-  if(i>0&&!o){c.innerHTML='📈 Non pesé → torréfié estimé <b>'+num2(i*0.82)+' kg</b> (82 %) · perte '+num2(i*0.18)+' kg — seul le vert est pesé';return;}
+  if(i>0&&!o){c.innerHTML='📈 Non pesé → torréfié retenu : <b>'+num2(i)+' kg</b> (= vert pesé). Aucune perte à ce stade : <b>lécart sera la perte au conditionnement</b>';return;}
   if(i>0){const p=i-o;c.innerHTML='Perte : <b>'+num2(p)+' kg</b> · Rendement : <b>'+num2(100*o/i)+' %</b>'+(p<0?' ⚠️ sortie supérieure à l\'entrée !':'');}else c.innerHTML='Perte et rendement apparaîtront ici';};
 App.roastEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];const r=(await DB.list('roastings',{eq:{id:id}}))[0];if(!r)return;
   S.roastEdit=id;
@@ -1765,27 +1765,27 @@ App.roastEdit=async function(){const args=[].slice.call(arguments);const id=args
 App.roastCancel=()=>{S.roastEdit=null;render();};
 App.roastSave=async()=>{let i=Number($('#rIn').value)||0,o=Number($('#rOut').value)||0;
   if(!i)return toast('Indiquez les kg de café vert pesés','bad');
-  const est=!o;const RY=Number(SETS.roast_yield)||0.82;
-  if(est)o=Math.round(i*RY*10)/10;
+  const est=!o;
+  if(est)o=i;
   if(o>i)return toast('La sortie ne peut pas dépasser l\'entrée','bad');
   const rec={date:$('#rD').value||todayISO(),green_in:i,roasted_out:o,estimated:est,operator:$('#rOp').value,note:$('#rN').value};
-  if(S.roastEdit){await DB.update('roastings',S.roastEdit,rec);S.roastEdit=null;toast('Torréfaction modifiée ✅'+(est?' — torréfié estimé '+num2(o)+' kg (82 %)':''),'ok');render();return;}
+  if(S.roastEdit){await DB.update('roastings',S.roastEdit,rec);S.roastEdit=null;toast('Torréfaction modifiée ✅'+(est?' — torréfié retenu '+num2(o)+' kg (= vert)':''),'ok');render();return;}
   await DB.insert('roastings',Object.assign({source:'admin'},rec));
-  toast('Torréfaction enregistrée ✅'+(est?' — torréfié estimé : '+num2(o)+' kg (82 %). Rien d\'autre à peser : les produits finis servent de baromètre':''),'ok');render();};
+  toast('Torréfaction enregistrée ✅'+(est?' — torréfié retenu : '+num2(o)+' kg (= vert pesé). La perte se mesurera au conditionnement':''),'ok');render();};
 async function prodTransTab(){
   S.trEdit=null;S.condEdit=null;
   const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
   const st=await computeStats();
   const stock={};(st.types||[]).forEach(t=>stock[t.id]=t.stock);
-  App._condCtx={prods:prods,types:ctypes,stock:stock,hasTypes:ctypes.length>0};
+  App._condCtx={prods:prods,types:ctypes,stock:stock,hasTypes:ctypes.length>0,roasted:st.roastedStock};
   const conds=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const transf=(await DB.list('transformations')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const cafeU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
   return await prodStockHead()
   +'<h3 style="margin:4px 0 8px">⚙️ Transformation &amp; Conditionnement <span class="mut">(en une seule saisie)</span></h3>'
   +'<div class="alert al-info">Les machines transforment le torréfié et le conditionnement se fait <b>dans la foulée</b> : indiquez le <b>torréfié consommé</b> et les <b>unités produites</b> — le café conditionné, la <b>perte</b> et le <b>rendement</b> se calculent tout seuls.</div>'
-  +'<div class="row">'+fld('Date','<input id="cD" type="date" value="'+todayISO()+'">')+fld('Torréfié consommé (kg) — facultatif (si pesé)','<input id="cIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCondCalc()">')+'</div>'
+  +'<div class="row">'+fld('Date','<input id="cD" type="date" value="'+todayISO()+'">')+fld('Torréfié consommé (kg) — vide = tout le stock','<input id="cIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCondCalc()">')+'</div>'
   +'<div class="row">'+fld('Opérateur / machine','<input id="cOp" placeholder="ex. Machine 1 — Broyage">')+fld('Note','<input id="cN" placeholder="lot, incident… (facultatif)">')+'</div>'
   +'<div class="field"><span>Unités produites par produit</span><div class="qtygrid">'
   +prods.map(p=>{const kg=cafeU(p);
@@ -1815,7 +1815,7 @@ async function prodTransTab(){
    +'</tbody></table></div>':'');
 }
 App.trCondCalc=()=>{const x=Number(($('#cIn')||{value:0}).value)||0;
-  const ctx=App._condCtx||{};const prods=ctx.prods||[];
+  const ctx=App._condCtx||{};const prods=ctx.prods||[];const stk=Number(ctx.roasted)||0;
   let cafe=0,units=0;$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=prods.filter(y=>'cq_'+y.id===i.id)[0];if(!p)return;units+=q;
     const r=(p.recipes||[])[0]||{};cafe+=q*(Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0);});
   const pkUse={};$$('input[id^=cq_]').forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=prods.filter(y=>'cq_'+y.id===i.id)[0];if(!p)return;
@@ -1824,7 +1824,7 @@ App.trCondCalc=()=>{const x=Number(($('#cIn')||{value:0}).value)||0;
   const c=$('#cTot');if(!c)return;
   if(units<=0){c.innerHTML='Café conditionné, perte et rendement apparaîtront ici';return;}
   const perte=x-cafe;
-  c.innerHTML='<b>'+num(units)+'</b> unité(s) · café conditionné <b>'+num2(cafe)+' kg</b>'+(x>0?' · perte <b>'+num2(perte)+' kg</b> · rendement <b>'+num2(100*cafe/x)+' %</b>'+(perte<0?' ⚠️ conditionné supérieur au consommé !':''):' · torréfié non pesé — baromètre : produits finis')+(pkParts.length?'<br>Emballages : '+pkParts.join(' · '):'');};
+  c.innerHTML='<b>'+num(units)+'</b> unité(s) · café conditionné <b>'+num2(cafe)+' kg</b>'+(x>0?' · perte <b>'+num2(perte)+' kg</b> · rendement <b>'+num2(100*cafe/x)+' %</b>'+(perte<0?' ⚠️ conditionné supérieur au consommé !':''):' · non pesé → consommé = stock ('+num2(stk)+' kg) · perte <b>'+num2(Math.max(stk-cafe,0))+' kg</b>'+(stk>cafe?'':' ⚠️ stock torréfié insuffisant'))+(pkParts.length?'<br>Emballages : '+pkParts.join(' · '):'');};
 App.trCancel=()=>{S.trEdit=null;render();};
 App.condCancel=()=>{S.condEdit=null;render();};
 App.trEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];
@@ -1912,11 +1912,15 @@ App.condSave=async()=>{
   if(!lines.length)return toast('Indiquez les unités produites (au moins un produit)','bad');
   const cafeU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
   const cafe=lines.reduce((a,l)=>a+l.qty*cafeU(prods.filter(y=>y.id===l.product_id)[0]||{}),0);
-  const weighed=x>0;if(!weighed)x=Math.round(cafe*10)/10;
+  const weighed=x>0;
+  if(!weighed){const roas=await DB.list('roastings');const prds2=await DB.list('productions');
+    const stk=roas.reduce((a,r)=>a+Number(r.roasted_out||0),0)-prds2.reduce((a,p)=>a+Number(p.roasted_used||0),0);
+    x=stk>cafe?Math.round(stk*10)/10:Math.round(cafe*10)/10;
+    if(stk<=cafe)toast('Stock torréfié : '+num2(Math.max(stk,0))+' kg — écart non mesurable, enregistrez la torréfaction du jour','bad');}
   if(weighed&&cafe>x)return toast('Le café conditionné ('+num2(cafe)+' kg) dépasse le torréfié consommé ('+num2(x)+' kg) — vérifiez les quantités','bad');
   if(weighed&&cafe<x*0.5)toast('⚠️ Perte de '+num2(x-cafe)+' kg ('+num2(100*(x-cafe)/x)+' %) — rendement faible, vérifiez la saisie','bad');
   const rec={date:$('#cD').value||todayISO(),roasted_used:x,lines:lines,operator:$('#cOp').value,note:$('#cN').value,source:'admin'};
-  const msg='✅ '+num(lines.reduce((a,l)=>a+l.qty,0))+' unités · '+num2(cafe)+' kg conditionnés'+(weighed?' · perte '+num2(x-cafe)+' kg · rendement '+num2(100*cafe/x)+' %':' — torréfié non pesé, baromètre = produits finis');
+  const msg='✅ '+num(lines.reduce((a,l)=>a+l.qty,0))+' unités · '+num2(cafe)+' kg conditionnés'+(weighed?' · perte '+num2(x-cafe)+' kg · rendement '+num2(100*cafe/x)+' %':' — consommé = stock torréfié ('+num2(x)+' kg) · perte '+num2(x-cafe)+' kg');
   if(S.condEdit){
     await DB.update('productions',S.condEdit,rec);
     const pr=(await DB.list('productions',{eq:{id:S.condEdit}}))[0];
@@ -1943,7 +1947,7 @@ async function prodHistTab(){
    +transf.map(t=>'<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(t.roasted_used)+'</td><td>'+(t.lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')+'</td><td class="r">'+num2(Number(t.roasted_used)-(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0))+'</td><td class="r"><b>'+(Number(t.roasted_used)>0?num2(100*(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0)/t.roasted_used)+' %':'—')+'</b></td><td>'+esc(t.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div><div style="height:16px"></div>':'')
   +'<h3>🔥 Torréfactions</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Vert (kg)</th><th class="r">Torréfié (kg)</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
-  +roast.map(r=>'<tr><td>'+dFR(r.date)+'</td><td class="r">'+num2(r.green_in)+'</td><td class="r">'+num2(r.roasted_out)+'</td><td class="r">'+num2(Number(r.green_in)-Number(r.roasted_out))+'</td><td class="r"><b>'+num2(100*r.roasted_out/r.green_in)+' %</b></td><td>'+esc(r.operator||'')+'</td><td><button class="btn sm sec" onclick="App.roastEdit(\'roastings\',\''+r.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'roastings\',\''+r.id+'\')">✕</button></td></tr>').join('')
+  +roast.map(r=>'<tr><td>'+dFR(r.date)+'</td><td class="r">'+num2(r.green_in)+'</td><td class="r">'+num2(r.roasted_out)+'</td><td class="r">'+(r.estimated?'—':num2(Number(r.green_in)-Number(r.roasted_out))+' kg')+'</td><td class="r"><b>'+(r.estimated?'—':num2(100*r.roasted_out/r.green_in)+' %')+'</b></td><td>'+esc(r.operator||'')+'</td><td><button class="btn sm sec" onclick="App.roastEdit(\'roastings\',\''+r.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'roastings\',\''+r.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div><div style="height:16px"></div><h3>📦 Conditionnements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Matière consommée</th><th>Production</th><th>Opérateur</th><th></th></tr></thead><tbody>'
   +prod.map(p=>'<tr><td>'+dFR(p.date)+'</td><td class="r">'+(Number(p.roasted_used)>0?num2(p.roasted_used)+' kg torréfié':((p.type_lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')||'—'))+'</td><td>'+ (p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td>'+esc(p.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div>';
@@ -2558,7 +2562,7 @@ App.expStocks=async()=>{
   roast.filter(inR).sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>{g-=Number(x.green_in);green.push([dFR(x.date),'Torréfaction (consommé)',-Number(x.green_in),Math.round(g*100)/100,x.operator||'']);});
   adj.filter(x=>x.level==='green'&&inR(x)).sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>{g+=Number(x.qty);green.push([dFR(x.date),'Ajustement',Number(x.qty),Math.round(g*100)/100,x.reason||'']);});
   const rlist=roast.filter(inR).sort((a,b)=>a.date.localeCompare(b.date));
-  const roastSh=[['DATE','VERT ENTRÉ (kg)','TORRÉFIÉ SORTI (kg)','PERTE (kg)','RENDEMENT','OPÉRATEUR']].concat(rlist.map(r=>[dFR(r.date),Number(r.green_in),Number(r.roasted_out),Math.round((r.green_in-r.roasted_out)*100)/100,Math.round(100*r.roasted_out/r.green_in*10)/10,r.operator||'']));
+  const roastSh=[['DATE','VERT ENTRÉ (kg)','TORRÉFIÉ SORTI (kg)','PERTE (kg)','RENDEMENT','OPÉRATEUR']].concat(rlist.map(r=>[dFR(r.date),Number(r.green_in),Number(r.roasted_out),(r.estimated?'':Math.round((r.green_in-r.roasted_out)*100)/100),(r.estimated?'':Math.round(100*r.roasted_out/r.green_in*10)/10),r.operator||'']));
   const used=prod.filter(inR).reduce((s,x)=>s+Number(x.roasted_used||0),0),made=prod.filter(inR).reduce((s,x)=>s+(x.lines||[]).reduce((y,l)=>y+Number(l.qty||0),0),0);
   roastSh.push([{v:'TOTAL',__style:1},{v:rlist.reduce((s,r)=>s+Number(r.green_in),0),__style:1},{v:rlist.reduce((s,r)=>s+Number(r.roasted_out),0),__style:1},{v:rlist.reduce((s,r)=>s+Number(r.green_in-r.roasted_out),0),__style:1},{v:Math.round((rlist.length?100*rlist.reduce((s,r)=>s+Number(r.roasted_out),0)/rlist.reduce((s,r)=>s+Number(r.green_in),0):0)*10)/10,__style:1},'']);
   const prodsSh=[['PRODUIT','PRODUITS','VENDUS','AJUSTEMENTS','STOCK','PRIX','VALEUR STOCK']];
@@ -2993,7 +2997,7 @@ async function formProduction(){
   }else{
     inner=tabsBtn
     +'<div class="field"><span>Date</span><input type="date" id="qD" value="'+todayISO()+'"></div>'
-    +(hasTypes?'':fld('Torréfié consommé (kg) — facultatif (si pesé)','<input id="qKg" type="number" step="0.1" inputmode="decimal">'))
+    +(hasTypes?'':fld('Torréfié consommé (kg) — vide = tout le stock','<input id="qKg" type="number" step="0.1" inputmode="decimal">'))
     +'<div class="field"><span>Quantités produites</span><div class="qtygrid">'
     +prods.map(p=>{const rec=(p.recipes||[])[0]||{};
       return '<div class="qcard"><div class="nm">'+esc(p.name)+(hasTypes&&rec.name?'<div class="pr">☕ '+esc(rec.name)+'</div>':'')+'</div><div class="stepper"><button onclick="App.step(\'qq_'+p.id+'\',-1)">−</button><input id="qq_'+p.id+'" type="number" inputmode="numeric" min="0" value="0"><button onclick="App.step(\'qq_'+p.id+'\',1)">+</button></div></div>';}).join('')
