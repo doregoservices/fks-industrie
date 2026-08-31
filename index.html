@@ -1639,25 +1639,37 @@ async function scAchats(){
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th class="r">Qté (kg)</th><th class="r">Prix/kg</th><th class="r">Montant</th><th>Règlement</th><th></th></tr></thead><tbody>'
   +list.map(p=>{const paid=cash.some(c=>c.ref==='purchase:'+p.id);
     return '<tr><td>'+dFR(p.date)+'</td><td>'+esc(p.supplier)+'</td><td class="r">'+num2(p.qty_kg)+'</td><td class="r">'+money(p.price_per_kg)+'</td><td class="r"><b>'+money(p.amount)+'</b></td><td>'+(paid?'<span class="badge b-ok">Payé</span>':'<span class="badge b-wait">Non payé</span>')+'</td>'
-    +'<td class="r" style="white-space:nowrap">'+(paid?'':'<button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">Marquer payé</button> ')+'<button class="btn sm sec" onclick="App.achatDel(\''+p.id+'\')">✕</button></td></tr>';}).join('')
+    +'<td class="r" style="white-space:nowrap">'+(paid?'':'<button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">Marquer payé</button> ')+'<button class="btn sm sec" onclick="App.achatEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.achatDel(\''+p.id+'\')">✕</button></td></tr>';}).join('')
   +'</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="r">'+num2(totKg)+' kg</td><td></td><td class="r">'+money(totAmt)+'</td><td></td><td></td></tr></tfoot></table></div></div>';
 }
 App.achatPay=async id=>{const p=(await DB.list('purchases',{eq:{id:id}}))[0];
   await createCashEntry({date:p.date,type:'out',account:p.pay_method==='momo'?'momo':'cash',category:'achat_vert',label:'Achat café vert — '+p.supplier,amount:p.amount,imputable:true,ref:'purchase:'+p.id});
   toast('Règlement enregistré dans la caisse','ok');render();};
 App.achatDel=id=>confirmBox('Supprimer cet achat ?','Le stock de café vert sera diminué d\'autant. Cette action est définitive.','Supprimer',async()=>{await DB.remove('purchases',id);render();});
-App.achatForm=()=>{modal('Nouvel achat de café vert',
-  '<div class="row">'+fld('Date','<input id="aD" type="date" value="'+todayISO()+'">')+fld('Fournisseur','<input id="aS" placeholder="ex : Coopérative de Man">')+'</div>'
-  +'<div class="row">'+fld('Quantité (kg)','<input id="aQ" type="number" step="0.1" inputmode="decimal">')+fld('Prix au kg (FCFA)','<input id="aP" type="number" inputmode="numeric" oninput="App.achatTot()">')+fld('Montant total','<input id="aT" type="number" inputmode="numeric" oninput="document.getElementById(\'aAuto\').value=\'0\'">')+'</div>'
-  +'<input type="hidden" id="aAuto" value="1">'
-  +fld('Moyen de paiement','<select id="aM"><option value="cash">Espèces</option><option value="momo">Mobile Money</option><option value="later">À payer plus tard</option></select>')
-  +fld('Note','<input id="aN" placeholder="qualité, lot… (facultatif)">'),
-  '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.achatSave()">Enregistrer</button>');};
+App.achatForm=async id=>{let p=null;
+  if(id)p=(await DB.list('purchases',{eq:{id:id}}))[0]||null;
+  modal(id?'Modifier l\'achat':'Nouvel achat de café vert',
+    '<div class="row">'+fld('Date','<input id="aD" type="date" value="'+(p?p.date:todayISO())+'">')+fld('Fournisseur','<input id="aS" value="'+(p?esc(p.supplier||''):'')+'" placeholder="ex : Coopérative de Man">')+'</div>'
+    +'<div class="row">'+fld('Quantité (kg)','<input id="aQ" type="number" step="0.1" inputmode="decimal" value="'+(p?Number(p.qty_kg)||'':'')+'">')+fld('Prix au kg (FCFA)','<input id="aP" type="number" inputmode="numeric" oninput="App.achatTot()" value="'+(p?Number(p.price_per_kg)||'':'')+'">')+'</div>'
+    +fld('Montant (FCFA)','<input id="aT" type="number" inputmode="numeric" oninput="$(\'#aAuto\').value=\'\'" value="'+(p?Number(p.amount)||'':'')+'">')
+    +'<input type="hidden" id="aAuto" value="1">'
+    +fld('Moyen de paiement','<select id="aM"><option value="cash">Espèces</option><option value="momo">Mobile Money</option><option value="later">À payer plus tard</option></select>')
+    +fld('Note','<input id="aN" value="'+(p?esc(p.note||''):'')+'" placeholder="qualité, lot… (facultatif)">'),
+    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.achatSave('+(id?"'"+id+"'":'')+')">Enregistrer</button>');
+  if(p){$('#aD').value=p.date||todayISO();$('#aS').value=p.supplier||'';$('#aQ').value=Number(p.qty_kg)||'';$('#aP').value=Number(p.price_per_kg)||'';$('#aT').value=Number(p.amount)||'';$('#aN').value=p.note||'';$('#aM').value=p.pay_method||'cash';}};
 App.achatTot=()=>{const q=Number($('#aQ').value)||0,p=Number($('#aP').value)||0;$('#aT').value=q?p*q:0;};
-App.achatSave=async()=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT').value)||q*(Number($('#aP').value)||0);
+App.achatSave=async id=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT').value)||q*(Number($('#aP').value)||0);
   if(!q||!t)return toast('Quantité et montant obligatoires','bad');
-  const p=await DB.insert('purchases',{date:$('#aD').value||todayISO(),supplier:$('#aS').value.trim()||'Fournisseur',qty_kg:q,price_per_kg:Number($('#aP').value)||Math.round(t/q),amount:t,pay_method:$('#aM').value,note:$('#aN').value});
-  if($('#aM').value!=='later')await createCashEntry({date:p.date,type:'out',account:$('#aM').value==='momo'?'momo':'cash',category:'achat_vert',label:'Achat café vert — '+p.supplier,amount:t,imputable:true,ref:'purchase:'+p.id});
+  const rec={date:$('#aD').value||todayISO(),supplier:$('#aS').value.trim()||'Fournisseur',qty_kg:q,price_per_kg:Number($('#aP').value)||Math.round(t/q),amount:t,pay_method:$('#aM').value,note:$('#aN').value};
+  const acc=rec.pay_method==='momo'?'momo':'cash';
+  if(id){await DB.update('purchases',id,rec);
+    const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='purchase:'+id)[0];
+    if(rec.pay_method==='later'){if(ce)await DB.remove('cash_entries',ce.id);}
+    else if(ce)await DB.update('cash_entries',ce.id,{date:rec.date,account:acc,amount:t,label:'Achat café vert — '+rec.supplier});
+    else await createCashEntry({date:rec.date,type:'out',account:acc,category:'achat_vert',label:'Achat café vert — '+rec.supplier,amount:t,imputable:true,ref:'purchase:'+id});
+    closeModal();toast('Achat modifié ✅','ok');render();return;}
+  const p=await DB.insert('purchases',Object.assign({status:'validated'},rec));
+  if(rec.pay_method!=='later')await createCashEntry({date:p.date,type:'out',account:acc,category:'achat_vert',label:'Achat café vert — '+p.supplier,amount:t,imputable:true,ref:'purchase:'+p.id});
   closeModal();toast('Achat enregistré','ok');render();};
 
 /* ================= PRODUCTION ================= */
@@ -1722,19 +1734,30 @@ async function prodStockHead(){
    +'</tbody></table></div>':'');
 }
 async function prodRoastTab(){
+  S.roastEdit=null;
   return await prodStockHead()
   +'<div class="alert al-info">Enregistrez ce qui est <b>réellement</b> pesé : le rendement et les pertes se calculent automatiquement, sans barème fixe.</div>'
   +'<div class="row">'+fld('Date','<input id="rD" type="date" value="'+todayISO()+'">')+fld('Café vert mis en torréfaction (kg)','<input id="rIn" type="number" step="0.1" inputmode="decimal" oninput="App.roastCalc()">')+fld('Café torréfié obtenu (kg)','<input id="rOut" type="number" step="0.1" inputmode="decimal" oninput="App.roastCalc()">')+'</div>'
   +'<div class="row">'+fld('Opérateur','<input id="rOp" placeholder="nom (facultatif)">')+fld('Note','<input id="rN" placeholder="lot, incident… (facultatif)">')+'</div>'
   +'<div id="rCalc" class="pill" style="margin:6px 0 12px">Perte et rendement apparaîtront ici</div>'
-  +'<button class="btn blk" onclick="App.roastSave()">Enregistrer la torréfaction</button>';
+  +'<button class="btn blk" id="roastBtn" onclick="App.roastSave()">Enregistrer la torréfaction</button> <a href="javascript:void(0)" onclick="App.roastCancel()" id="roastCancel" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>';
 }
 App.roastCalc=()=>{const i=Number($('#rIn').value)||0,o=Number($('#rOut').value)||0;const c=$('#rCalc');
   if(i>0){const p=i-o;c.innerHTML='Perte : <b>'+num2(p)+' kg</b> · Rendement : <b>'+num2(100*o/i)+' %</b>'+(p<0?' ⚠️ sortie supérieure à l\'entrée !':'');}else c.innerHTML='Perte et rendement apparaîtront ici';};
+App.roastEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];const r=(await DB.list('roastings',{eq:{id:id}}))[0];if(!r)return;
+  S.roastEdit=id;
+  $('#rD').value=r.date;$('#rIn').value=Number(r.green_in)||'';$('#rOut').value=Number(r.roasted_out)||'';
+  $('#rOp').value=r.operator||'';$('#rN').value=r.note||'';
+  const b=$('#roastBtn');if(b)b.textContent='💾 Enregistrer la modification';
+  const c=$('#roastCancel');if(c)c.style.display='inline';
+  App.roastCalc();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
+App.roastCancel=()=>{S.roastEdit=null;render();};
 App.roastSave=async()=>{const i=Number($('#rIn').value)||0,o=Number($('#rOut').value)||0;
   if(!i||!o)return toast('Indiquez les kg entrés et sortis','bad');
   if(o>i)return toast('La sortie ne peut pas dépasser l\'entrée','bad');
-  await DB.insert('roastings',{date:$('#rD').value||todayISO(),green_in:i,roasted_out:o,operator:$('#rOp').value,note:$('#rN').value,source:'admin'});
+  const rec={date:$('#rD').value||todayISO(),green_in:i,roasted_out:o,operator:$('#rOp').value,note:$('#rN').value};
+  if(S.roastEdit){await DB.update('roastings',S.roastEdit,rec);S.roastEdit=null;toast('Torréfaction modifiée ✅','ok');render();return;}
+  await DB.insert('roastings',Object.assign({source:'admin'},rec));
   toast('Torréfaction enregistrée ✅','ok');render();};
 async function prodTransTab(){
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
@@ -1849,7 +1872,7 @@ async function prodHistTab(){
    +transf.map(t=>'<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(t.roasted_used)+'</td><td>'+(t.lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')+'</td><td class="r">'+num2(Number(t.roasted_used)-(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0))+'</td><td class="r"><b>'+(Number(t.roasted_used)>0?num2(100*(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0)/t.roasted_used)+' %':'—')+'</b></td><td>'+esc(t.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div><div style="height:16px"></div>':'')
   +'<h3>🔥 Torréfactions</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Vert (kg)</th><th class="r">Torréfié (kg)</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
-  +roast.map(r=>'<tr><td>'+dFR(r.date)+'</td><td class="r">'+num2(r.green_in)+'</td><td class="r">'+num2(r.roasted_out)+'</td><td class="r">'+num2(Number(r.green_in)-Number(r.roasted_out))+'</td><td class="r"><b>'+num2(100*r.roasted_out/r.green_in)+' %</b></td><td>'+esc(r.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'roastings\',\''+r.id+'\')">✕</button></td></tr>').join('')
+  +roast.map(r=>'<tr><td>'+dFR(r.date)+'</td><td class="r">'+num2(r.green_in)+'</td><td class="r">'+num2(r.roasted_out)+'</td><td class="r">'+num2(Number(r.green_in)-Number(r.roasted_out))+'</td><td class="r"><b>'+num2(100*r.roasted_out/r.green_in)+' %</b></td><td>'+esc(r.operator||'')+'</td><td><button class="btn sm sec" onclick="App.roastEdit(\'roastings\',\''+r.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'roastings\',\''+r.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div><div style="height:16px"></div><h3>📦 Conditionnements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Matière consommée</th><th>Production</th><th>Opérateur</th><th></th></tr></thead><tbody>'
   +prod.map(p=>'<tr><td>'+dFR(p.date)+'</td><td class="r">'+(Number(p.roasted_used)>0?num2(p.roasted_used)+' kg torréfié':((p.type_lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')||'—'))+'</td><td>'+ (p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td>'+esc(p.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div>';
@@ -1858,6 +1881,7 @@ App.delRow=(t,id)=>confirmBox('Supprimer cet enregistrement ?','Les stocks seron
   if(t==='productions'){const ents=await DB.list('packaging_entries');for(const e of ents.filter(x=>x.ref==='production:'+id))await DB.remove('packaging_entries',e.id);}
   await DB.remove(t,id);render();});
 async function prodAdjTab(){
+  S.adjEdit=null;
   const adj=(await DB.list('adjustments')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
@@ -1867,18 +1891,30 @@ async function prodAdjTab(){
   +'<div class="field" id="jP" style="display:none"><span>Produit</span><select>'+prods.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select></div>'
   +(ctypes.length?'<div class="field" id="jT" style="display:none"><span>Type de café transformé</span><select>'+ctypes.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></div>':'')
   +'<div class="row">'+fld('Quantité (+ ou −)','<input id="jQ" type="number" inputmode="numeric" step="0.1" placeholder="ex : -5 ou 10">')+fld('Motif','<input id="jR" placeholder="casse, don, inventaire…">')+'</div>'
-  +'<button class="btn blk" onclick="App.adjSave()">Enregistrer l\'ajustement</button><div style="height:14px"></div>'
+  +'<button class="btn blk" id="adjBtn" onclick="App.adjSave()">Enregistrer l\'ajustement</button> <a href="javascript:void(0)" id="adjCancel" onclick="App.adjCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a><div style="height:14px"></div>'
   +(adj.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Niveau</th><th class="r">Qté</th><th>Motif</th><th></th></tr></thead><tbody>'
    +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé',product:'Produit'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div>':'');
 }
+App.adjEdit=async id=>{const a=(await DB.list('adjustments',{eq:{id:id}}))[0];if(!a)return;
+  S.adjEdit=id;
+  $('#jD').value=a.date;$('#jL').value=a.level;
+  const jp=$('#jP'),jt=$('#jT');
+  if(jp){jp.style.display=a.level==='product'?'block':'none';if(a.level==='product'&&a.product_id){const sel=jp.querySelector('select');if(sel)sel.value=a.product_id;}}
+  if(jt){jt.style.display=a.level==='type'?'block':'none';if(a.level==='type'&&a.type_id){const sel=jt.querySelector('select');if(sel)sel.value=a.type_id;}}
+  $('#jQ').value=Number(a.qty)||'';$('#jR').value=a.reason||'';
+  const b=$('#adjBtn');if(b)b.textContent='💾 Enregistrer la modification';
+  const c=$('#adjCancel');if(c)c.style.display='inline';
+  try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
+App.adjCancel=()=>{S.adjEdit=null;render();};
+
 App.adjSave=async()=>{const q=Number($('#jQ').value)||0;if(!q)return toast('Quantité obligatoire','bad');
-  const lvl=$('#jL').value;let pid=null,pname=null;
-  let tid=null;
+  const lvl=$('#jL').value;let pid=null,pname=null,tid=null;
   if(lvl==='product'){const sel=$('#jP select');pid=sel.value;pname=sel.options[sel.selectedIndex].text;}
   if(lvl==='type'&&$('#jT select')){const sel=$('#jT select');tid=sel.value;pname=sel.options[sel.selectedIndex].text;}
   const rec={date:$('#jD').value||todayISO(),level:lvl,qty:q,reason:$('#jR').value};
   if(pid)rec.product_id=pid;if(tid)rec.type_id=tid;if(pname)rec.name=pname;
+  if(S.adjEdit){await DB.update('adjustments',S.adjEdit,rec);S.adjEdit=null;toast('Ajustement modifié ✅','ok');render();return;}
   await DB.insert('adjustments',rec);
   toast('Ajustement enregistré','ok');render();};
 
@@ -1896,7 +1932,7 @@ async function scVentes(){
   +'<div class="pill" style="margin-bottom:10px">'+list.length+' vente(s) · <b>'+money(tot)+'</b></div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Commerciale</th><th>Produits</th><th class="r">Montant</th><th>Règlement</th><th></th></tr></thead><tbody>'
   +list.map(s=>'<tr><td>'+dFR(s.date)+'</td><td>'+esc(s.agent_name)+'</td><td class="mut">'+(s.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td class="r"><b>'+money(s.total)+'</b></td><td>'+payPill(s)+'</td>'
-   +'<td><button class="btn sm sec" onclick="App.venteDel(\''+s.id+'\')">✕</button></td></tr>').join('')
+   +'<td><button class="btn sm sec" onclick="App.venteEdit(\''+s.id+'\')">✎</button> <button class="btn sm sec" onclick="App.venteDel(\''+s.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div></div>';
 }
 App.venteDel=id=>confirmBox('Supprimer cette vente ?','Le stock de produits et la caisse seront recalculés. Action définitive.','Supprimer',async()=>{
@@ -1904,19 +1940,36 @@ App.venteDel=id=>confirmBox('Supprimer cette vente ?','Le stock de produits et l
   const cash=await DB.list('cash_entries',{eq:{ref:'sale:'+id}});
   for(const c of cash)await DB.remove('cash_entries',c.id);
   await DB.remove('sales',id);toast('Vente supprimée');render();});
-App.venteForm=async()=>{
+App.venteForm=async id=>{
   const agents=(await DB.list('sales_agents')).filter(a=>a.active);
   const prods=(await DB.list('products')).filter(p=>p.active);
-  modal('Nouvelle vente',
-    '<div class="row">'+fld('Date','<input id="vD" type="date" value="'+todayISO()+'">')+fld('Commerciale','<select id="vA">'+agents.map(a=>'<option value="'+a.id+'|'+esc(a.name)+'">'+esc(a.name)+'</option>').join('')+'<option value="|Vente directe">Vente directe (magasin)</option></select>')+'</div>'
-    +'<div class="field"><span>Règlement</span><div class="toggle" id="vM"><button type="button" class="on in" onclick="App.payMode(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.payMode(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.payMode(this,\'credit\')">🧾 À crédit</button></div></div>'
-    +'<div class="field" id="vCli" style="display:none"><span>Nom du client (crédit)</span><input id="vClient" placeholder="ex : Hôtel Ivoire Café"></div>'
+  let sv=null;if(id)sv=(await DB.list('sales',{eq:{id:id}}))[0]||null;
+  App._editSale=id||null;
+  modal(id?'Modifier la vente':'Nouvelle vente',
+    '<div class="row">'+fld('Date','<input id="vD" type="date" value="'+(sv?sv.date:todayISO())+'">')+fld('Commerciale','<select id="vA">'+agents.map(a=>'<option value="'+a.id+'|'+esc(a.name)+'">'+esc(a.name)+'</option>').join('')+'</select>')+'</div>'
+    +'<div class="field"><span>Règlement</span><div class="toggle" id="vM"><button type="button" class="on in" onclick="App.payMode(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.payMode(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.payMode(this,\'credit\')">📝 Crédit</button></div></div>'
+    +'<div class="field" id="vCli" style="display:none"><span>Nom du client (crédit)</span><input id="vClient" placeholder="ex : Hôtel Ivoire Café" value="'+(sv?esc(sv.client||''):'')+'"></div>'
     +'<div class="field"><span>Produits</span><div id="vLines"></div><button class="btn sm sec" onclick="App.venteLine()">+ Ajouter une ligne</button></div>'
     +'<div class="pill" id="vTot">Total : 0 F</div>',
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.venteSave()">Enregistrer la vente</button>');
   App._pay='cash';App._prods=prods;
   App.venteLine();
-};
+  if(sv){
+    $('#vD').value=sv.date||todayISO();
+    const av=(sv.agent_id||'')+'|'+(sv.agent_name||'');
+    if(!agents.some(a=>(a.id+'|'+a.name)===av)){$('#vA').innerHTML+='<option value="'+esc(av)+'">'+esc(sv.agent_name||'')+'</option>';}
+    $('#vA').value=av;
+    const bs=$$('#vM button');const ix={cash:0,momo:1,credit:2}[sv.pay_mode];const n=(ix===0||ix)?ix:0;
+    bs.forEach(b=>b.className='');if(bs[n]){bs[n].className='on '+sv.pay_mode;App._pay=sv.pay_mode;}
+    $('#vCli').style.display=sv.pay_mode==='credit'?'block':'none';
+    if($('#vClient'))$('#vClient').value=sv.client||'';
+    $$('#vLines .linerow').forEach(r=>r.remove());
+    (sv.lines||[]).forEach(l=>{App.venteLine();const rows=$$('#vLines .linerow');const row=rows[rows.length-1];
+      const sel=row.querySelector('.lp');const val=(l.product_id||'')+'|'+(l.name||'')+'|'+(l.price||0);
+      let found=false;for(const o of sel.options)if(o.value===val)found=true;
+      if(!found){const op=document.createElement('option');op.value=val;op.textContent=l.name||'';sel.appendChild(op);}
+      sel.value=val;row.querySelector('.lq').value=l.qty;row.querySelector('.lp2').value=l.price;});
+    App.venteTot();}};
 App.payMode=(btn,v)=>{$$('#vM button').forEach(b=>b.className='');btn.className='on '+v;App._pay=v;$('#vCli').style.display=v==='credit'?'block':'none';};
 App.venteLine=()=>{const prods=App._prods||[];const d=document.createElement('div');d.className='linerow';
   d.innerHTML='<select class="lp">'+prods.map(p=>'<option value="'+p.id+'|'+esc(p.name)+'|'+(p.price||0)+'">'+esc(p.name)+'</option>').join('')+'</select>'
@@ -1929,9 +1982,18 @@ App.venteTot=()=>{let t=0;$$('#vLines .linerow').forEach(r=>{const q=Number(r.qu
 App.venteSave=async()=>{
   const lines=[];$$('#vLines .linerow').forEach(r=>{const q=Number(r.querySelector('.lq').value)||0;if(q>0){const[pid,nm]=r.querySelector('.lp').value.split('|');lines.push({product_id:pid,name:nm,qty:q,price:Number(r.querySelector('.lp2').value)||0});}});
   if(!lines.length)return toast('Ajoutez au moins un produit','bad');
-  const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
+  const total=lines.reduce((s2,l)=>s2+l.qty*l.price,0);
   const[aid,aname]=$('#vA').value.split('|');
-  await createSale({date:$('#vD').value||todayISO(),agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total,lines,source:'admin'});
+  const date=$('#vD').value||todayISO();const acc=App._pay==='momo'?'momo':'cash';
+  if(App._editSale){
+    const old=(await DB.list('sales',{eq:{id:App._editSale}}))[0]||{};
+    await DB.update('sales',App._editSale,{date:date,agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total:total,lines:lines,credit_status:App._pay==='credit'?(old.credit_status||'due'):'paid'});
+    const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='sale:'+App._editSale)[0];
+    if(App._pay==='credit'){if(ce)await DB.remove('cash_entries',ce.id);}
+    else if(ce)await DB.update('cash_entries',ce.id,{date:date,account:acc,amount:total,label:'Ventes '+aname});
+    else await createCashEntry({date:date,type:'in',account:acc,category:'ventes',label:'Ventes '+aname,amount:total,imputable:true,ref:'sale:'+App._editSale});
+    App._editSale=null;closeModal();toast('Vente modifiée ✅','ok');render();return;}
+  await createSale({date:date,agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total,lines,source:'admin'});
   closeModal();toast('Vente enregistrée ✅','ok');render();};
 
 /* ================= COMMERCIAUX & LIENS ================= */
@@ -2024,27 +2086,37 @@ async function scCaisse(){
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Libellé</th><th>Catégorie</th><th>Moyen</th><th class="r">Entrée</th><th class="r">Sortie</th><th></th></tr></thead><tbody>'
   +list.map(e=>'<tr'+(e.imputable===false?' style="background:#fdf8f0"':'')+'><td>'+dFR(e.date)+'</td><td>'+esc(e.label)+(e.imputable===false?' <span class="badge b-wait">OD</span>':'')+'</td><td>'+esc(catLabel(e.category))+'</td><td>'+(e.account==='momo'?'📱':'💵')+'</td>'
    +'<td class="r" style="color:var(--ok)">'+(e.type==='in'?money(e.amount):'')+'</td><td class="r" style="color:var(--bad)">'+(e.type==='out'?money(e.amount):'')+'</td>'
-   +'<td><button class="btn sm sec" onclick="App.cashDel(\''+e.id+'\')">✕</button></td></tr>').join('')
+   +'<td><button class="btn sm sec" onclick="App.cashEdit(\''+e.id+'\')">✎</button> <button class="btn sm sec" onclick="App.cashDel(\''+e.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div>'
   +(od.length?'<div class="alert al-info" style="margin-top:12px">'+od.length+' opération(s) avec la direction (« OD », fond orange) — suivies dans la caisse mais exportées à part pour Sage.</div>':'')
   +'</div>';
 }
 function catLabel(k){if(k==='od_transfer'||k==='od_funding')return OD_LABELS[k];return sagLbl(k);}
 App.cashDel=id=>confirmBox('Supprimer cette opération ?','Le solde sera recalculé. Action définitive.','Supprimer',async()=>{await DB.remove('cash_entries',id);render();});
-App.cashForm=()=>{
+App.cashForm=async id=>{
+  let e=null;
+  if(id)e=(await DB.list('cash_entries',{eq:{id:id}}))[0]||null;
   const cats=(SETS.sage_accounts||[]).filter(c=>!c.key.startsWith('treso_')&&c.key!=='apport');
-  modal('Nouvelle opération de caisse',
-    '<div class="field"><span>Type</span><div class="toggle" id="cT"><button type="button" class="on in" onclick="App.cashDir(this,\'in\')">↓ Entrée (reçu)</button><button type="button" onclick="App.cashDir(this,\'out\')">↑ Sortie (payé)</button></div></div>'
-    +'<div class="row">'+fld('Date','<input id="oD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="oM" type="number" inputmode="numeric">')+'</div>'
+  const c1=(!e||e.type==='out')?'':'on in';const c2=(e&&e.type==='out')?'on out':'';
+  modal(id?'Modifier l\'opération de caisse':'Nouvelle opération de caisse',
+    '<div class="field"><span>Type</span><div class="toggle" id="cT"><button type="button" class="'+c1+'" onclick="App.cashDir(this,\'in\')">↓ Entrée (reçu)</button><button type="button" class="'+c2+'" onclick="App.cashDir(this,\'out\')">↑ Sortie (payé)</button></div></div>'
+    +'<div class="row">'+fld('Date','<input id="oD" type="date" value="'+(e?e.date:todayISO())+'">')+fld('Montant (FCFA)','<input id="oM" type="number" inputmode="numeric" value="'+(e?Number(e.amount)||'':'')+'">')+'</div>'
     +'<div class="row">'+fld('Sur','<select id="oA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option></select>')
     +fld('Catégorie','<select id="oC">'+cats.map(c=>'<option value="'+c.key+'">'+esc(c.label)+'</option>').join('')+'</select>')+'</div>'
-    +fld('Libellé','<input id="oL" placeholder="description courte">'),
-    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.cashSave()">Enregistrer</button>');
-  App._cash='in';};
+    +fld('Libellé','<input id="oL" placeholder="description courte" value="'+(e?esc(e.label||''):'')+'">'),
+    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.cashSave('+(id?"'"+id+"'":'')+')">Enregistrer</button>');
+  if(e){$('#oD').value=e.date||todayISO();$('#oM').value=Number(e.amount)||'';$('#oL').value=e.label||'';
+    $('#oA').value=e.account==='momo'?'momo':'cash';
+    if(e.category&&!cats.some(c=>c.key===e.category)){$('#oC').innerHTML+='<option value="'+e.category+'">'+esc(catLabel(e.category))+'</option>';}
+    $('#oC').value=e.category||'divers';}
+  App._cash=e?e.type:'in';};
 App.cashDir=(btn,v)=>{$$('#cT button').forEach(b=>b.className='');btn.className='on '+v;App._cash=v;};
-App.cashSave=async()=>{const amt=Number($('#oM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
-  await createCashEntry({date:$('#oD').value||todayISO(),type:App._cash,account:$('#oA').value,category:$('#oC').value,label:$('#oL').value||catLabel($('#oC').value),amount:amt,imputable:true});
-  closeModal();toast('Opération enregistrée','ok');render();};
+App.cashSave=async id=>{const amt=Number($('#oM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
+  const rec={date:$('#oD').value||todayISO(),type:App._cash,account:$('#oA').value,category:$('#oC').value,label:$('#oL').value||catLabel($('#oC').value),amount:amt};
+  if(id)await DB.update('cash_entries',id,rec);
+  else await createCashEntry(rec);
+  closeModal();toast(id?'Opération modifiée ✅':'Opération enregistrée','ok');render();};
+App.cashEdit=App.cashForm;App.achatEdit=App.achatForm;App.venteEdit=App.venteForm;
 App.odForm=(kind)=>{
   modal(kind==='od_transfer'?'📤 Envoi des ventes à la direction':'📥 Approvisionnement reçu de la direction',
     '<div class="row">'+fld('Date','<input id="dD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="dM" type="number" inputmode="numeric">')+'</div>'
@@ -3004,7 +3076,7 @@ async function emailSend(subject,html,attachment){
   if(!E.key)throw new Error('Clé d\'envoi REPORT_KEY manquante — Réglages → 📧 Envoi des rapports');
   let r;
   try{r=await fetch(Supa.base()+'/functions/v1/send-report',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.anon,Authorization:'Bearer '+CFG.anon,'x-report-key':E.key},body:JSON.stringify({to:E.boss,subject,html,attachment:attachment||null})});}
-  catch(e){throw new Error('Fonction d\'envoi injoignable — projet Supabase en pause (relancez-le dans la console) ou URL incorrecte');}
+  catch(e){throw new Error('Fonction d\'envoi injoignable — la fonction « send-report » n\'est sans doute PAS encore déployée sur votre projet (installation gratuite en 10 min : écran 🛟 Support → guide, section 📧) ; sinon projet en pause à relancer depuis la console Supabase');}
   let j=null;try{j=await r.json();}catch(e){}
   if(r.ok)return j;
   const msg=String((j&&(j.error||j.msg))||'');

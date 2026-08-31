@@ -79,6 +79,8 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 
 **Écran Produits** : « 🛍️ Produits » dans le menu — créer / modifier / désactiver un produit fini (prix, poids, type de café consommé, emballages) et gérer les types de café produits par les machines.
 
+**✏️ Modifier une saisie** : bouton **✎** sur les opérations de caisse, achats, ventes, ajustements et torréfactions — stocks, caisse et écritures liées sont recalculés automatiquement (aucun doublon). Employés, produits, types de café et immobilisations disposent déjà de leur bouton Modifier.
+
 **Logo société** : Réglages → Société — les images lourdes sont **réduites automatiquement** ; le logo s'affiche dans l'app, les emails au boss et est **embarqué dans chaque export Excel** (haut de la première feuille).
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
