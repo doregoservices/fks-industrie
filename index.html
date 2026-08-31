@@ -1400,21 +1400,24 @@ async function dbProbe(){
       if(r.status===401||r.status===403){out.auth++;break;}
       if(r.status===400){
         let j2=null;try{j2=await r.json();}catch(e){}
-        const mm=j2&&j2.message&&String(j2.message).match(/Could not find the '([^']+)' column/);
-        if(mm){
-          const listed=mm[1].split(',').map(x=>x.trim()).filter(Boolean);
-          const known=listed.filter(c=>pend.indexOf(c)>=0);
-          if(known.length){
-            const rec=out.partial.filter(p=>p.t===t)[0];
-            if(rec)known.forEach(c=>{if(rec.cols.indexOf(c)<0)rec.cols.push(c);});
-            else out.partial.push({t:t,cols:known.slice()});
-            pend=pend.filter(c=>known.indexOf(c)<0);
-            if(!pend.length)done=true;
-            continue;
-          }
+        const msg=j2&&j2.message?String(j2.message):'';
+        let listed=[];
+        const m1=msg.match(/Could not find the '([^']+)' column/);
+        if(m1)listed=listed.concat(m1[1].split(','));
+        const m2=msg.match(/column\s+([\w.]+)\.([\w]+)\s+does not exist/i);
+        if(m2)listed=listed.concat([m2[2]]);
+        const m3=msg.match(/relationship\"[^\"]*\"\s+for\s+column\s+\"([\w]+)\"/i);
+        if(m3)listed=listed.concat([m3[1]]);
+        const known=listed.map(x=>x.trim()).filter(Boolean).filter(c=>pend.indexOf(c)>=0);
+        if(known.length){
+          const rec=out.partial.filter(p=>p.t===t)[0];
+          if(rec)known.forEach(c=>{if(rec.cols.indexOf(c)<0)rec.cols.push(c);});
+          else out.partial.push({t:t,cols:known.slice()});
+          pend=pend.filter(c=>known.indexOf(c)<0);
+          if(!pend.length)done=true;
+          continue;
         }
-        const msg=j2&&j2.message?String(j2.message).slice(0,120):'erreur 400';
-        out.err.push(t+' : '+msg);break;
+        out.err.push(t+' : '+(msg.slice(0,120)||'erreur 400'));break;
       }
       out.err.push(t+' (erreur '+r.status+')');break;
     }

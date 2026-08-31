@@ -24,7 +24,10 @@ const mk=schema=>async(u)=>{
   const t=m[1];const cols=decodeURIComponent(m[2]).split(',').filter(Boolean);
   if(!schema[t])return{ok:false,status:404,json:async()=>({code:'PGRST205'})};
   const miss=cols.filter(c=>schema[t].indexOf(c)<0);
-  if(miss.length)return{ok:false,status:400,json:async()=>({message:"Could not find the '"+miss.join(',')+"' column of '"+t+"' in the schema cache"})};
+  if(miss.length){
+    if(t==='adjustments')return{ok:false,status:400,json:async()=>({code:'PGRST204',message:"Could not find the '"+miss.join(',')+"' column of '"+t+"' in the schema cache"})};
+    return{ok:false,status:400,json:async()=>({code:'42703',message:'column '+t+'.'+miss[0]+' does not exist'})};
+  }
   return{ok:true,json:async()=>([])};
 };
 const _fetch=global.fetch;
@@ -48,7 +51,7 @@ if(!sql.includes('create table if not exists form_tokens'))throw new Error('SQL 
 ['packaging jsonb','type_id text','type_name text','type_kg numeric','recipes jsonb'].forEach(f=>{if(!sql.includes('add column if not exists '+f))throw new Error('SQL products : '+f+' absent');});
 if(!sql.includes('add column if not exists type_lines jsonb'))throw new Error('SQL productions : type_lines absent');
 if(!mod.b.includes('type_id')||!mod.b.includes('form_tokens')||!mod.b.includes('products'))throw new Error('résumé incomplet');
-console.log('✓ MULTI-colonnes détectées (products×5, adjustments×2, productions×1) → ALTER complets générés (cas PostgREST réel)');
+console.log('✓ Formats réels couverts : PostgreSQL « column x.y does not exist » + PostgREST multi-colonnes → ALTER complets générés');
 /* 5. injoignable / pause */
 global.fetch=async()=>{throw new Error('network');};
 await App.dbCheck();
