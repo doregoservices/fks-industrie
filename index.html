@@ -1776,7 +1776,7 @@ async function prodTransTab(){
   +'<div class="alert al-info">Le café <b>torréfié</b> est passé aux <b>machines</b> (broyage, mouture, assemblage…) qui produisent les <b>types de café</b>. La <b>perte machines</b> et le rendement se mesurent ici : c\'est la quantité <b>obtenue</b> qui sera disponible au conditionnement.</div>'
   +'<div class="row">'+fld('Date','<input id="tD" type="date" value="'+todayISO()+'">')+fld('Café torréfié consommé (kg)','<input id="tIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCalc()">')+'</div>'
   +'<div class="field"><span>Quantités obtenues par type (kg réellement pesés)</span>'
-  +(ctypes.length?ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join(''):'<div class="help">Aucun type — créez-les dans l\'écran Produits (section Types de café).</div>')
+  +(ctypes.length?ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join(''):'<div class="alert al-bad">⚠️ Aucun <b>type de café</b> créé : les machines ne peuvent rien produire. Créez d\'abord vos types (ex : Moulu premium, Café grain, Moulu gingembre…).</div><button class="btn" onclick="closeModal();go(\'produits\')">➡️ Créer les types de café (écran Produits)</button>')
   +'</div>'
   +'<div class="row">'+fld('Opérateur / machine','<input id="tOp" placeholder="ex. Machine 1 — Broyage">')+fld('Note','<input id="tN" placeholder="lot, incident… (facultatif)">')+'</div>'
   +'<div id="tCalc" class="pill" style="margin:6px 0 12px">Perte et rendement machines apparaîtront ici</div>'
@@ -1834,7 +1834,9 @@ App.trSave=async()=>{const i=Number($('#tIn').value)||0;
   const editId=S.trEdit;
   const ctypes=await DB.list('coffee_types');
   const lines=[];$$('input[id^=tq_]').forEach(x=>{const q=Number(x.value)||0;if(q>0){const t=ctypes.filter(y=>y.id===x.id.slice(3))[0];if(t)lines.push({type_id:t.id,name:t.name,qty:q});}});
-  if(!i||!lines.length)return toast('Indiquez les kg consommés et au moins un type obtenu','bad');
+  const nbTypes=(await DB.list('coffee_types')).filter(t=>t.active!==false).length;
+  if(!nbTypes)return toast('Créez d\'abord vos types de café (écran Produits, section Types) — ce sont eux que les machines produisent','bad');
+  if(!i||!lines.length)return toast('Indiquez les kg de torréfié consommés ET la quantité obtenue d\'au moins un type','bad');
   const out=lines.reduce((a,l)=>a+l.qty,0);
   if(out>i)return toast('La somme obtenue ('+num2(out)+' kg) dépasse l\'entrée ('+num2(i)+' kg)','bad');
   const st=await computeStats();

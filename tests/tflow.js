@@ -98,5 +98,19 @@ console.log('✓ Emballages : mouvement modifiable (✎)'+(cashLink?' avec écri
 /* 7. vocabulaire cohérent */
 if(h1.includes('semi-fini'))throw new Error('terme « semi-fini » encore utilisé à l\’écran');
 console.log('✓ Vocabulaire : « Café transformé par les machines » partout (plus de « semi-fini »)');
-console.log('TFLOW: 7/7 OK');
+/* 8. aucun type créé : guidage explicite (alerte + bouton vers Produits) */
+const ctys=await DB.list('coffee_types');
+for(const t of ctys)await DB.update('coffee_types',t.id,{active:false});
+S.route='production';S.tab={production:'trans'};location.hash='#/production';await render();
+const hNoType=$('#main').innerHTML;
+if(!hNoType.includes('Aucun <b>type de café</b> créé'))throw new Error('guidage types absent');
+if(!hNoType.includes('go(\'produits\')')&&!hNoType.includes("go('produits')"))throw new Error('bouton vers Produits absent');
+let guided=false;const _tt=toast;toast=(m,k)=>{if(String(m).includes('Créez d'))guided=true;return _tt(m,k);};
+$('#tIn').value='50';
+await App.trSave();
+toast=_tt;
+if(!guided)throw new Error('message de guidage trSave absent');
+for(const t of ctys)await DB.update('coffee_types',t.id,{active:true});
+console.log('✓ Aucun type : alerte + bouton « Créer les types » + message clair au lieu de l\'erreur laconique');
+console.log('TFLOW: 8/8 OK');
 })().catch(e=>{console.error('ÉCHEC TFLOW:',e.stack||e.message);process.exit(1);});
