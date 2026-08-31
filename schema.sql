@@ -31,6 +31,7 @@ create table if not exists purchases(
   price_per_kg numeric default 0,
   amount numeric default 0,
   pay_method text default 'cash',
+  status text default 'validated',
   note text
 );
 create table if not exists coffee_types(
