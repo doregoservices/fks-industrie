@@ -1400,15 +1400,21 @@ async function dbProbe(){
       if(r.status===401||r.status===403){out.auth++;break;}
       if(r.status===400){
         let j2=null;try{j2=await r.json();}catch(e){}
-        const mm=j2&&j2.message&&j2.message.match(/Could not find the '([\w]+)' column/);
-        if(mm&&pend.indexOf(mm[1])>=0){
-          const rec=out.partial.filter(p=>p.t===t)[0];
-          if(rec)rec.cols.push(mm[1]);else out.partial.push({t:t,cols:[mm[1]]});
-          pend=pend.filter(c=>c!==mm[1]);
-          if(!pend.length)done=true;
-          continue;
+        const mm=j2&&j2.message&&String(j2.message).match(/Could not find the '([^']+)' column/);
+        if(mm){
+          const listed=mm[1].split(',').map(x=>x.trim()).filter(Boolean);
+          const known=listed.filter(c=>pend.indexOf(c)>=0);
+          if(known.length){
+            const rec=out.partial.filter(p=>p.t===t)[0];
+            if(rec)known.forEach(c=>{if(rec.cols.indexOf(c)<0)rec.cols.push(c);});
+            else out.partial.push({t:t,cols:known.slice()});
+            pend=pend.filter(c=>known.indexOf(c)<0);
+            if(!pend.length)done=true;
+            continue;
+          }
         }
-        out.err.push(t+' (erreur '+r.status+')');break;
+        const msg=j2&&j2.message?String(j2.message).slice(0,120):'erreur 400';
+        out.err.push(t+' : '+msg);break;
       }
       out.err.push(t+' (erreur '+r.status+')');break;
     }
@@ -1422,7 +1428,7 @@ App.dbCheck=async()=>{
   const p=await dbProbe();
   if(p.net){modal('Vérification impossible','<div class="alert al-bad">Projet <b>injoignable</b> : URL incorrecte, connexion internet coupée, ou projet Supabase <b>en pause</b> — les projets gratuits se mettent en pause après une semaine d\'inactivité ; relancez-le depuis la console Supabase (bouton Restore), puis refaites Ctrl+F5 ici.</div>');return;}
   if(p.auth){modal('Session expirée','<div class="alert al-bad">Votre session a expiré — <b>déconnectez-vous puis reconnectez-vous</b>, et relancez la vérification.</div>');return;}
-  if(p.err.length){modal('Accès refusé sur certaines tables','<div class="alert al-bad">'+esc(p.err.join(', '))+'</div><div class="help" style="margin-top:8px">Déconnectez/reconnectez-vous. Si cela persiste, ré-exécutez schema.sql dans le SQL Editor (il réinstalle aussi les droits gestionnaire_full).</div>');return;}
+  if(p.err.length){modal('Accès refusé sur certaines tables','<div class="alert al-bad">'+esc(p.err.join(', '))+'</div><div class="help" style="margin-top:8px">Le message ci-dessus contient la cause exacte. Déconnectez/reconnectez-vous puis relancez la vérification ; si cela persiste, communiquez ce message précis.</div>');return;}
   const nMiss=p.miss.length,nPart=p.partial.reduce((a,x)=>a+x.cols.length,0);
   if(!nMiss&&!nPart){modal('Vérification de la base ✅','<div class="alert al-ok"><b>Base complète :</b> les '+DB_TABLES.length+' tables et toutes leurs colonnes répondent correctement.</div>');return;}
   const parts=[];

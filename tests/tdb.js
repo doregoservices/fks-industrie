@@ -24,7 +24,7 @@ const mk=schema=>async(u)=>{
   const t=m[1];const cols=decodeURIComponent(m[2]).split(',').filter(Boolean);
   if(!schema[t])return{ok:false,status:404,json:async()=>({code:'PGRST205'})};
   const miss=cols.filter(c=>schema[t].indexOf(c)<0);
-  if(miss.length)return{ok:false,status:400,json:async()=>({message:"Could not find the '"+miss[0]+"' column of '"+t+"' in the schema cache"})};
+  if(miss.length)return{ok:false,status:400,json:async()=>({message:"Could not find the '"+miss.join(',')+"' column of '"+t+"' in the schema cache"})};
   return{ok:true,json:async()=>([])};
 };
 const _fetch=global.fetch;
@@ -36,6 +36,8 @@ console.log('✓ Base complète : 21 tables + toutes leurs colonnes détectées'
 /* 4. CAS RÉEL : adjustments sans type_id/name + table form_tokens absente */
 const OLD=JSON.parse(JSON.stringify(FULL));
 OLD.adjustments=OLD.adjustments.filter(c=>c!=='type_id'&&c!=='name');
+OLD.products=OLD.products.filter(c=>c!=='packaging'&&c!=='type_id'&&c!=='type_name'&&c!=='type_kg'&&c!=='recipes');
+OLD.productions=OLD.productions.filter(c=>c!=='type_lines');
 delete OLD.form_tokens;
 global.fetch=mk(OLD);
 await App.dbCheck();
@@ -43,8 +45,10 @@ const sql=(mod.b.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)||[])[1]||'';
 if(!sql.includes('alter table adjustments add column if not exists type_id text'))throw new Error('SQL : ALTER type_id absent → '+sql.slice(0,120));
 if(!sql.includes('add column if not exists name text'))throw new Error('SQL : ALTER name absent');
 if(!sql.includes('create table if not exists form_tokens'))throw new Error('SQL : CREATE form_tokens absent');
-if(!mod.b.includes('type_id')||!mod.b.includes('form_tokens'))throw new Error('résumé incomplet');
-console.log('✓ Colonne manquante détectée (type_id, name) → ALTER généré + table absente → CREATE généré');
+['packaging jsonb','type_id text','type_name text','type_kg numeric','recipes jsonb'].forEach(f=>{if(!sql.includes('add column if not exists '+f))throw new Error('SQL products : '+f+' absent');});
+if(!sql.includes('add column if not exists type_lines jsonb'))throw new Error('SQL productions : type_lines absent');
+if(!mod.b.includes('type_id')||!mod.b.includes('form_tokens')||!mod.b.includes('products'))throw new Error('résumé incomplet');
+console.log('✓ MULTI-colonnes détectées (products×5, adjustments×2, productions×1) → ALTER complets générés (cas PostgREST réel)');
 /* 5. injoignable / pause */
 global.fetch=async()=>{throw new Error('network');};
 await App.dbCheck();
