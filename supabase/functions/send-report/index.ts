@@ -19,17 +19,19 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const REPORT_KEY = Deno.env.get("REPORT_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") || "CafePro <onboarding@resend.dev>";
 
+let CORS_ORIGIN = "*"; // reflète l'origine du site appelant (exigé par la passerelle Supabase)
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
       "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": CORS_ORIGIN,
       "Access-Control-Allow-Headers": "Content-Type, x-report-key, apikey, Authorization",
     },
   });
 
 Deno.serve(async (req: Request) => {
+  CORS_ORIGIN = req.headers.get("origin") || "*";
   if (req.method === "OPTIONS") return json({ ok: true });
 
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
