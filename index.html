@@ -1893,10 +1893,10 @@ async function prodAdjTab(){
   +'<div class="row">'+fld('Quantité (+ ou −)','<input id="jQ" type="number" inputmode="numeric" step="0.1" placeholder="ex : -5 ou 10">')+fld('Motif','<input id="jR" placeholder="casse, don, inventaire…">')+'</div>'
   +'<button class="btn blk" id="adjBtn" onclick="App.adjSave()">Enregistrer l\'ajustement</button> <a href="javascript:void(0)" id="adjCancel" onclick="App.adjCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a><div style="height:14px"></div>'
   +(adj.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Niveau</th><th class="r">Qté</th><th>Motif</th><th></th></tr></thead><tbody>'
-   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé',product:'Produit'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
+   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé',product:'Produit'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.adjEdit(\'adjustments\',\''+a.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div>':'');
 }
-App.adjEdit=async id=>{const a=(await DB.list('adjustments',{eq:{id:id}}))[0];if(!a)return;
+App.adjEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];const a=(await DB.list('adjustments',{eq:{id:id}}))[0];if(!a)return;
   S.adjEdit=id;
   $('#jD').value=a.date;$('#jL').value=a.level;
   const jp=$('#jP'),jt=$('#jT');

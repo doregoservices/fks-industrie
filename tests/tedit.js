@@ -78,12 +78,14 @@ if((await DB.list('roastings')).length===(await DB.list('roastings')).length){} 
 console.log('✓ Torréfaction : pesées modifiées, stocks recalculés automatiquement');
 /* 7. Boutons ✎ visibles dans les listes */
 await new Promise(r=>setTimeout(r,20));
-for(const sc2 of [['caisse',{}],['achats',{}],['ventes',{}],['production',{production:'hist'}]]){
+for(const sc2 of [['caisse',{}],['achats',{}],['ventes',{}],['production',{production:'hist'}],['production',{production:'adj'}]]){
   S.route=sc2[0];S.tab=sc2[1];location.hash='#/'+sc2[0];
   await render();
-  if(!$('#main').innerHTML.includes('✎')&&!$('#app').innerHTML.includes('✎'))throw new Error('écran '+sc2[0]+' : bouton ✎ absent');
+  const h2=$('#main').innerHTML;
+  if(!h2.includes('✎')&&!$('#app').innerHTML.includes('✎'))throw new Error('écran '+sc2[0]+' : bouton ✎ absent');
+  if(sc2[0]==='production'&&S.tab.production==='adj'&&!h2.includes('App.adjEdit('))throw new Error('ajustements : bouton ✎ non branché');
 }
-console.log('✓ Bouton ✎ présent sur les écrans Caisse, Achats, Ventes, Historique production');
+console.log('✓ Bouton ✎ présent : Caisse, Achats, Ventes, Historique + Ajustements (branché)');
 /* 8. Message email : cause réelle (fonction non déployée) */
 CFG.mode='supabase';CFG.url='https://x.supabase.co';CFG.anon='k';SETS.email={boss:'b@x.ci',key:'k'};SES=null;
 const _f=global.fetch;global.fetch=async()=>{throw new Error('Failed to fetch');};
