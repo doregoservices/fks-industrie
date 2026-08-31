@@ -1041,9 +1041,10 @@ const Supa={
       let j=null;try{j=await r.json();}catch(e){}
       if(j&&j.message){m+=' : '+j.message;if(/Could not find the '.+' column|column .* does not exist/i.test(String(j.message)))m+='  →  Réglages → 🔍 Vérifier la base (génère la réparation)';}throw new Error(m);}
     if(method==='DELETE'||r.status===204)return null;
-    return r.json();},
-  async list(t,f){f=f||{};let q='select=*';if(f.eq)for(const k in f.eq)q+='&'+k+'=eq.'+encodeURIComponent(f.eq[k]);if(f.order)q+='&order='+f.order;return this.req(t,q,'GET');},
-  async insert(t,o){const rows=await this.req(t,'select=*','POST',Array.isArray(o)?o:[o],{Prefer:'return=representation'});return Array.isArray(o)?rows:rows[0];},
+    let out=null;try{out=await r.json();}catch(e){}
+    return out;},
+  async list(t,f){f=f||{};let q='select=*';if(f.eq)for(const k in f.eq)q+='&'+k+'=eq.'+encodeURIComponent(f.eq[k]);if(f.order)q+='&order='+f.order;return (await this.req(t,q,'GET'))||[];},
+  async insert(t,o){const rows=await this.req(t,'select=*','POST',Array.isArray(o)?o:[o],{Prefer:'return=representation'})||[];return Array.isArray(o)?rows:rows[0];},
   async update(t,id,p){const rows=await this.req(t,'id=eq.'+encodeURIComponent(id)+'&select=*','PATCH',p,{Prefer:'return=representation'});return rows?rows[0]:null;},
   async remove(t,id){return this.req(t,'id=eq.'+encodeURIComponent(id),'DELETE');}
 };
