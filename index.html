@@ -1055,7 +1055,9 @@ function setDbAdapter(){const base=(CFG.mode==='supabase'&&CFG.url&&CFG.anon)?Su
       if(a===undefined){a=await base.list(t);if(!Array.isArray(a))a=[];if(this._v===v)this._cache[k]=a;}
       let r=a;if(f&&f.eq)for(const q in f.eq)r=r.filter(x=>String(x[q])===String(f.eq[q]));
       return r.slice();},
-    async insert(t,o){const r=await base.insert(t,o);this.bump();return r;},
+    async insert(t,o){const fix=r=>(r&&r.id)?r:Object.assign({id:uid(),created_at:(r&&r.created_at)||nowISO()},r||{});
+      const p=Array.isArray(o)?o.map(fix):fix(o);
+      const r=await base.insert(t,p);this.bump();return r;},
     async update(t,id,p){const r=await base.update(t,id,p);this.bump();return r;},
     async remove(t,id){await base.remove(t,id);this.bump();}};}
 
