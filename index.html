@@ -1039,7 +1039,7 @@ const Supa={
   async req(t,q,method,body,extra){const r=await fetch(this.base()+'/rest/v1/'+t+(q?'?'+q:''),{method:method||'GET',headers:Object.assign(this.headers(),extra||{}),body:body?JSON.stringify(body):undefined});
     if(!r.ok){let m='Erreur Supabase '+r.status;if(r.status===401&&SES){m='Session expirée — reconnectez-vous.';logout();}
       let j=null;try{j=await r.json();}catch(e){}
-      if(j&&j.message)m+=' : '+j.message;throw new Error(m);}
+      if(j&&j.message){m+=' : '+j.message;if(/Could not find the '.+' column|column .* does not exist/i.test(String(j.message)))m+='  →  Réglages → 🔍 Vérifier la base (génère la réparation)';}throw new Error(m);}
     if(method==='DELETE'||r.status===204)return null;
     return r.json();},
   async list(t,f){f=f||{};let q='select=*';if(f.eq)for(const k in f.eq)q+='&'+k+'=eq.'+encodeURIComponent(f.eq[k]);if(f.order)q+='&order='+f.order;return this.req(t,q,'GET');},

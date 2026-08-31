@@ -216,3 +216,12 @@ Les fenêtres « Lien de … » (commerciales, production, caisse) affichent un 
 - **Clavier numérique automatique** sur tous les champs de montants et quantités (saisie FCFA plus rapide, moins d'erreurs).
 - **Indicateur « 📡 Hors ligne »** dès que la connexion coupe (reprise automatique à la reconnexion) ; le bouton **📥 Installer** apparaît quand le téléphone propose d'installer l'application.
 - **Menu par rôle** : chaque profil ne voit que ses écrans, partout (barre du haut, onglets du bas, menu).
+
+## 11. Dépannage — « Erreur Supabase 400 : Could not find the '…' column »
+
+La base en ligne peut être en retard sur le schéma de l'app (mise à jour des tables). Réparation guidée, sans perte de données :
+
+1. Dans l'app : **Réglages → 🔍 Vérifier la base** — l'app teste les tables et colonnes, liste ce qui manque et **génère le SQL de réparation**.
+2. **📋 Copier le SQL manquant** → console Supabase → **SQL Editor** → New query → coller → **Run** (les instructions `add column if not exists` / `create table if not exists` conservent tout).
+3. Revenir dans l'app → relancer **Vérifier la base** → « ✅ Base complète ».
+4. Refaire l'enregistrement qui échouait.
