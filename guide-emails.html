@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Installation des emails — CaféPro FKS</title></head>
+<body style="margin:0;font-family:Arial,sans-serif;background:#f4ece2;color:#2b211a;line-height:1.55">
+<div style="max-width:720px;margin:0 auto;padding:18px 16px 60px">
+
+<div style="background:linear-gradient(135deg,#6f4e37,#8a6a4f);color:#fff;border-radius:16px;padding:22px 20px;margin-bottom:18px">
+<div style="font-size:34px">📧</div>
+<h1 style="margin:6px 0 4px;font-size:24px">Installation des emails au boss</h1>
+<div style="opacity:.9;font-size:14px">3 étapes · environ 10 minutes · gratuit (Resend : 100 emails/jour offerts)</div>
+</div>
+
+<div style="background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;border:1px solid #e5d9c9">
+<div style="font-size:13px;color:#8a6a4f;font-weight:bold">ÉTAPE 1 · 3 MIN — CRÉER LE COMPTE D'ENVOI</div>
+<ol style="margin:10px 0 0;padding-left:22px">
+<li>Ouvre <b>resend.com</b> → bouton <b>Sign up</b>.</li>
+<li><b>IMPORTANT :</b> inscris-toi avec <b>l'adresse email du boss</b> (c'est elle qui pourra recevoir les rapports tant qu'aucun domaine n'est vérifié).</li>
+<li>Choisis le plan <b>Free</b> (gratuit).</li>
+<li>Une fois connecté : menu <b>API Keys</b> → <b>Create API Key</b> → donne un nom (ex : fks) → <b>copie la clé</b> qui commence par <code style="background:#f4ece2;padding:1px 5px;border-radius:4px">re_...</code> → garde-la de côté (étape 2).</li>
+</ol>
+</div>
+
+<div style="background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;border:1px solid #e5d9c9">
+<div style="font-size:13px;color:#8a6a4f;font-weight:bold">ÉTAPE 2 · 5 MIN — INSTALLER LA FONCTION DANS SUPABASE</div>
+<ol style="margin:10px 0 0;padding-left:22px">
+<li>Ouvre <b>supabase.com</b> → connecte-toi → clique sur <b>ton projet FKS</b>.</li>
+<li>Menu de gauche : <b>Edge Functions</b> (dans la section Database) → bouton <b>Create a function</b>.</li>
+<li>Nom exact : <code style="background:#f4ece2;padding:1px 5px;border-radius:4px">send-report</code> → <b>Next</b>.</li>
+<li><b>Efface tout</b> le code de l'éditeur, puis colle le code de la fonction :<br>
+<span style="font-size:13px">↳ ouvre ce lien dans un nouvel onglet : <br><a href="https://raw.githubusercontent.com/gfeinfos-hue/fks-industrie/main/supabase/functions/send-report/index.ts" style="color:#6f4e37;word-break:break-all">raw.githubusercontent.com/gfeinfos-hue/fks-industrie/main/supabase/functions/send-report/index.ts</a><br>
+↳ sélectionne tout (<b>Ctrl+A</b>) → copie (<b>Ctrl+C</b>) → colle dans l'éditeur Supabase (<b>Ctrl+V</b>).</span></li>
+<li>Clique <b>Deploy</b> (ou Save). La fonction est installée.</li>
+</ol>
+<div style="background:#faf7f2;border-left:4px solid #8a6a4f;padding:10px 12px;margin-top:12px;font-size:14px">
+<b>Puis les 3 codes secrets</b> — sur la page de la fonction, onglet <b>Secrets</b> → <b>Add secret</b> (3 fois) :
+<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
+<tr><td style="padding:5px;border-bottom:1px solid #eee"><b>Nom</b></td><td style="padding:5px;border-bottom:1px solid #eee"><b>Valeur</b></td></tr>
+<tr><td style="padding:5px;border-bottom:1px solid #eee">RESEND_API_KEY</td><td style="padding:5px;border-bottom:1px solid #eee">ta clé <code>re_...</code> de l'étape 1</td></tr>
+<tr><td style="padding:5px;border-bottom:1px solid #eee">REPORT_KEY</td><td style="padding:5px;border-bottom:1px solid #eee"><code>fks-report-8472</code></td></tr>
+<tr><td style="padding:5px">EMAIL_FROM</td><td style="padding:5px"><code>CafePro &lt;onboarding@resend.dev&gt;</code></td></tr>
+</table>
+</div>
+</div>
+
+<div style="background:#fff;border-radius:14px;padding:18px;margin-bottom:14px;border:1px solid #e5d9c9">
+<div style="font-size:13px;color:#8a6a4f;font-weight:bold">ÉTAPE 3 · 1 MIN — BRANCHER DANS L'APPLICATION</div>
+<ol style="margin:10px 0 0;padding-left:22px">
+<li>Ouvre l'application → <b>Réglages</b> → descends à <b>📧 Envoi des rapports au boss</b>.</li>
+<li><b>Email du boss</b> : l'adresse du boss.</li>
+<li><b>Clé d'envoi (REPORT_KEY)</b> : <code style="background:#f4ece2;padding:1px 5px;border-radius:4px">fks-report-8472</code> (exactement la même que dans Supabase).</li>
+<li><b>Enregistrer</b> → <b>Envoyer un email de test</b> → le boss reçoit un email « ✅ Si vous lisez cet email… » 🎉</li>
+</ol>
+</div>
+
+<div style="background:#fff;border-radius:14px;padding:18px;border:1px solid #e5d9c9">
+<div style="font-size:13px;color:#8a6a4f;font-weight:bold">SI ÇA NE MARCHE PAS</div>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px">
+<tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Message dans l'app</b></td><td style="padding:6px;border-bottom:1px solid #eee"><b>Solution</b></td></tr>
+<tr><td style="padding:6px;border-bottom:1px solid #eee">« fonction NON DÉPLOYÉE »</td><td style="padding:6px;border-bottom:1px solid #eee">le nom n'est pas exactement <code>send-report</code> → supprime et recrée</td></tr>
+<tr><td style="padding:6px;border-bottom:1px solid #eee">« REPORT_KEY invalide »</td><td style="padding:6px;border-bottom:1px solid #eee">le mot de passe diffère entre Supabase (Secrets) et Réglages → remets <code>fks-report-8472</code> des deux côtés</td></tr>
+<tr><td style="padding:6px;border-bottom:1px solid #eee">« Resend: ... only send testing emails to your own address »</td><td style="padding:6px;border-bottom:1px solid #eee">le compte Resend n'a pas été créé avec l'email du boss → recrée Resend avec l'email du boss (ou fais vérifier ton domaine par Resend)</td></tr>
+<tr><td style="padding:6px">« RESEND_API_KEY non configuré »</td><td style="padding:6px">le secret RESEND_API_KEY manque ou la clé est fausse dans Supabase → Secrets</td></tr>
+</table>
+</div>
+
+<div style="text-align:center;color:#8a6a4f;font-size:12px;margin-top:18px">CaféPro — FKS Industrie · Réalisé par Doregoservices · 07 17 57 95 56</div>
+</div></body></html>
