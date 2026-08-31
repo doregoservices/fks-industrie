@@ -58,6 +58,7 @@ create table if not exists roastings(
   date date not null,
   green_in numeric not null,
   roasted_out numeric not null,
+  estimated boolean default false,
   operator text,
   note text,
   source text default 'admin'
@@ -178,6 +179,17 @@ create table if not exists pay_slips(
   advances numeric default 0,
   net numeric default 0,
   cnps_employer numeric default 0,
+  its_gross numeric default 0,
+  its numeric default 0,
+  ricf numeric default 0,
+  cmu numeric default 0,
+  cmu_er numeric default 0,
+  cnps_er numeric default 0,
+  pf numeric default 0,
+  mat numeric default 0,
+  at numeric default 0,
+  fdfp numeric default 0,
+  cout_employeur numeric default 0,
   paid boolean default false
 );
 create table if not exists pending_entries(

@@ -36,7 +36,7 @@
 <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px">
 <tr><td style="padding:5px;border-bottom:1px solid #eee"><b>Nom</b></td><td style="padding:5px;border-bottom:1px solid #eee"><b>Valeur</b></td></tr>
 <tr><td style="padding:5px;border-bottom:1px solid #eee">RESEND_API_KEY</td><td style="padding:5px;border-bottom:1px solid #eee">ta clé <code>re_...</code> de l'étape 1</td></tr>
-<tr><td style="padding:5px;border-bottom:1px solid #eee">REPORT_KEY</td><td style="padding:5px;border-bottom:1px solid #eee"><code>fks-report-8472</code></td></tr>
+<tr><td style="padding:5px;border-bottom:1px solid #eee">REPORT_KEY</td><td style="padding:5px;border-bottom:1px solid #eee"><code>VOTRE-REPORT-KEY</code></td></tr>
 <tr><td style="padding:5px">EMAIL_FROM</td><td style="padding:5px"><code>FKS Industrie &lt;onboarding@resend.dev&gt;</code></td></tr>
 </table>
 </div>
@@ -47,7 +47,7 @@
 <ol style="margin:10px 0 0;padding-left:22px">
 <li>Ouvre l'application → <b>Réglages</b> → descends à <b>📧 Envoi des rapports au boss</b>.</li>
 <li><b>Email du boss</b> : l'adresse du boss.</li>
-<li><b>Clé d'envoi (REPORT_KEY)</b> : <code style="background:#f4ece2;padding:1px 5px;border-radius:4px">fks-report-8472</code> (exactement la même que dans Supabase).</li>
+<li><b>Clé d'envoi (REPORT_KEY)</b> : <code style="background:#f4ece2;padding:1px 5px;border-radius:4px">VOTRE-REPORT-KEY</code> (exactement la même que dans Supabase).</li>
 <li><b>Enregistrer</b> → <b>Envoyer un email de test</b> → le boss reçoit un email « ✅ Si vous lisez cet email… » 🎉</li>
 </ol>
 </div>
@@ -57,7 +57,7 @@
 <table style="width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px">
 <tr><td style="padding:6px;border-bottom:1px solid #eee"><b>Message dans l'app</b></td><td style="padding:6px;border-bottom:1px solid #eee"><b>Solution</b></td></tr>
 <tr><td style="padding:6px;border-bottom:1px solid #eee">« fonction NON DÉPLOYÉE »</td><td style="padding:6px;border-bottom:1px solid #eee">le nom n'est pas exactement <code>send-report</code> → supprime et recrée</td></tr>
-<tr><td style="padding:6px;border-bottom:1px solid #eee">« REPORT_KEY invalide »</td><td style="padding:6px;border-bottom:1px solid #eee">le mot de passe diffère entre Supabase (Secrets) et Réglages → remets <code>fks-report-8472</code> des deux côtés</td></tr>
+<tr><td style="padding:6px;border-bottom:1px solid #eee">« REPORT_KEY invalide »</td><td style="padding:6px;border-bottom:1px solid #eee">le mot de passe diffère entre Supabase (Secrets) et Réglages → remets <code>VOTRE-REPORT-KEY</code> des deux côtés</td></tr>
 <tr><td style="padding:6px;border-bottom:1px solid #eee">« Resend: ... only send testing emails to your own address »</td><td style="padding:6px;border-bottom:1px solid #eee">le compte Resend n'a pas été créé avec l'email du boss → recrée Resend avec l'email du boss (ou fais vérifier ton domaine par Resend)</td></tr>
 <tr><td style="padding:6px">« RESEND_API_KEY non configuré »</td><td style="padding:6px">le secret RESEND_API_KEY manque ou la clé est fausse dans Supabase → Secrets</td></tr>
 </table>

@@ -1,7 +1,7 @@
 -- ══════════════════════════════════════════════════════════════════
--- MIGRATION COMPLÈTE FKS Industrie v2 — Supabase SQL Editor → Run
+-- MIGRATION COMPLÈTE FKS Industrie v3 — Supabase SQL Editor → Run
 -- Sûr : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
--- Corrige : Could not find the 'status' column of 'purchases'.
+-- Corrige : purchases.status, roastings.estimated, pay_slips (11 col paie).
 -- ══════════════════════════════════════════════════════════════════
 
 create table if not exists settings(
@@ -103,6 +103,7 @@ create table if not exists roastings(
   date date not null,
   green_in numeric not null,
   roasted_out numeric not null,
+  estimated boolean default false,
   operator text,
   note text,
   source text default 'admin'
@@ -112,6 +113,7 @@ alter table roastings add column if not exists created_at timestamptz;
 alter table roastings add column if not exists date date;
 alter table roastings add column if not exists green_in numeric;
 alter table roastings add column if not exists roasted_out numeric;
+alter table roastings add column if not exists estimated boolean;
 alter table roastings add column if not exists operator text;
 alter table roastings add column if not exists note text;
 alter table roastings add column if not exists source text;
@@ -316,6 +318,17 @@ create table if not exists pay_slips(
   advances numeric default 0,
   net numeric default 0,
   cnps_employer numeric default 0,
+  its_gross numeric default 0,
+  its numeric default 0,
+  ricf numeric default 0,
+  cmu numeric default 0,
+  cmu_er numeric default 0,
+  cnps_er numeric default 0,
+  pf numeric default 0,
+  mat numeric default 0,
+  at numeric default 0,
+  fdfp numeric default 0,
+  cout_employeur numeric default 0,
   paid boolean default false
 );
 alter table pay_slips add column if not exists id text;
@@ -341,6 +354,17 @@ alter table pay_slips add column if not exists other numeric;
 alter table pay_slips add column if not exists advances numeric;
 alter table pay_slips add column if not exists net numeric;
 alter table pay_slips add column if not exists cnps_employer numeric;
+alter table pay_slips add column if not exists its_gross numeric;
+alter table pay_slips add column if not exists its numeric;
+alter table pay_slips add column if not exists ricf numeric;
+alter table pay_slips add column if not exists cmu numeric;
+alter table pay_slips add column if not exists cmu_er numeric;
+alter table pay_slips add column if not exists cnps_er numeric;
+alter table pay_slips add column if not exists pf numeric;
+alter table pay_slips add column if not exists mat numeric;
+alter table pay_slips add column if not exists at numeric;
+alter table pay_slips add column if not exists fdfp numeric;
+alter table pay_slips add column if not exists cout_employeur numeric;
 alter table pay_slips add column if not exists paid boolean;
 
 create table if not exists pending_entries(

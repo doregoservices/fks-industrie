@@ -1,5 +1,5 @@
 // ============================================================
-// CaféPro — Fonction Supabase "send-report" v2
+// CaféPro — Fonction Supabase "send-report" v3
 // Envoie au boss les points quotidiens et rapports mensuels.
 //
 // DEUX MODES :
@@ -232,10 +232,12 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ---- mode relais (app) ----
+  // ---- mode relais (app) — destinataire verrouillé sur le boss ----
   const { to, subject, html, attachment } = body ?? {};
-  if (!to || !subject || !html) return json({ error: "Champs requis : to, subject, html" }, 400);
-  const payload: Record<string, unknown> = { from: EMAIL_FROM, to: [to], subject, html };
+  const dest = BOSS_EMAIL || to; // si BOSS_EMAIL est défini, on ignore tout autre destinataire
+  if (!dest) return json({ error: "Champs requis : to, subject, html (ou secret BOSS_EMAIL)" }, 400);
+  if (!subject || !html) return json({ error: "Champs requis : subject, html" }, 400);
+  const payload: Record<string, unknown> = { from: EMAIL_FROM, to: [dest], subject, html };
   if (attachment?.filename && attachment?.base64) payload.attachments = [{ filename: attachment.filename, content: attachment.base64 }];
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
