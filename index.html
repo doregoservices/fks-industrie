@@ -3088,10 +3088,10 @@ async function emailSend(subject,html,attachment){
   throw new Error(msg||('Erreur '+r.status));
 }
 App.saveEmail=async()=>{await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),auto_daily:$('#emA').value==='yes'});toast('Réglages email enregistrés','ok');};
-App.emailTest=async()=>{try{toast('Envoi en cours…');await emailSend('CaféPro — email de test','<p>✅ Si vous lisez cet email, l\'envoi automatique fonctionne.</p>');toast('Email de test envoyé ✅','ok');}catch(e){toast(e.message,'bad');}};
+App.emailTest=async()=>{try{toast('Envoi en cours…');await emailSend(((SETS.company||{}).name||'FKS Industrie')+' — email de test','<p>✅ Si vous lisez cet email, l\'envoi automatique fonctionne.</p>');toast('Email de test envoyé ✅','ok');}catch(e){toast(e.message,'bad');}};
 const EMAILCSS='body{font-family:Arial,sans-serif;color:#2b211a}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #ddd;padding:6px 8px;font-size:13px;text-align:left}th{background:#6f4e37;color:#fff}.tot{font-weight:bold;background:#f4ece2}.ok{color:#1d7a4f;font-weight:bold}.bad{color:#c0392b;font-weight:bold}h2{color:#6f4e37}';
 function emailShell(title,body){const lg=(SETS.company||{}).logo;
-  return '<html><head><meta charset="utf-8"><style>'+EMAILCSS+'</style></head><body>'+(lg?'<p style="text-align:center;margin:0 0 6px"><img src="'+lg+'" style="height:52px;object-fit:contain"></p>':'')+'<h2>'+(lg?'':'☕ ')+esc((SETS.company||{}).name||'FKS Industrie')+'</h2>'+body+'<p style="color:#999;font-size:11px">Généré automatiquement par CaféPro — '+esc((SETS.company||{}).name||'FKS Industrie')+'.</p></body></html>';}
+  return '<html><head><meta charset="utf-8"><style>'+EMAILCSS+'</style></head><body>'+(lg?'<p style="text-align:center;margin:0 0 6px"><img src="'+lg+'" style="height:52px;object-fit:contain"></p>':'')+'<h2>'+(lg?'':'☕ ')+esc((SETS.company||{}).name||'FKS Industrie')+'</h2>'+body+'<p style="color:#999;font-size:11px">Généré automatiquement — '+esc((SETS.company||{}).name||'FKS Industrie')+' · Réalisé par Doregoservices · 07 17 57 95 56</p></body></html>';}
 async function buildDailyReport(D){
   const sales=(await DB.list('sales')).filter(s=>s.date===D);
   const cash=(await DB.list('cash_entries')).filter(e=>e.date===D);
