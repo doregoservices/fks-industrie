@@ -1234,7 +1234,7 @@ async function computeStats(){
 /* ================= DONNÉES DE DÉMONSTRATION ================= */
 async function seedDemo(){
   if(LS.get('cafepro_seeded'))return;
-  const D=n=>{const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);};
+  const D=n=>{const d=new Date();d.setDate(d.getDate()-n);const t=new Date();if(d.getMonth()!==t.getMonth()||d.getFullYear()!==t.getFullYear())return t.toISOString().slice(0,8)+'01';return d.toISOString().slice(0,10);};
   const PK=[{name:'Sachet 1 kg',unit:'sachet',alert_min:200},{name:'Sachet 500 g',unit:'sachet',alert_min:200},{name:'Étiquette autocollante',unit:'étiquette',alert_min:500}];
   const pkids={};for(const k of PK){const r=await Local.insert('packaging_items',Object.assign({active:true},k));pkids[k.name]=r.id;}
   const T=[{name:'Moulu premium',alert_min:30},{name:'Moulu standard',alert_min:30},{name:'Grains (non moulu)',alert_min:20}];
