@@ -1302,7 +1302,7 @@ async function render(){
   const parts=h.split('/');
   S.route=parts[0]||'dashboard';
   if(S.user&&!roleAllowed(S.route))S.route=roleHome();
-  if(S.route==='f')return scForm(decodeURIComponent(parts[1]||''));
+  if(S.route==='f')return scForm(decodeURIComponent(String(parts[1]||'').split('?')[0]));
   if(S.route==='login'||!S.user)return scLogin();
   const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets};
   const app=$('#app');
@@ -1357,7 +1357,7 @@ function formLink(token){return location.href.split('#')[0].split('?')[0]+'#/f/'
 function applyCfgFromUrl(){
   try{
     const h=(location.href||'');
-    const q=(location.search||'').replace(/^\?/,'')||h.split('#')[0].split('?')[1]||'';
+    const q=(location.search||'').replace(/^\?/,'')||h.split('#')[0].split('?')[1]||(location.hash||'').split('?')[1]||'';
     if(!q)return false;
     const p={};q.split('&').forEach(kv=>{const i=kv.indexOf('=');if(i>0)p[kv.slice(0,i)]=decodeURIComponent(kv.slice(i+1));});
     if(!p.su||!p.sk)return false;
@@ -2084,7 +2084,7 @@ async function scCommerciaux(){
   +agents.map(a=>{const cnt=sales.filter(s=>s.agent_id===a.id).length;const tot=sales.filter(s=>s.agent_id===a.id).reduce((s,x)=>s+Number(x.total||0),0);
     return '<div class="listitem"><div class="avatar">'+esc((a.name||'?').trim().charAt(0))+'</div><div style="flex:1"><b>'+esc(a.name)+'</b> <small>'+esc(a.phone||'')+'</small><div class="mut" style="font-size:12px">'+cnt+' vente(s) · '+money(tot)+'</div></div>'
     +(a.active?'<span class="badge b-ok">actif</span>':'<span class="badge b-no">inactif</span>')
-    +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" onclick="App.linkModal(\''+a.token+'\',\''+esc(a.name)+'\')">🔗 Lien</button><button class="btn sm sec" onclick="App.agentForm(\''+a.id+'\')">✎</button></div></div>';}).join('')
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" onclick="App.linkModal(\''+a.id+'\')">🔗 Lien</button><button class="btn sm sec" onclick="App.agentForm(\''+a.id+'\')">✎</button></div></div>';}).join('')
   +(agents.length?'':'<div class="empty"><span class="ic">👤</span>Aucune commerciale enregistrée</div>')+'</div>'
   +'<div class="card"><h2>🔗 Autres liens de saisie</h2><div class="help" style="margin-bottom:12px">Liens pour la production (atelier) et la caisse — pour saisir <b>sans accès</b> à l\'application.</div>'
   +['production','caisse'].map(t=>{const tk=tokens.filter(x=>x.type===t&&x.active)[0];
@@ -2101,7 +2101,10 @@ App.agentSave=async id=>{const name=$('#agN').value.trim();if(!name)return toast
   if(id)await DB.update('sales_agents',id,{name:name,phone:$('#agP').value.trim()});
   else await DB.insert('sales_agents',{name:name,phone:$('#agP').value.trim(),token:rndToken(),active:true});
   closeModal();toast('Enregistré','ok');render();};
-App.linkModal=(token,name)=>{
+App.linkModal=async id=>{
+  const a=((await DB.list('sales_agents')).filter(x=>x.id===id)[0])||null;
+  if(!a)return toast('Commerciale introuvable','bad');
+  const token=a.token,name=a.name;
   const url=formLink(token);
   const wa='https://wa.me/?text='+encodeURIComponent('Bonjour '+name+' 👋 Voici votre lien pour enregistrer vos ventes : '+url+' — Ajoutez-le à votre écran d\'accueil (menu du navigateur → « Ajouter à l\'écran d\'accueil »).');
   modal('Lien de '+name,'<div style="text-align:center;margin-bottom:10px">'+qrSvg(url,210)+'<div class="help" style="margin-top:6px">Elle peut scanner ce QR code avec sa caméra</div></div>'
@@ -2110,8 +2113,11 @@ App.linkModal=(token,name)=>{
   +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="copyTxt(\''+url+'\')">📋 Copier</button>'
   +'<a class="btn sm ok" href="'+wa+'" target="_blank" rel="noopener">💬 Envoyer par WhatsApp</a> '
   +' <a class="btn sm sec" href="'+url+'" target="_blank" rel="noopener">🔍 Tester le lien</a></div>'
-  +'<div class="help" style="margin-top:8px">Le test ouvre le lien comme la commerciale : si la page de saisie s\affiche, le lien est bon.</div>');
-};
+  +'<div class="help" style="margin-top:8px">Le test ouvre le lien comme la commerciale : si la page de saisie s\affiche, le lien est bon.</div>'
+  +(a.active===false?'<div class="alert al-bad" style="margin:10px 0">🚫 <b>Lien coupé</b> — '+esc(name)+' ne peut plus saisir de ventes. Son historique est conservé.</div><button class="btn ok" onclick="App.linkOn(\''+a.id+'\')">▶️ Réactiver son lien</button>':'<button class="btn danger" style="margin-top:10px" onclick="App.linkCut(\''+a.id+'\')">🚫 Couper ce lien (départ de l\'entreprise)</button>')
+  );};
+App.linkCut=async id=>{await DB.update('sales_agents',id,{active:false});closeModal();toast('Lien coupé — cette commerciale ne peut plus saisir 🚫','ok');render();};
+App.linkOn=async id=>{await DB.update('sales_agents',id,{active:true});closeModal();toast('Lien réactivé ✅','ok');render();};
 App.tokenModal=async t=>{
   let tk=(await DB.list('form_tokens')).filter(x=>x.type===t&&x.active)[0];
   if(!tk){tk=await DB.insert('form_tokens',{type:t,name:t==='production'?'Atelier production':'Caisse',token:rndToken(),active:true});toast('Lien créé','ok');}
@@ -2122,8 +2128,10 @@ App.tokenModal=async t=>{
     +'<div class="linkbox" style="margin:10px 0">'+esc(url)+'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="copyTxt(\''+url+'\')">📋 Copier</button>'
     +'<button class="btn sm sec" onclick="App.tokenReset(\''+t+'\')">↻ Régénérer (coupe l\'ancien lien)</button> '
+  +'<button class="btn sm danger" onclick="App.tokenOff(\''+t+'\')">🚫 Désactiver</button> '
   +' <a class="btn sm sec" href="'+url+'" target="_blank" rel="noopener">🔍 Tester</a></div>');
 };
+App.tokenOff=async t=>{const tks=await DB.list('form_tokens');for(const x of tks.filter(x=>x.type===t))await DB.update('form_tokens',x.id,{active:false});closeModal();toast('Lien désactivé — plus personne ne peut saisir par ce lien 🚫','ok');render();};
 App.tokenReset=async t=>{const tks=await DB.list('form_tokens');for(const x of tks.filter(x=>x.type===t))await DB.update('form_tokens',x.id,{active:false});
   await DB.insert('form_tokens',{type:t,name:t==='production'?'Atelier production':'Caisse',token:rndToken(),active:true});
   closeModal();toast('Nouveau lien généré','ok');render();};
@@ -2927,7 +2935,7 @@ async function scForm(token){
     else{const tk=await DB.list('form_tokens',{eq:{token:token}});
       if(tk.length&&tk[0].active!==false){kind=tk[0].type;name=tk[0].name||'Atelier';}}
   }catch(e){return formErr('Impossible de vérifier le lien (connexion ?).');}
-  if(!kind)return formErr('Ce lien n\'existe pas ou a été révoqué.');
+  if(!kind){const b=CFG.mode==='supabase'?('la base en ligne '+String(CFG.url||'').replace(/^https?:\/\//,'').split('.')[0]):'la mémoire locale de cet appareil (aucune base en ligne connectée)';return formErr('Lien introuvable sur '+b+'. Causes fréquentes : lien recopié en partie (utilisez le lien complet depuis l\'écran Commerciaux), lien remplacé par un nouveau, ou lien coupé par le gestionnaire.');}
   if(kind==='sales'){if(agent&&agent.active===false)return formErr('Ce lien a été désactivé.');return formSales(agent);}
   if(kind==='production')return formProduction();
   return formCaisse(name);
