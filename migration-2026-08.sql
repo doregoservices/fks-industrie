@@ -1,7 +1,7 @@
 -- ══════════════════════════════════════════════════════════════════
--- MIGRATION COMPLÈTE FKS Industrie v3 — Supabase SQL Editor → Run
--- Sûr : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
--- Corrige : purchases.status, roastings.estimated, pay_slips (11 col paie).
+-- MIGRATION COMPLÈTE FKS Industrie v4 — Supabase SQL Editor → Run
+-- Sûr : create/alter IF NOTExists uniquement — aucune donnée perdue.
+-- Corrige : purchases.status, roastings.estimated, pay_slips (11 col), sales.note.
 -- ══════════════════════════════════════════════════════════════════
 
 create table if not exists settings(
@@ -188,7 +188,8 @@ create table if not exists sales(
   source text default 'admin',
   status text default 'validated',
   credit_status text default 'paid',
-  paid_date date
+  paid_date date,
+  note text
 );
 alter table sales add column if not exists id text;
 alter table sales add column if not exists created_at timestamptz;
@@ -203,6 +204,7 @@ alter table sales add column if not exists source text;
 alter table sales add column if not exists status text;
 alter table sales add column if not exists credit_status text;
 alter table sales add column if not exists paid_date date;
+alter table sales add column if not exists note text;
 
 create table if not exists cash_entries(
   id text primary key,

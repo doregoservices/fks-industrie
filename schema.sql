@@ -106,7 +106,8 @@ create table if not exists sales(
   source text default 'admin',
   status text default 'validated',
   credit_status text default 'paid',
-  paid_date date
+  paid_date date,
+  note text
 );
 create table if not exists cash_entries(
   id text primary key,
