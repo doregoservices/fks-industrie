@@ -137,6 +137,7 @@ create table if not exists employees(
   housing numeric default 0,
   tax_shares numeric default 2,
   zone text,
+  primes jsonb default '[]',
   active boolean default true
 );
 create table if not exists advances(

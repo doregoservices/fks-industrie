@@ -10,6 +10,7 @@ const run=(await DB.list('pay_runs')).filter(r=>r.period===monthISO())[0];
 const slips=(await DB.list('pay_slips')).filter(x=>x.run_id===run.id);
 const netTot=slips.reduce((a,x)=>a+Number(x.net||0),0);
 await DB.update('pay_runs',run.id,{status:'closed',paid_date:todayISO()});
+await DB.insert('cash_entries',{date:todayISO(),type:'in',account:'cash',category:'ventes',label:'Encaissements tests (appro caisse)',amount:Math.max(netTot,900000),imputable:true,status:'validated',created_at:nowISO()});
 await createCashEntry({date:todayISO(),type:'out',account:'cash',category:'salaires',label:'Salaires '+run.period+' ('+slips.length+' employés)',amount:netTot,imputable:true,ref:'payrun:'+run.id});
 const p1=(await DB.list('products')).filter(p=>p.name==='Café moulu 500 g')[0];
 await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'credit',client:'Épicerie Bassam',total:22500,lines:[{product_id:p1.id,name:p1.name,qty:5,price:4500}],source:'admin'});

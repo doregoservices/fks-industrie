@@ -24,6 +24,7 @@ console.log('✓ Amortissements : torréfacteur 41 667/mois, électrogène 25 00
 
 /* ===== 2. GRANDES MASSES + IMPÔTS ===== */
 // patente payée ce mois (impôts et taxes)
+await DB.insert('cash_entries',{date:todayISO(),type:'in',account:'cash',category:'ventes',label:'Appro caisse tests v3',amount:800000,imputable:true,status:'validated',created_at:nowISO()});
 await createCashEntry({date:todayISO(),type:'out',account:'cash',category:'impots_taxes',label:'Patente communale',amount:120000,imputable:true});
 // loyer du mois
 await createCashEntry({date:todayISO(),type:'out',account:'cash',category:'loyer',label:'Loyer entrepôt',amount:250000,imputable:true});

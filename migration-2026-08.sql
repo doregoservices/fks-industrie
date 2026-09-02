@@ -1,8 +1,7 @@
 -- ══════════════════════════════════════════════════════════════════
--- MIGRATION COMPLÈTE FKS Industrie v5 — Supabase SQL Editor → Run
+-- MIGRATION COMPLÈTE FKS Industrie v6 — Supabase SQL Editor → Run
 -- Sûr : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
--- v5 : employees.zone/tax_shares, pay_slips.primes/transport_exo,
---      sales.note, purchases.status, roastings.estimated, pay_slips paie.
+-- v6 : employees.primes ; v5 : zone, pay_slips.primes, sales.note…
 -- ══════════════════════════════════════════════════════════════════
 
 create table if not exists settings(
@@ -249,6 +248,7 @@ create table if not exists employees(
   housing numeric default 0,
   tax_shares numeric default 2,
   zone text,
+  primes jsonb default '[]',
   active boolean default true
 );
 alter table employees add column if not exists id text;
@@ -263,6 +263,7 @@ alter table employees add column if not exists transport numeric;
 alter table employees add column if not exists housing numeric;
 alter table employees add column if not exists tax_shares numeric;
 alter table employees add column if not exists zone text;
+alter table employees add column if not exists primes jsonb;
 alter table employees add column if not exists active boolean;
 
 create table if not exists advances(
