@@ -2750,9 +2750,8 @@ App.expCaisse=async()=>{
   const A=e=>e.account==='momo'?acc('treso_momo'):acc('treso_caisse');
   /* --- VE : toutes les ventes (comptant espèces/MoMo + crédit) --- */
   sales.filter(x=>inR(x.date)).forEach(x=>{
-    const ct=x.pay_mode==='credit'?acc('clients'):(x.pay_mode==='momo'?acc('treso_momo'):acc('treso_caisse'));
     const lib='Vente '+(x.agent_name||'')+(x.client?' — '+x.client:'');
-    push('VE',x.date,ct,lib,Number(x.total)||0,'');
+    push('VE',x.date,acc('clients'),lib,Number(x.total)||0,'');
     push('VE',x.date,acc('ventes'),lib,'',Number(x.total)||0);
   });
   /* --- PA : paies clôturées de la période --- */
@@ -2761,38 +2760,38 @@ App.expCaisse=async()=>{
   if(sl.length){
     const SUM=k=>sl.reduce((a,x)=>a+Number(x[k]||0),0);
     const brut=SUM('brut_ap');
-    const pat=sl.reduce((a,x)=>a+Number(x.cnps_employer||0)+Number(x.cmu_er||0),0);
-    const fdfp=SUM('fdfp');
-    const org=SUM('cnps')+sl.reduce((a,x)=>a+Number(x.cnps_employer||0),0)+SUM('cmu')+SUM('cmu_er');
-    const etat=SUM('its')+fdfp;const retenues=SUM('other');
+    const cnpsSal=SUM('cnps'),cmuSal=SUM('cmu'),cnpsEr=SUM('cnps_employer'),cmuEr=SUM('cmu_er');
+    const fdfp=SUM('fdfp'),its=SUM('its'),retenues=SUM('other');
     const net=SUM('net'),adv=SUM('advances');
     const dt=closed[sl[0].run_id].paid_date||sl[0].created_at;
     const lib='Paie '+ (sl[0].run_period||'');
-    push('PA',dt,acc('salaires'),lib,brut,'');
-    if(pat)push('PA',dt,acc('charges_sociales'),lib,pat,'');
-    if(fdfp)push('PA',dt,acc('fdfp'),lib,fdfp,'');
-    if(org)push('PA',dt,acc('cnps'),lib,'',org);
-    if(etat)push('PA',dt,acc('etat'),lib,'',etat);
-    if(retenues)push('PA',dt,acc('retenues_divers'),lib,'',retenues);
-    if(adv)push('PA',dt,acc('personnel_avances'),lib,'',adv);
-    if(net)push('PA',dt,acc('personnel_net'),lib,'',net);
+    push('PA',dt,acc('salaires'),lib+' — salaires bruts',brut,'');
+    if(cnpsEr)push('PA',dt,acc('charges_sociales'),lib+' — CNPS patronal (retraite+PF+AT+maternité)',cnpsEr,'');
+    if(cmuEr)push('PA',dt,acc('charges_sociales'),lib+' — CMU employeur',cmuEr,'');
+    if(fdfp)push('PA',dt,acc('fdfp'),lib+' — FDFP (taxe d’apprentissage + formation continue)',fdfp,'');
+    if(cnpsSal+cnpsEr)push('PA',dt,acc('cnps'),lib+' — CNPS (retenue salarié + part patronale)','',cnpsSal+cnpsEr);
+    if(cmuSal+cmuEr)push('PA',dt,acc('cnps'),lib+' — CMU (moitié salarié + moitié employeur)','',cmuSal+cmuEr);
+    if(its)push('PA',dt,acc('etat'),lib+' — ITS','',its);
+    if(fdfp)push('PA',dt,acc('etat'),lib+' — FDFP à reverser (DGI)','',fdfp);
+    if(retenues)push('PA',dt,acc('retenues_divers'),lib+' — autres retenues','',retenues);
+    if(adv)push('PA',dt,acc('personnel_avances'),lib+' — avances déduites','',adv);
+    if(net)push('PA',dt,acc('personnel_net'),lib+' — net à payer','',net);
   }
   /* --- CA / BQ / AC / OD depuis les écritures de caisse --- */
   const saleById={};sales.forEach(x=>saleById[x.id]=x);
+  const purById={};pur.forEach(x=>purById[x.id]=x);
   cash.filter(e=>inR(e.date)).forEach(e=>{
     const amt=Number(e.amount)||0,lib=e.label,d=e.date,cat=e.category;
     if(e.imputable===false){
       if(e.od==='transfer'){push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);}
       else{push('OD',d,A(e),lib,amt,'');push('OD',d,acc('virement_interne'),lib,'',amt);}
       return;}
-    if(cat==='ventes'){
-      const ref=String(e.ref||'');
-      const src=ref.indexOf('sale:')===0?saleById[ref.slice(5)]:null;
-      if(src&&src.pay_mode==='credit'){const jr=e.account==='momo'?'BQ':'CA';
-        push(jr,d,A(e),lib,amt,'');push(jr,d,acc('clients'),lib,'',amt);}
-      return;}
-    if(cat==='achat_vert'||cat==='emballages'){
-      push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,A(e),lib,'',amt);return;}
+    if(cat==='ventes'){const jr=e.account==='momo'?'BQ':'CA';
+      push(jr,d,A(e),lib,amt,'');push(jr,d,acc('clients'),lib,'',amt);return;}
+    if(cat==='achat_vert'||cat==='emballages'){const jr=e.account==='momo'?'BQ':'CA';
+      const rfr=String(e.ref||'');const lie=rfr.indexOf('purchase:')===0&&purById[rfr.slice(9)];
+      if(!lie){push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,acc('fournisseurs'),lib,'',amt);}
+      push(jr,d,acc('fournisseurs'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='salaires'){const jr=e.account==='momo'?'BQ':'CA';
       push(jr,d,acc('personnel_net'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='personnel_avances'&&e.type==='out'){const jr=e.account==='momo'?'BQ':'CA';
@@ -2806,9 +2805,8 @@ App.expCaisse=async()=>{
     else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
   });
   /* --- achats non encore réglés → AC crédit fournisseurs --- */
-  const paidPur={};cash.forEach(e=>{const r=String(e.ref||'');if(r.indexOf('purchase:')===0)paidPur[r.slice(9)]=1;});
-  pur.filter(p=>inR(p.date)&&!paidPur[p.id]).forEach(p=>{
-    const lib='Achat café vert — '+p.supplier+' (à crédit)';
+  pur.filter(p=>inR(p.date)).forEach(p=>{
+    const lib='Achat café vert — '+p.supplier;
     push('AC',p.date,sagAcc('achat_vert')||'',lib,Number(p.amount)||0,'');
     push('AC',p.date,acc('fournisseurs'),lib,'',Number(p.amount)||0);
   });
@@ -2829,8 +2827,7 @@ App.expCaisse=async()=>{
   cash.filter(e=>inR(e.date)).forEach(e=>{
     let jr='—';
     if(e.imputable===false)jr=jl('OD');
-    else if(e.category==='ventes'){const ref=String(e.ref||'');const src=ref.indexOf('sale:')===0?saleById[ref.slice(5)]:null;jr=(src&&src.pay_mode==='credit')?(e.account==='momo'?jl('BQ'):jl('CA')):jl('VE');}
-    else if(e.category==='achat_vert'||e.category==='emballages')jr=jl('AC');
+    else if(e.category==='ventes'||e.category==='achat_vert'||e.category==='emballages')jr=e.account==='momo'?jl('BQ'):jl('CA');
     else if(e.category==='salaires')jr=e.account==='momo'?jl('BQ'):jl('CA');
     else if(e.category==='apport')jr=jl('OD');
     else jr=e.account==='momo'?jl('BQ'):jl('CA');

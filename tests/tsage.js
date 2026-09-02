@@ -51,8 +51,8 @@ console.log('✓ Contrôle global : '+Math.round(gD)+' F débit = '+Math.round(g
 const has=(k,a)=>rowsOf(k).some(r=>String(r[2])===a&&(num(r[4])+num(r[5]))>0);
 if(!has('VE','411100'))throw new Error('VE : créance client 411100 absente');
 if(!has('VE','702000'))throw new Error('VE : compte ventes 702000 (produits finis) absent');
-if(!has('VE','571000')&&!has('VE','552100'))throw new Error('VE : encaissement comptant absent');
-console.log('✓ VE : 702 produits finis + 4111 créances clients + 571/5521 encaissements');
+if(has('VE','571000')||has('VE','552100'))throw new Error('VE : compte de caisse interdit dans le journal des ventes');
+console.log('✓ VE : 702 produits finis + 4111 clients — AUCUN compte de caisse (règle client)');
 
 /* 6. Aucun double comptage dans CA */
 ['702000','602100','608100','661000','664100'].forEach(a=>{if(has('CA',a))throw new Error('CA : compte '+a+' présent en double (déjà dans VE/AC/PA)');});
@@ -64,7 +64,8 @@ console.log('✓ CA : charges réglées en espèces (612…) + encaissement cré
 if(!has('AC','602100'))throw new Error('AC : matière première 602100 absente');
 if(!has('AC','608100'))throw new Error('AC : emballages 608100 absents');
 if(!has('AC','401100'))throw new Error('AC : fournisseur 401100 absent (achat à crédit)');
-console.log('✓ AC : café vert 6021 + emballages 6081 + dette fournisseur 4011 (achat à crédit)');
+if(has('AC','571000')||has('AC','552100'))throw new Error('AC : compte de caisse interdit dans le journal des achats');
+console.log('✓ AC : 6021 café vert + 6081 emballages / 4011 fournisseurs — AUCUN compte de caisse (règle fournisseur)');
 
 /* 8. OD + PA : structure complète révisée */
 if(!has('OD','585000'))throw new Error('OD : virements de fonds 585000 absent');
@@ -74,7 +75,14 @@ if(!has('PA','664100'))throw new Error('PA : charges sociales 664100 absentes');
 if(!has('PA','422000'))throw new Error('PA : rémunérations dues 422000 absent');
 if(!has('PA','431000'))throw new Error('PA : CNPS 431000 absente');
 if(!has('PA','447200'))throw new Error('PA : ITS 447200 absent');
-console.log('✓ OD : virements de fonds 585 · PA : 661 + 6641 débit / 422 + 431 + 4472 crédit');
+const cnt=(k,a)=>rowsOf(k).filter(r=>String(r[2])===a).length;
+if(cnt('PA','431000')<2)throw new Error('PA : CNPS et CMU doivent être 2 lignes distinctes (431)');
+if(cnt('PA','447200')<2)throw new Error('PA : ITS et FDFP doivent être 2 lignes distinctes (4472)');
+const libPA=rowsOf('PA').map(r=>String(r[3]));
+if(!libPA.some(l=>l.includes('ITS')))throw new Error('PA : libellé ITS absent');
+if(!libPA.some(l=>l.includes('FDFP')))throw new Error('PA : libellé FDFP absent');
+if(!libPA.some(l=>l.includes('CNPS')))throw new Error('PA : libellé CNPS absent');
+console.log('✓ OD 585 · PA écriture COMPLÈTE : 661 bruts + 6641 CNPS patronal + 6641 CMU employeur + 6414 FDFP / 431 CNPS + 431 CMU + 4472 ITS + 4472 FDFP + 4211 avances + 422 net');
 
 /* 9. Codes journaux personnalisés (Réglages) */
 SETS.journals={VE:'VT',AC:'AC',CA:'CS',BQ:'BQ',PA:'PY',OD:'DIV'};

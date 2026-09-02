@@ -83,12 +83,13 @@ Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne
 
 | Opération | Écriture Sage |
 |---|---|
-| Vente comptant | VE : **571 Caisse / 5521 MoMo** au débit, **702 Ventes** au crédit |
-| Vente à crédit + encaissement | VE : **4111 Clients / 702** puis CA-BQ : **571-5521 / 4111** |
-| Achat café vert payé / à crédit | AC : **6021 / 571-5521** ou **6021 / 4011 Fournisseurs** |
+| Vente (comptant ou à crédit) | VE : **4111 Clients** au débit, **702 Ventes** au crédit — **jamais de compte de caisse dans VE** |
+| Encaissement d'une vente (immédiat ou crédit) | CA (espèces) / BQ (MoMo) : **571-5521 Caisse** au débit, **4111 Clients** au crédit |
+| Achat (café vert, emballages — payé ou à crédit) | AC : **6021/6081** au débit, **4011 Fournisseurs** au crédit — **jamais de compte de caisse dans AC** |
+| Règlement d'un achat | CA-BQ : **4011 Fournisseurs** au débit, **571-5521** au crédit |
 | Dépense (loyer 622, transport 612, électricité 6052, entretien 624, patente 6412…) | CA-BQ : **compte de charge / 571-5521** |
 | Avance sur salaire | CA : **4211 Avances / 571** |
-| Paie clôturée | PA : **661 Salaires + 6641 Charges CNPS + 6414 FDFP** au débit ; **431 CNPS, 4472 État (ITS+FDFP), 428 retenues diverses, 4211 avances déduites, 422 Net dû** au crédit |
+| Paie clôturée | PA — **écriture complète** : *débit* **661** salaires bruts, **6641** CNPS patronal (retraite+PF+AT+maternité), **6641** CMU employeur, **6414** FDFP ; *crédit* **431** CNPS (retenue salarié + part patronale), **431** CMU (½ salarié + ½ employeur), **4472** ITS, **4472** FDFP à reverser (DGI), **428** autres retenues, **4211** avances déduites, **422** net à payer |
 | Paiement des salaires | CA-BQ : **422 / 571-5521** |
 | Envoi / appro de la direction, transfert caisse↔MoMo | OD via **585 Virements de fonds** (opérations non imputables, hors résultat) |
 
