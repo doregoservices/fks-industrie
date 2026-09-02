@@ -1099,6 +1099,7 @@ function defaultSettings(){
       {key:'fournisseurs',label:'Fournisseurs locaux — dettes (4011)',account:'401100',group:'tiers'},
       {key:'personnel_net',label:'Personnel — rémunérations dues (422)',account:'422000',group:'tiers'},
       {key:'personnel_avances',label:'Personnel — avances et acomptes (4211)',account:'421100',group:'tiers'},
+      {key:'retenues_divers',label:'Personnel — autres retenues (428)',account:'428000',group:'tiers'},
       {key:'cnps',label:'CNPS — sécurité sociale (431)',account:'431000',group:'tiers'},
       {key:'etat',label:'État — impôts sur salaires ITS (4472)',account:'447200',group:'tiers'},
       {key:'fdfp',label:'FDFP — taxe d’apprentissage (6414) + formation continue (6415)',account:'641400',group:'impots'},
@@ -1311,7 +1312,7 @@ async function render(){
   if(S.user&&!roleAllowed(S.route))S.route=roleHome();
   if(S.route==='f')return scForm(decodeURIComponent(String(parts[1]||'').split('?')[0]));
   if(S.route==='login'||!S.user)return scLogin();
-  const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets};
+  const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets,bulletin:scBulletin};
   const app=$('#app');
   app.innerHTML=topHtml()+'<main id="main"><div class="empty">Chargement…</div></main>'+bottomHtml();
   try{await(routes[S.route]||scDashboard)();}catch(e){console.error(e);$('#main').innerHTML='<div class="card"><div class="alert al-bad">Erreur : '+esc(e.message)+'</div><button class="btn sec" onclick="render()">Réessayer</button></div>';}
@@ -2301,16 +2302,26 @@ async function scPaie(){
   +'</div>'+body+'</div>';
 }
 async function paieEmpTab(){
-  const emps=(await DB.list('employees')).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  return '<div class="help" style="margin-bottom:10px">Salaire de base + primes récurrentes. Les éléments ponctuels (absences, heures sup, primes) se saisissent lors de la paie du mois.</div>'
+  const all=(await DB.list('employees')).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const emps=all.filter(e=>e.active!==false);
+  const arch=all.filter(e=>e.active===false);
+  return '<div class="help" style="margin-bottom:10px">Salaire de base (sans primes) + primes récurrentes. Tout est modifiable (✎). Les éléments ponctuels (absences, heures sup, primes du mois) se saisissent lors de la paie.</div>'
   +'<button class="btn sm" style="margin-bottom:10px" onclick="App.empForm()">+ Ajouter un employé</button>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Poste</th><th>Type</th><th>Zone</th><th class="r">Base</th><th class="r">Primes</th><th class="r">Coût CNPS empl.</th><th></th></tr></thead><tbody>'
   +emps.map(e=>{const base=Number(e.base_salary||0);const prim=Number(e.transport||0)+Number(e.housing||0);const sl=computeSlip(e,{});
-    return '<tr'+(e.active?'':' style="opacity:.5"')+'><td><b>'+esc(e.name)+'</b></td><td>'+esc(e.position||'')+'</td><td>'+(e.salary_type==='daily'?'Journalier':'Mensuel')+'</td><td>'+(e.zone==='bouake'?'Bouaké':e.zone==='autres'?'Autres villes':'Abidjan')+'</td><td class="r">'+money(base)+(e.salary_type==='daily'?'/jour':'')+'</td><td class="r">'+money(prim)+'</td><td class="r mut">'+money(sl.cout_employeur-sl.brut_ap)+'</td>'
-    +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.empForm(\''+e.id+'\')">✎</button> '+(e.active?'<button class="btn sm sec" onclick="App.empToggle(\''+e.id+'\')">Archiver</button>':'')+'</td></tr>';}).join('')
-  +'</tbody></table></div>';
+    return '<tr><td><b>'+esc(e.name)+'</b></td><td>'+esc(e.position||'')+'</td><td>'+(e.salary_type==='daily'?'Journalier':'Mensuel')+'</td><td>'+(e.zone==='bouake'?'Bouaké':e.zone==='autres'?'Autres':'Abidjan')+'</td>'
+    +'<td class="r">'+money(base)+(e.salary_type==='daily'?'/j':'')+'</td><td class="r">'+money(prim)+'</td><td class="r">'+money(sl.cout_employeur||0)+'</td>'
+    +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.empForm(\''+e.id+'\')">✎ Modifier</button> <button class="btn sm sec" onclick="App.empArchive(\''+e.id+'\')">🗂 Archiver</button></td></tr>';}).join('')
+  +'</tbody></table></div>'
+  +(arch.length?'<details style="margin-top:12px"><summary style="cursor:pointer;font-size:13.5px;color:#8a6a4f">🗂 Employés archivés ('+arch.length+') — cliquez pour afficher</summary><div class="tblwrap" style="margin-top:8px"><table class="tbl"><thead><tr><th>Nom</th><th>Poste</th><th></th></tr></thead><tbody>'
+   +arch.map(e=>'<tr style="opacity:.6"><td><b>'+esc(e.name)+'</b></td><td>'+esc(e.position||'')+'</td><td><button class="btn sm ok" onclick="App.empUnarchive(\''+e.id+'\')">▶️ Désarchiver</button></td></tr>').join('')
+   +'</tbody></table></div><div class="help" style="margin-top:6px">Un employé archivé ne reçoit plus de bulletins, mais tout son historique (paies, avances) est conservé.</div></details>':'');
 }
-App.empToggle=async id=>{const e=(await DB.list('employees',{eq:{id:id}}))[0];await DB.update('employees',id,{active:!(e.active!==false)});render();};
+App.empArchive=async id=>{const e=(await DB.list('employees',{eq:{id:id}}))[0];if(!e)return;
+  confirmBox('Archiver '+esc(e.name)+' ?','Il ne recevra plus de bulletins. Son historique est conservé et il pourra être désarchivé à tout moment.','Archiver',async()=>{
+  await DB.update('employees',id,{active:false});toast(esc(e.name)+' archivé — visible dans « Employés archivés »','ok');render();});};
+App.empUnarchive=async id=>{const e=(await DB.list('employees',{eq:{id:id}}))[0];if(!e)return;
+  await DB.update('employees',id,{active:true});toast(esc(e.name)+' désarchivé — il reprendra place dans la paie','ok');render();};
 App.empForm=async id=>{let e={name:'',position:'',phone:'',hire_date:todayISO(),salary_type:'monthly',base_salary:0,transport:0,housing:0,tax_shares:2};
   if(id)e=(await DB.list('employees',{eq:{id:id}}))[0]||e;
   modal(id?'Modifier l\'employé':'Nouvel employé',
@@ -2319,9 +2330,7 @@ App.empForm=async id=>{let e={name:'',position:'',phone:'',hire_date:todayISO(),
     +'<div class="row">'+fld('Type de salaire','<select id="eS"><option value="monthly"'+(e.salary_type!=='daily'?' selected':'')+'>Mensuel</option><option value="daily"'+(e.salary_type==='daily'?' selected':'')+'>Journalier (par jour)</option></select>')
     +fld('Salaire de base (FCFA)','<input id="eB" type="number" inputmode="numeric" value="'+(e.base_salary||0)+'">')+'</div>'
     +'<div class="row">'+fld('Prime transport (FCFA/mois)','<input id="eTr" type="number" inputmode="numeric" value="'+(e.transport||0)+'">')+fld('Prime logement (FCFA/mois)','<input id="eHo" type="number" inputmode="numeric" value="'+(e.housing||0)+'">')+'</div>'
-    +'<div class="row">'+(SETS.payroll.primes||[]).length?'<div class="field"><span>Rubriques attribuées à cet employé</span><div style="display:grid;grid-template-columns:1fr;gap:2px">'
-    +(SETS.payroll.primes||[]).map(p=>'<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:2px 0"><input type="checkbox" id="ePr_'+p.id+'"'+(((e.primes||[]).indexOf(p.id)>=0)?' checked':'')+' style="width:auto"> '+esc(p.name)+' <span class="mut">('+(p.taxable!==false?'taxable':'non taxable')+')</span></label>').join('')
-    +'</div><div class="help">Cochez seulement les rubriques de cet employé — elles se rempliront automatiquement à chaque paie (montant modifiable). Sans coche héritée : toutes.</div></div>':''+fld('Zone (exonération transport)','<select id="eZ">'
+    +'<div class="row">'+(function(){const PR=SETS.payroll.primes||[];if(!PR.length)return '';return '<div class="field"><span>Rubriques attribuées à cet employé</span><div style="display:grid;grid-template-columns:1fr;gap:2px">'+PR.map(p=>'<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:2px 0"><input type="checkbox" id="ePr_'+p.id+'"'+(((e.primes||[]).indexOf(p.id)>=0)?' checked':'')+' style="width:auto"> '+esc(p.name)+' <span class="mut">('+(p.taxable!==false?'taxable':'non taxable')+')</span></label>').join('')+'</div><div class="help">Cochez seulement les rubriques de cet employé — elles se rempliront automatiquement à chaque paie (montant modifiable). Sans coche héritée : toutes.</div>';})()+fld('Zone (exonération transport)','<select id="eZ">'
     +'<option value="abidjan"'+(e.zone==='abidjan'||!e.zone?' selected':'')+'>Abidjan — exo jusqu à 30 000 F</option>'
     +'<option value="bouake"'+(e.zone==='bouake'?' selected':'')+'>Bouaké — exo jusqu à 24 000 F</option>'
     +'<option value="autres"'+(e.zone==='autres'?' selected':'')+'>Autres villes — exo jusqu à 20 000 F</option></select>')
@@ -2341,7 +2350,7 @@ async function paieAdvTab(){
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Employé</th><th class="r">Montant</th><th>Note</th><th>Statut</th><th></th></tr></thead><tbody>'
   +advs.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+esc(a.employee_name)+'</td><td class="r"><b>'+money(a.amount)+'</b></td><td>'+esc(a.note||'')+'</td>'
    +'<td>'+(a.run_id?'<span class="badge b-ok">Déduite ('+esc(a.run_id)+')</span>':'<span class="badge b-wait">En attente</span>')+'</td>'
-   +'<td>'+(a.run_id?'':'<button class="btn sm sec" onclick="App.delRow(\'advances\',\''+a.id+'\')">✕</button>')+'</td></tr>').join('')
+   +'<td>'+(a.run_id?'':'<button class="btn sm sec" onclick="App.advDel(\''+a.id+'\')">✕</button>')+'</td></tr>').join('')
   +'</tbody></table></div>';
 }
 App.advForm=async()=>{
@@ -2359,8 +2368,11 @@ App.advSave=async()=>{const amt=Number($('#avM').value)||0;if(!amt)return toast(
   const mois=($('#avD').value||todayISO()).slice(0,7);
   const deja=(await DB.list('advances')).filter(a=>a.employee_id===eid&&!a.run_id&&String(a.date||'').slice(0,7)===mois).reduce((x,a)=>x+Number(a.amount||0),0);
   if(sal&&deja+amt>sal)return toast('Refusé : cumul du mois ('+money(deja+amt)+') dépasserait le salaire ('+money(sal)+')','bad');
-  await DB.insert('advances',{employee_id:eid,employee_name:ename,date:$('#avD').value||todayISO(),amount:amt,note:$('#avN').value,run_id:null});
-  closeModal();toast('Avance enregistrée (plafond : '+money(sal)+')','ok');render();};
+  const av=await DB.insert('advances',{employee_id:eid,employee_name:ename,date:$('#avD').value||todayISO(),amount:amt,note:$('#avN').value,run_id:null});
+  try{await createCashEntry({date:$('#avD').value||todayISO(),type:'out',account:'cash',category:'personnel_avances',label:'Avance sur salaire — '+ename+($('#avN').value?' · '+$('#avN').value:''),amount:amt,ref:'advance:'+av.id});}
+  catch(err){await DB.remove('advances',av.id);return toast('Avance annulée — '+err.message,'bad');}
+  closeModal();toast('Avance enregistrée et sortie de caisse créée (plafond : '+money(sal)+')','ok');render();};
+App.advDel=id=>confirmBox('Supprimer cette avance ?','La sortie de caisse correspondante sera également supprimée et le solde recalculé.','Supprimer',async()=>{const ces=await DB.list('cash_entries');const ce=ces.filter(e=>String(e.ref||'')==='advance:'+id)[0];if(ce)await DB.remove('cash_entries',ce.id);await DB.remove('advances',id);toast('Avance supprimée','ok');render();});
 async function paieRunTab(){
   const runs=(await DB.list('pay_runs')).sort((a,b)=>(b.period||'').localeCompare(a.period||''));
   const period=S.payPeriod||monthISO();
@@ -2372,7 +2384,7 @@ async function paieRunTab(){
   if(!run){
     const emps=(await DB.list('employees')).filter(e=>e.active!==false);
     const advs=await DB.list('advances');
-    html+='<div class="help" style="margin:10px 0">Complétez les éléments du mois (facultatif) puis générez les bulletins.</div>'
+    html+='<div class="help" style="margin:10px 0">Complétez les éléments du mois (facultatif) puis générez les bulletins.<br>📖 <b>Absences</b> : chaque jour absent retire <b>salaire de base ÷ '+(Number(P.day_basis)||30)+'</b> (base mensuelle). Ex. : base 150 000 F + 2 jours d absence → retenue 150 000 ÷ '+(Number(P.day_basis)||30)+' × 2 = '+money(Math.round(150000*2/(Number(P.day_basis)||30)))+'. Les primes ne sont pas réduites par les absences (à ajuster manuellement si besoin). Les journaliers sont payés sur les jours travaillés.</div>'
     +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Employé</th><th class="r">Base</th><th class="r">J. absents</th><th class="r">J. travaillés <small>(journaliers)</small></th><th class="r">H. supp.</th><th class="r">Prime</th><th class="r">Autre retenue</th>'+(P.primes||[]).map(pr=>'<th class="r">'+esc(pr.name)+'<div class="mut" style="font-size:10px">'+(pr.taxable!==false?'taxable':'non taxable')+'</div></th>').join('')+'<th class="r">Avances</th></tr></thead><tbody>'
     +emps.map(e=>{const adv=advs.filter(a=>!a.run_id&&a.employee_id===e.id).reduce((s,a)=>s+Number(a.amount||0),0);
       return '<tr><td><b>'+esc(e.name)+'</b><div class="mut" style="font-size:11px">'+esc(e.position||'')+'</div></td>'
@@ -2451,7 +2463,7 @@ App.livreGo=async()=>{
   const all=[];
   for(const r of runs){const slips=await DB.list('pay_slips',{eq:{run_id:r.id}});
     slips.forEach(x=>all.push({p:r.period,x:x}));}
-  const head=(n>1?['MOIS']:[]).concat(['NOM','POSTE','ZONE','SALAIRE BASE','TRANSPORT','LOGEMENT']).concat(pr.map(p=>p.name.toUpperCase())).concat(['BRUT','CNPS','CMU','IMPOSABLE','RICF','ITS','AUTRES RET.','AVANCES','NET À PAYER','COÛT EMPLOY.']);
+  const head=(n>1?['MOIS']:[]).concat(['NOM','POSTE','ZONE','SALAIRE BASE (hors primes)','TRANSPORT','LOGEMENT']).concat(pr.map(p=>p.name.toUpperCase())).concat(['BRUT','CNPS','CMU','IMPOSABLE','RICF','ITS','AUTRES RET.','AVANCES','NET À PAYER','COÛT EMPLOY.']);
   const rows=all.map(({p,x})=>(n>1?[p.slice(5)+'/'+p.slice(0,4)]:[]).concat([x.employee_name,x.position||'',zl(x.employee_id),x.base,x.transport||0,x.housing||0])
     .concat(pr.map(c=>((x.primes||[]).filter(y=>y.id===c.id)[0]||{}).amount||0))
     .concat([x.brut_ap,x.cnps,x.cmu||0,x.taxable!=null?x.taxable:x.brut_ap,x.ricf||0,x.its!=null?x.its:x.irpp||0,x.other||0,x.advances||0,x.net,x.cout_employeur||x.brut_ap]));
@@ -2508,41 +2520,53 @@ App.runCloseGo=async id=>{
   await DB.update('pay_runs',id,{status:'closed',paid_date:$('#pcD').value||todayISO(),account:$('#pcA').value,total_net:tot});
   await createCashEntry({date:$('#pcD').value||todayISO(),type:'out',account:$('#pcA').value,category:'salaires',label:'Salaires '+monthLabel(run.period)+' ('+slips.length+' employés)',amount:tot,imputable:true,ref:'payrun:'+id});
   closeModal();toast('Paie clôturée ✅ sortie de caisse créée','ok');render();};
-App.slipView=async id=>{
-  const s=(await DB.list('pay_slips',{eq:{id:id}}))[0];
-  const P=SETS.payroll;
-  const its=s.its!=null?s.its:s.irpp;
-  modal('Bulletin — '+esc(s.employee_name)+' ('+monthLabel(s.run_period)+')',
-   '<table class="tbl"><tbody>'
-   +'<tr><td>Salaire de base</td><td class="r">'+money(s.base)+'</td></tr>'
-   +(Number(s.transport)?'<tr><td>Prime transport'+(Number(s.transport_exo)||0?' <span class="mut" style="font-size:11px">(dont '+money(s.transport_exo)+' exonérée d ITS)</span>':'')+'</td><td class="r">'+money(s.transport)+'</td></tr>':'')
-   +(Number(s.housing)?'<tr><td>Prime logement</td><td class="r">'+money(s.housing)+'</td></tr>':'')
-   +((s.primes&&s.primes.length)?s.primes.filter(p=>Number(p.amount)>0).map(p=>'<tr><td>'+esc(p.name)+' <span class="mut" style="font-size:11px">('+(p.taxable!==false?'taxable':'non taxable')+')</span></td><td class="r">'+money(p.amount)+'</td></tr>').join(''):'')
-   +(s.bonus?'<tr><td>Prime exceptionnelle</td><td class="r">'+money(s.bonus)+'</td></tr>':'')
-   +(s.ot_hours?'<tr><td>Heures supplémentaires ('+num2(s.ot_hours)+' h)</td><td class="r">incluses</td></tr>':'')
-   +(s.abs_ded?'<tr><td>Absences ('+num2(s.absence_days)+' j)</td><td class="r" style="color:var(--bad)">− '+money(s.abs_ded)+'</td></tr>':'')
-   +'<tr><td><b>Salaire brut</b></td><td class="r"><b>'+money(s.brut_ap)+'</b></td></tr>'
-   +'<tr><td>CNPS retraite '+P.cnps_retraite_e+' % (base '+money(s.cnps_base)+')</td><td class="r" style="color:var(--bad)">− '+money(s.cnps)+'</td></tr>'
-   +'<tr><td>CMU (part salarié)</td><td class="r" style="color:var(--bad)">− '+money(s.cmu||0)+'</td></tr>'
-   +'<tr><td>ITS brut (barème 2024 sur imposable '+money(s.taxable!=null?s.taxable:s.brut_ap)+')</td><td class="r">'+money(s.its_gross||0)+'</td></tr>'
-   +'<tr><td>Réduction charges de famille (RICF)</td><td class="r" style="color:var(--ok)">− '+money(s.ricf||0)+'</td></tr>'
-   +'<tr><td><b>ITS dû (DGI)</b></td><td class="r" style="color:var(--bad)"><b>− '+money(its)+'</b></td></tr>'
-   +(s.other?'<tr><td>Autres retenues</td><td class="r" style="color:var(--bad)">− '+money(s.other)+'</td></tr>':'')
-   +(s.advances?'<tr><td>Avances déduites</td><td class="r" style="color:var(--bad)">− '+money(s.advances)+'</td></tr>':'')
-   +'<tr><td><b>NET À PAYER</b></td><td class="r"><b style="color:var(--ok)">'+money(s.net)+'</b></td></tr>'
-   +'</tbody></table>'
-   +'<div class="hr"></div><h3>Charges patronales</h3><table class="tbl"><tbody>'
-   +'<tr><td>CNPS retraite patronale '+P.cnps_retraite_er+' %</td><td class="r">'+money(s.cnps_er||0)+'</td></tr>'
-   +'<tr><td>Prestations familiales '+P.pf_rate+' % (plafond '+money(P.pf_plafond)+')</td><td class="r">'+money(s.pf||0)+'</td></tr>'
-   +'<tr><td>Maternité '+P.mat_rate+' %</td><td class="r">'+money(s.mat||0)+'</td></tr>'
-   +'<tr><td>Accidents du travail '+P.at_rate+' %</td><td class="r">'+money(s.at||0)+'</td></tr>'
-   +'<tr><td>CMU (part employeur)</td><td class="r">'+money(s.cmu_er||0)+'</td></tr>'
-   +'<tr><td>FDFP (TA '+P.fdfp_ta+'% + TFPC '+P.fdfp_tfpc+'%)</td><td class="r">'+money(s.fdfp||0)+'</td></tr>'
-   +'<tr><td><b>Coût total employeur</b></td><td class="r"><b>'+money(s.cout_employeur||s.brut_ap)+'</b></td></tr>'
-   +'</tbody></table>',
-   '<button class="btn sec" onclick="closeModal()">Fermer</button>');
-};
-
+App.slipView=async id=>{S._slipId=id;go('bulletin');if(location.hash==='#/bulletin')render();};
+async function scBulletin(){
+  const id=S._slipId;const s=(await DB.list('pay_slips',{eq:{id:id}}))[0];
+  if(!s){go('paie');return;}
+  const P=SETS.payroll;const its=s.its!=null?s.its:s.irpp;
+  const C=SETS.company||{};
+  const emp=(await DB.list('employees',{eq:{id:s.employee_id}}))[0]||{};
+  const zone=emp.zone||'abidjan';
+  const zlb=zone==='bouake'?'Bouaké':zone==='autres'?'Autres villes':'Abidjan';
+  const gains=[['Salaire de base (sans primes)',s.base]];
+  if(Number(s.transport))gains.push(['Prime transport — dont '+money(s.transport_exo||0)+' exonérés d\'ITS (zone '+zlb+')',s.transport]);
+  if(Number(s.housing))gains.push(['Prime logement',s.housing]);
+  (s.primes||[]).filter(p=>Number(p.amount)>0).forEach(p=>gains.push([p.name+(p.taxable!==false?'':' (non taxable)'),p.amount]));
+  if(Number(s.bonus))gains.push(['Prime exceptionnelle',s.bonus]);
+  if(s.ot_hours)gains.push(['Heures supplémentaires ('+num2(s.ot_hours)+' h)',null]);
+  if(Number(s.abs_ded))gains.push(['Retenue absences ('+num2(s.absence_days)+' j à base ÷ '+(Number(P.day_basis)||30)+')',-Math.abs(Number(s.abs_ded))]);
+  const ret=[['CNPS retraite '+P.cnps_retraite_e+' % (base '+money(s.cnps_base)+')',s.cnps],['CMU (part salarié)',s.cmu||0],['ITS (barème 2024, imposable '+money(s.taxable!=null?s.taxable:s.brut_ap)+')',its]];
+  if(Number(s.ricf))ret.push(['RICF (déjà déduit du ITS ci-dessus)',0]);
+  if(Number(s.other))ret.push(['Autres retenues',s.other]);
+  if(Number(s.advances))ret.push(['Avances sur salaire',s.advances]);
+  const logo=C.logo?'<img src="'+C.logo+'" style="height:56px;object-fit:contain">':'';
+  $('#main').innerHTML='<div class="card" style="max-width:760px;margin:0 auto" id="bullettin">'
+  +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:2px solid #5a4030;padding-bottom:10px;margin-bottom:12px">'+logo
+  +'<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:800;color:#5a4030">BULLETIN DE PAIE</div><div style="font-size:13px">'+esc(C.name||'FKS Industrie')+' — '+monthLabel(s.run_period)+'</div></div><div style="font-size:11px;color:#888">FKS/CNPS/ITS</div></div>'
+  +'<div class="row" style="font-size:13.5px;margin-bottom:10px"><div style="flex:1"><b>'+esc(s.employee_name)+'</b><div class="mut">'+esc(s.position||'')+' · Zone '+zlb+'</div></div>'
+  +'<div style="flex:1;text-align:right">Matricule : '+esc(s.employee_id||'').slice(0,8)+'<div class="mut">Période : '+monthLabel(s.run_period)+'</div></div></div>'
+  +'<table class="tbl"><thead><tr><th>GAINS</th><th class="r">Montant</th></tr></thead><tbody>'
+  +gains.map(g=>'<tr><td>'+g[0]+'</td><td class="r">'+(g[1]===null?'incluses':money(g[1]))+'</td></tr>').join('')
+  +'<tr class="tot"><td>SALAIRE BRUT</td><td class="r">'+money(s.brut_ap)+'</td></tr></tbody></table>'
+  +'<table class="tbl" style="margin-top:8px"><thead><tr><th>RETENUES</th><th class="r">Montant</th></tr></thead><tbody>'
+  +ret.map(r=>'<tr><td>'+r[0]+'</td><td class="r">'+(r[1]?'− '+money(r[1]):(r[0].indexOf('RICF')>=0?money(s.ricf):'—'))+'</td></tr>').join('')
+  +'<tr class="tot"><td>TOTAL RETENUES</td><td class="r">− '+money(s.cnps+(s.cmu||0)+its+(s.other||0)+(s.advances||0))+'</td></tr>'
+  +'<tr><td style="background:#e8f5e9;font-weight:800;font-size:16px">NET À PAYER</td><td class="r" style="background:#e8f5e9;font-weight:800;font-size:16px;color:#1e8449">'+money(s.net)+'</td></tr></tbody></table>'
+  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable ITS : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' = brut − '+money(s.transport_exo||0)+' (transport exonéré, zone '+zlb+') − primes non taxables. Base CNPS : '+money(s.cnps_base)+'.</div>'
+  +'<table class="tbl" style="margin-top:8px"><thead><tr><th>CHARGES PATRONALES</th><th class="r">Montant</th></tr></thead><tbody>'
+  +'<tr><td>CNPS retraite patronale '+P.cnps_retraite_er+' %</td><td class="r">'+money(s.cnps_er||0)+'</td></tr>'
+  +'<tr><td>Prestations familiales '+P.pf_rate+' %</td><td class="r">'+money(s.pf||0)+'</td></tr>'
+  +'<tr><td>Maternité '+P.mat_rate+' %</td><td class="r">'+money(s.mat||0)+'</td></tr>'
+  +'<tr><td>Accidents du travail '+P.at_rate+' %</td><td class="r">'+money(s.at||0)+'</td></tr>'
+  +'<tr><td>CMU employeur</td><td class="r">'+money(s.cmu_er||0)+'</td></tr>'
+  +'<tr><td>FDFP (TA '+P.fdfp_ta+'% + TFPC '+P.fdfp_tfpc+'%)</td><td class="r">'+money(s.fdfp||0)+'</td></tr>'
+  +'<tr class="tot"><td>COÛT TOTAL EMPLOYEUR</td><td class="r">'+money(s.cout_employeur||s.brut_ap)+'</td></tr></tbody></table>'
+  +'<div class="row" style="margin-top:18px;font-size:12px;color:#666"><div style="flex:1;border-top:1px solid #999;padding-top:4px">Signature employé</div><div style="flex:1;border-top:1px solid #999;padding-top:4px;text-align:right">Signature employeur</div></div>'
+  +'<div class="mut" style="font-size:10.5px;text-align:center;margin-top:10px">Réalisé par Doregoservices · 07 17 57 95 56</div>'
+  +'</div>'
+  +'<div style="display:flex;gap:8px;margin-top:10px;justify-content:center" id="btnbar"><button class="btn" onclick="window.print()">🖨 Imprimer / PDF</button><button class="btn sec" onclick="go(\'paie\');S.tab={paie:\'run\'};render()">← Retour à la paie</button></div>';
+}
 /* ================= GÉNÉRATEUR XLSX (sans dépendance) ================= */
 const CRC_T=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0;}return t;})();
 function crc32(u8){let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=CRC_T[(c^u8[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;}
@@ -2718,7 +2742,7 @@ App.expCaisse=async()=>{
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const J=(SETS.journals||{});
   const jl=k=>(J[k]||k);
-  const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',cnps:'431000',etat:'447200',fdfp:'641400',virement_interne:'585000'};
+  const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',virement_interne:'585000'};
   const acc=k=>sagAcc(k)||DEF[k]||'';
   const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
   const L={VE:[],AC:[],CA:[],BQ:[],PA:[],OD:[]};
@@ -2740,7 +2764,7 @@ App.expCaisse=async()=>{
     const pat=sl.reduce((a,x)=>a+Number(x.cnps_employer||0)+Number(x.cmu_er||0),0);
     const fdfp=SUM('fdfp');
     const org=SUM('cnps')+sl.reduce((a,x)=>a+Number(x.cnps_employer||0),0)+SUM('cmu')+SUM('cmu_er');
-    const etat=SUM('its')+SUM('other')+fdfp;
+    const etat=SUM('its')+fdfp;const retenues=SUM('other');
     const net=SUM('net'),adv=SUM('advances');
     const dt=closed[sl[0].run_id].paid_date||sl[0].created_at;
     const lib='Paie '+ (sl[0].run_period||'');
@@ -2749,6 +2773,7 @@ App.expCaisse=async()=>{
     if(fdfp)push('PA',dt,acc('fdfp'),lib,fdfp,'');
     if(org)push('PA',dt,acc('cnps'),lib,'',org);
     if(etat)push('PA',dt,acc('etat'),lib,'',etat);
+    if(retenues)push('PA',dt,acc('retenues_divers'),lib,'',retenues);
     if(adv)push('PA',dt,acc('personnel_avances'),lib,'',adv);
     if(net)push('PA',dt,acc('personnel_net'),lib,'',net);
   }
@@ -2770,6 +2795,8 @@ App.expCaisse=async()=>{
       push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,A(e),lib,'',amt);return;}
     if(cat==='salaires'){const jr=e.account==='momo'?'BQ':'CA';
       push(jr,d,acc('personnel_net'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
+    if(cat==='personnel_avances'&&e.type==='out'){const jr=e.account==='momo'?'BQ':'CA';
+      push(jr,d,acc('personnel_avances'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='apport'){push('OD',d,A(e),lib,amt,'');push('OD',d,sagAcc('apport')||'101000',lib,'',amt);return;}
     if(cat==='treso_caisse'||cat==='treso_momo'){
       push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);return;}
@@ -2965,6 +2992,7 @@ async function scParametres(){
   +'<div class="row">'+fld('Taux d\'impôt sur les bénéfices (%)','<input id="xpIs" type="number" inputmode="numeric" step="0.1" value="'+((SETS.exploitation||{}).is_rate!=null?(SETS.exploitation||{}).is_rate:25)+'">')+'<button class="btn sm" style="margin-bottom:12px" onclick="App.saveExpl()">Enregistrer</button></div>'
   +'<div class="help">Appliqué au résultat d\'exploitation lorsqu\'il est bénéficiaire, pour donner le résultat net et le cash-flow. Mettre 0 pour ne pas le déduire. Taux standard CI : 25 % — à confirmer avec votre comptable.</div>'
   +'<div class="hr"></div><h3>⚠️ Zone sensible</h3><button class="btn danger sm" onclick="App.resetAll()">Réinitialiser toutes les données locales</button>'
+  +(CFG.mode==='supabase'?' <button class="btn danger sm" onclick="App.dbWipe()">🧹 Vider la base en ligne (après tests)</button>':'')
   +'</div>';
 }
 App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
@@ -3012,6 +3040,13 @@ App.xlSave=async(sec,per)=>{const lbl=$('#xlLbl').value.trim(),amt=Number($('#xl
   await setSetting('extra_lines',arr);closeModal();toast('Ligne ajoutée','ok');render();};
 App.xlDel=async id=>{await setSetting('extra_lines',(SETS.extra_lines||[]).filter(x=>x.id!==id));toast('Ligne supprimée','ok');render();};
 App.saveExpl=async()=>{await setSetting('exploitation',{is_rate:Number($('#xpIs').value)||0});toast('Enregistré','ok');};
+App.dbWipe=()=>confirmBox('Vider toute la base en ligne ?','TOUTES les données seront supprimées : ventes, achats, production, caisse, paie, employés, commerciales, emballages, tokens… Les réglages (société, taux, comptes Sage, emails, utilisateurs) sont conservés. Utile pour repartir de zéro après les tests.','Tout vider',async()=>{
+  toast('Suppression en cours…');
+  for(const t of DB_TABLES){
+    if(t==='settings')continue;
+    try{const rows=await DB.list(t);for(const r of rows)await DB.remove(t,r.id);}catch(e){}
+  }
+  toast('Base vidée ✅ — vous repartez de zéro (réglages conservés)','ok');render();});
 App.resetAll=()=>confirmBox('Tout réinitialiser ?','Toutes les données locales (démo ou saisies hors-ligne) seront effacées. La connexion Supabase, votre session et la file d\'envoi hors-ligne sont conservées. Les données Supabase ne sont pas touchées.','Réinitialiser',()=>{
   const KEEP=['cafepro_cfg','cafepro_session','cafepro_outbox'];
   const DATA_KEYS=['cafepro_settings','cafepro_seeded'].concat(['products','coffee_types','packaging_items','packaging_entries','purchases','roastings','transformations','productions','adjustments','assets','sales_agents','sales','cash_entries','employees','advances','pay_runs','pay_slips','pending_entries','form_tokens','email_log','supabase_cache','local_cache'].map(t=>'cafepro_'+t));

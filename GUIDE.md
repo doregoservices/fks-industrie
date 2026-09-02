@@ -64,7 +64,6 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
 3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
 3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, types de café, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
-4. **Production — un seul pesage, l'écart est la perte** : 🌱 **le café vert pesé avant torréfaction est la seule pesée**. 🔥 Torréfaction : torréfié obtenu facultatif → **retenu = vert pesé** (aucune perte à ce stade). ⚙️ **Transformation & Conditionnement en une saisie** : torréfié consommé facultatif → **vide = tout le stock torréfié est consommé** et **l'écart entre ce stock et les produits finis = la perte usine** (ex. vert 100 kg → 95 kg conditionnés = 5 kg de perte). 📈 Baromètre usine 30 jours affiché en tête. Tout est modifiable (✎).
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (marquées « OD », elles ne polluent pas Sage).
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
 
@@ -72,23 +71,26 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 | Export | Contenu |
 |---|---|
 | **Point complet des stocks** | Café vert, torréfié, **types de café transformés**, produits finis, **emballages**, rendements (torréfaction + machines), mouvements détaillés |
-| **Sage 100 — 6 journaux** | **8 feuilles** : `Synthèse` (contrôle) + un feuillet par journal — **VE Ventes, AC Achats, CA Caisse, BQ Banque/Mobile Money, PA Paie, OD Opérations diverses** — écritures équilibrées `Date/Journal/Compte/Libellé/Débit/Crédit`, + `Mouvements` (détail). Fourni en **.xlsx et .csv global** prêt à importer |
-
-**Classement automatique (aucun double comptage)** : ventes (comptant + crédit → VE, créances au 4111) · encaissements de crédits → CA/BQ (4111) · achats café vert & emballages → AC · achats non réglés → AC (dette 4011) · paies clôturées → PA (661 + 6641 / 422 + 431 + 4472), leur règlement en caisse passe au 422 · transferts avec la direction et apports → OD (585 / 101).
-
-**Comptes conformes au SYSCOHADA révisé (AUDCIF, applicable 2018)** : 702 produits finis · 6021 café vert (matière première) · 6081 emballages perdus · 622 locations · 612/611 transports · 6042 carburant · 6052 électricité · 624 entretien · 661 salaires · 6641 charges sociales CNPS · 6412 patente · 6414/6415 FDFP · 571 caisse · **5521 Mobile Money (monnaie électronique)** · 4111 clients · 4011 fournisseurs · 422 rémunérations dues · 4211 avances · 431 CNPS · 4472 impôts sur salaires · **585 virements de fonds** · 101 capital. Migration automatique depuis les anciens numéros ; **toute personnalisation existante est conservée**. Tous modifiables dans **Réglages → Correspondance des comptes**.
-
-**Écran Produits** : « 🛍️ Produits » dans le menu — créer / modifier / désactiver un produit fini (prix, poids, type de café consommé, emballages) et gérer les types de café produits par les machines.
-
-**✏️ Modifier une saisie** : bouton **✎** sur les opérations de caisse, achats, ventes, ajustements et torréfactions — stocks, caisse et écritures liées sont recalculés automatiquement (aucun doublon). Employés, produits, types de café et immobilisations disposent déjà de leur bouton Modifier.
-
-**Logo société** : Réglages → Société — les images lourdes sont **réduites automatiquement** ; le logo s'affiche dans l'app, les emails au boss et est **embarqué dans chaque export Excel** (haut de la première feuille).
+| **Export Sage 100 — 6 journaux** | **Synthèse** (équilibre Débit = Crédit par journal et total) + une feuille par journal **VE / AC / CA / BQ / PA / OD** (`Date/Journal/Compte/Libellé/Débit/Crédit`, codes paramétrables) + feuille Mouvements. Fourni en **.xlsx et .csv**, chaque ligne équilibrée |
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
 | **Compte d'exploitation mensuel** | Écran **Exploitation** : résultat, ventes, achats consommés, charges par nature, personnel, annexes stocks + trésorerie. S'ouvre dans Excel **et** Google Sheets |
 | **Design des fichiers** | Tous les exports Excel sont mis en forme automatiquement : bandeau de titre brun café, en-têtes de colonnes colorées et figées au défilement, lignes zébrées, totaux encadrés, nombres formatés — avec la signature « Réalisé par Doregoservices » en pied de chaque feuille |
 
-Pour Sage : ouvrez le csv global `Sage_6_journaux_*.csv` (séparateur `;`), vérifiez la colonne **Compte** puis importez — chaque journal (VE, AC, CA, BQ, PA, OD) est déjà étiqueté et équilibré.
+Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne **Compte** puis importer le CSV (séparateur `;`).
+
+**Écritures types générées** (comptes modifiables dans Réglages → Correspondance des comptes) :
+
+| Opération | Écriture Sage |
+|---|---|
+| Vente comptant | VE : **571 Caisse / 5521 MoMo** au débit, **702 Ventes** au crédit |
+| Vente à crédit + encaissement | VE : **4111 Clients / 702** puis CA-BQ : **571-5521 / 4111** |
+| Achat café vert payé / à crédit | AC : **6021 / 571-5521** ou **6021 / 4011 Fournisseurs** |
+| Dépense (loyer 622, transport 612, électricité 6052, entretien 624, patente 6412…) | CA-BQ : **compte de charge / 571-5521** |
+| Avance sur salaire | CA : **4211 Avances / 571** |
+| Paie clôturée | PA : **661 Salaires + 6641 Charges CNPS + 6414 FDFP** au débit ; **431 CNPS, 4472 État (ITS+FDFP), 428 retenues diverses, 4211 avances déduites, 422 Net dû** au crédit |
+| Paiement des salaires | CA-BQ : **422 / 571-5521** |
+| Envoi / appro de la direction, transfert caisse↔MoMo | OD via **585 Virements de fonds** (opérations non imputables, hors résultat) |
 
 ### 🏗️ Immobilisations et amortissements
 Écran **Immobili.** : enregistrez vos équipements (torréfacteur, moulin, groupe électrogène, véhicules…) avec coût, valeur résiduelle et durée. L'application calcule la **dotation mensuelle** (amortissement linéaire), le cumulé et la **valeur nette comptable**, et déduit automatiquement l'amortissement dans le compte d'exploitation.
@@ -116,9 +118,7 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 Écran **Emballages** : articles (sachets, étiquettes, cartons…), achats (avec sortie de caisse automatique optionnelle), sorties/pertes, valeur du stock au coût moyen. Sur chaque **produit**, définissez la **nomenclature** (ex. 1 sachet + 1 étiquette par unité) : chaque conditionnement consomme alors les emballages **automatiquement**.
 
 ### 📤 Points quotidiens & rapport mensuel par email
-- **Point quotidien à 22h00** (programmé) : envoyé **tous les jours à 22h00**, même si des commerciales n'ont pas envoyé leurs ventes — l'email liste alors les **commerciales manquantes**. Si tout était déjà validé plus tôt dans la journée, le point était déjà parti (pas de doublon).
-- **Rapport mensuel le 3 à 10h00** (programmé) : synthèse du mois précédent (CA, production, trésorerie, résultat) envoyée automatiquement.
-- **Envoi manuel avant l'heure** : toujours possible depuis l'app (exactement pareil qu'avant) — rapport Excel complet inclus.
+- **Point quotidien** : dès que toutes les ventes d'une journée sont validées, le point part **automatiquement** sur l'email du boss (si configuré) : ventes par commerciale, encaissements, caisse du jour — avec fichier Excel joint.
 - **Une commerciale en retard ?** Dans son formulaire, la date du point peut être changée (jusqu'à **7 jours en arrière**). Une nouvelle saisie pour une même journée **remplace** celle qui est encore en attente (jamais celle déjà validée — dans ce cas elle devient un « complément » à valider). Si un point déjà envoyé est complété, l'app vous le signale pour **renvoyer la version à jour**.
 - **Fin de mois** : l'écran **Exploitation** génère le rapport mensuel (compte d'exploitation par grandes masses + cash-flow + immobilisations + mouvements de TOUS les stocks + ventes + caisse + paie) et l'envoie au boss. Un rappel s'affiche en début de mois tant qu'il n'est pas envoyé.
 
@@ -136,20 +136,12 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 
 ## 6 bis. Activer l'envoi automatique des emails
 
-**Nouveau — envois à heure fixe (pg_cron)** : après avoir déployé la fonction `send-report` v2 et ajouté les secrets `BOSS_EMAIL` + `SUPABASE_SERVICE_ROLE_KEY`, collez **cron-emails.sql** dans le SQL Editor → le point part à 22h00 chaque jour et le rapport mensuel le 3 du mois à 10h00 (heure de Côte d'Ivoire). Anti-doublon automatique via la table email_log.
-
 1. Créez un compte gratuit sur [resend.com](https://resend.com) → copiez votre clé API (`re_...`). 100 emails/jour offerts — largement suffisant.
 2. Supabase → **Edge Functions** → *New Function* → nom : **send-report** → collez le fichier `supabase/functions/send-report/index.ts` → **Deploy**.
 3. Dans les **Secrets** de la fonction : `RESEND_API_KEY` (votre clé), `REPORT_KEY` (un mot de passe secret que vous choisissez), `EMAIL_FROM` (ex. `CafePro <onboarding@resend.dev>`).
 4. Application → **Réglages → 📧 Envoi des rapports** : email du boss + le `REPORT_KEY` choisi → Enregistrer → **Envoyer un email de test**.
 
 > Sans cette configuration, les boutons **« ✉️ Préparer l'email »** téléchargent le fichier Excel et ouvrent votre messagerie avec un brouillon prêt à envoyer.
-
-**Dépannage (l'app affiche toujours la cause exacte)** :
-- « fonction NON DÉPLOYÉE » → l'étape 2 (Edge Functions) n'a pas été faite ;
-- « REPORT_KEY invalide » → le mot de passe diffère entre les Secrets Supabase et Réglages → 📧 ;
-- « projet en pause » → les projets gratuits Supabase se mettent en pause après ~1 semaine d'inactivité : relancez-le (bouton *Restore*) dans la console Supabase ;
-- **Réglages → 🔍 Vérifier la base** teste directement les 21 tables : si des tables manquent, il fournit le SQL de réparation tout prêt à copier-coller.
 
 ### 👥 Paie — taux Côte d'Ivoire en vigueur (réforme ITS du 1<sup>er</sup> janvier 2024)
 Préconfigurés dans l'application (modifiables dans Réglages, **à faire valider par votre comptable**) :
@@ -167,6 +159,15 @@ Préconfigurés dans l'application (modifiables dans Réglages, **à faire valid
 | Réduction RICF | − 5 500 F par demi-part (plafond 44 000 F) | demi-parts par employé (fiche employé) |
 
 Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (avant le 10), **DISA** (CNPS) et **État 301** (DGI) en fin d'année.
+
+### 👔 Paie v31 — employés, archivage, bulletin pro, absences, remise à zéro
+
+- **Fiches employés entièrement modifiables** : **Paie → Employés → ✎ Modifier** — nom, poste, matricule, type (mensuel/journalier), salaire de base, transport, logement, zone, demi-parts, **coches des rubriques attribuées** (elles se rempliront automatiquement à chaque paie), à tout moment.
+- **Archivage réversible** : **🗂 Archiver** déplace l'employé dans la section repliable **« Employés archivés (N) »** — il ne reçoit plus de bulletins, mais **tout son historique (paies, avances) est conservé**. **▶️ Désarchiver** le ramène dans la liste active.
+- **Absences** : saisissez les jours d'absence dans **Paie → Paie du mois**. Retenue = **salaire de base ÷ base mensuelle (30 par défaut) × jours d'absence** — uniquement sur la base, **jamais sur les primes** ; les journaliers sont payés au jours travaillés. L'absence apparaît en gain négatif sur le bulletin (déjà déduite du brut).
+- **Bulletin de paie professionnel** : dans Paie du mois, bouton **👁 Bulletin** → page dédiée imprimable (**🖨 Imprimer/PDF**) : en-tête société + période, matricule, table **GAINS** (salaire de base **hors primes**, transport avec partie exonérée et zone, primes attribuées, absences en négatif), **BRUT**, **RETENUES** (CNPS, CMU, ITS, avances), **NET À PAYER**, ligne imposable explicative, **CHARGES PATRONALES** détaillées, **COÛT TOTAL EMPLOYEUR**, zones de signatures, pied de page Doregoservices.
+- **Avances sur salaire** : dès l'enregistrement d'une avance, la **sortie de caisse correspondante est créée** (compte Sage 4211) ; elle est déduite automatiquement du net à la paie suivante. Supprimer une avance supprime aussi sa sortie de caisse.
+- **Remise à zéro de la base en ligne** : **Réglages → zone sensible → « 🧹 Vider la base en ligne (après tests) »** supprime **toutes** les données (ventes, achats, caisse, paie, employés, liens…) en gardant les **réglages** (société, taux, comptes Sage, e-mails, utilisateurs). Le bouton local, lui, n'efface que les données de l'appareil.
 
 ## 7. Bon à savoir
 
@@ -200,17 +201,6 @@ En bas de l'écran Exploitation : graphique en barres (bleu = ventes, vert = ré
 ### QR codes
 Les fenêtres « Lien de … » (commerciales, production, caisse) affichent un **QR code** du lien : la personne scanne avec sa caméra, sans retaper l'adresse. Génération intégrée (librairie QR intégrée à l'app, aucune connexion requise).
 
-## 8 bis. Paie paramétrable (rubriques, transport, livre de paie)
-- **Prime transport exonérée d'ITS par zone** : Abidjan jusqu'à 30 000 F · Bouaké 24 000 F · autres villes 20 000 F (seuils modifiables : Paie → 🏷️ Primes & rubriques). La part au-delà du seuil est taxable. Chaque employé a une zone (fiche employé).
-- **Rubriques paramétrables et attribuées par employé** : Paie → 🏷️ Primes & rubriques → créez des primes (montant fixe ou % du salaire de base, taxable ou non). Puis, sur chaque fiche employé (✎), cochez les rubriques qui lui sont attribuées — montants pré-remplis à chaque paie et modifiables au moment de la paie.
-- **📗 Livre de paie** : Paie → 📅 Paie du mois → Livre de paie : impossible tant que les bulletins du mois ne sont pas générés ; période au choix : 1, 2, 3, 6 ou 12 mois (Excel, ligne TOTAL, zone par employé).
-- **Caisse sans découvert** : aucune dépense, achat, salaire ou envoi ne peut être saisie au-delà du solde disponible (espèces et Mobile Money séparés) — pas de solde négatif possible.
-- **Avances plafonnées** : une avance ne peut dépasser le salaire de l'employé, ni un cumul supérieur au salaire sur le mois.
-
-
-## 8 ter. Lien production (formulaire atelier)
-Le lien atelier suit le flux réel : 🔥 torréfaction (vert pesé, torréfié facultatif) puis ⚙️ machines + conditionnement en une saisie (unités produites ; torréfié consommé facultatif = tout le stock). Les liens peuvent être coupés (🚫) ou régénérés.
-
 ## 9. Revue complète (limites, années, données)
 
 **Aucune limite d'années** : les mois sont gérés par calcul pur (janvier − 1 = décembre de l'année précédente, etc.), testé de 1998 à 2100. Ventes, exploitations mensuelles, comparatifs 12 mois et amortissements longue durée (ex. 8 ans = 96 mois soldés automatiquement) fonctionnent sur n'importe quel horizon.
@@ -231,13 +221,3 @@ Le lien atelier suit le flux réel : 🔥 torréfaction (vert pesé, torréfié 
 - **Clavier numérique automatique** sur tous les champs de montants et quantités (saisie FCFA plus rapide, moins d'erreurs).
 - **Indicateur « 📡 Hors ligne »** dès que la connexion coupe (reprise automatique à la reconnexion) ; le bouton **📥 Installer** apparaît quand le téléphone propose d'installer l'application.
 - **Menu par rôle** : chaque profil ne voit que ses écrans, partout (barre du haut, onglets du bas, menu).
-
-## 11. Dépannage — « Erreur Supabase 400 : Could not find the '…' column »
-
-La base en ligne peut être en retard sur le schéma de l'app (mise à jour des tables). Réparation guidée, sans perte de données :
-
-1. **Le plus simple** : ouvrir le fichier **migration-2026-08.sql** (livré avec l'app), copier tout son contenu → console Supabase → **SQL Editor** → New query → **Run**. Il couvre les 21 tables et toutes les colonnes (sûr : `if not exists` uniquement, aucune donnée perdue).
-2. Sinon : dans l'app, **Réglages → 🔍 Vérifier la base** — l'app teste les tables et colonnes, liste ce qui manque et **génère le SQL de réparation**.
-2. **📋 Copier le SQL manquant** → console Supabase → **SQL Editor** → New query → coller → **Run** (les instructions `add column if not exists` / `create table if not exists` conservent tout).
-3. Revenir dans l'app → relancer **Vérifier la base** → « ✅ Base complète ».
-4. Refaire l'enregistrement qui échouait.

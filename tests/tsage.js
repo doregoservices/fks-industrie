@@ -103,6 +103,31 @@ if(gA('clients')!=='411100')throw new Error('migration : clients '+gA('clients')
 if(gA('transport')!=='625000')throw new Error('migration : personnalisation 625000 écrasée ('+gA('transport')+')');
 console.log('✓ Migration SYSCOHADA révisé : anciens défauts remplacés, comptes personnalisés conservés');
 
+/* 11. Avance sur salaire : sortie de caisse D 4211 puis déduction PA C 4211 -> compte soldé */
+const emps=(await DB.list('employees')).filter(e=>e.active!==false);
+const avE=emps[0];
+$('#main').innerHTML='<input id="avE"><input id="avD"><input id="avN"><input id="avM">';
+const d11b=new Date();d11b.setMonth(d11b.getMonth()-1);$('#avE').value=avE.id+'|'+avE.name;$('#avD').value=d11b.toISOString().slice(0,7)+'-05';$('#avN').value='sage';$('#avM').value='10000';
+await App.advSave();
+const avOut=(await DB.list('cash_entries')).filter(x=>String(x.ref||'').indexOf('advance:')===0);
+if(avOut.length!==1||avOut[0].category!=='personnel_avances')throw new Error('avance sans sortie de caisse cat personnel_avances');
+const d11=new Date();d11.setMonth(d11.getMonth()-1);const per=d11.toISOString().slice(0,7);const dd11=per+'-28';
+emps.forEach(e=>{$('#x_adv_'+e.id).value=e.id===avE.id?'10000':'0';});
+await App.runGen(per);
+const run11=(await DB.list('pay_runs')).filter(r=>r.period===per).slice(-1)[0];if(!run11)throw new Error('run cas 11 non généré');
+$('#main').innerHTML='<input id="pcD"><select id="pcA"></select>';$('#pcD').value=dd11;$('#pcA').value='cash';await DB.insert('cash_entries',{date:dd11,type:'in',account:'cash',category:'apport',label:'appro cas 11',amount:2000000,status:'validated',created_at:nowISO()});
+await App.runCloseGo(run11.id);
+const cap11=null;const _mk11=makeXlsx;let capS=null;makeXlsx=(sh)=>{capS=sh;};const _dl11=dlCsv;dlCsv=()=>{};
+await App.expCaisse();makeXlsx=_mk11;dlCsv=_dl11;
+const codeOf11=k=>({VE:'VT',AC:'AC',CA:'CS',BQ:'BQ',PA:'PY',OD:'DIV'})[k]||k;const rowsOf11=k=>{const sh11=capS.filter(x=>x.name.split(' — ')[0]===codeOf11(k))[0];if(!sh11)throw new Error('feuille '+k+' introuvable');return sh11.rows.filter(r=>r.length===6&&r[1]);}
+const balJ11=rows=>{let d=0,c=0;rows.forEach(r=>{d+=Number(r[4])||0;c+=Number(r[5])||0;});if(Math.abs(d-c)>1)throw new Error('journal '+k+' déséquilibré '+d+'/'+c);return d;};
+const pa1111=rowsOf11('PA'),ca1111=rowsOf11('CA');
+const accStart11=r=>String(r[2]).slice(0,4);
+const cred11=pa1111.filter(r=>accStart11(r)==='4211'&&Number(r[5])>0).reduce((a,r)=>a+Number(r[5]),0);
+const deb11=ca1111.filter(r=>accStart11(r)==='4211'&&Number(r[4])>0).reduce((a,r)=>a+Number(r[4]),0);
+if(cred11!==10000||deb11!==10000)throw new Error('4211 : crédit PA '+cred11+' / débit CA '+deb11+' (attendu 10000/10000)');
+console.log('✓ Avance : CA D 4211 puis PA C 4211 — compte soldé, journaux équilibrés');
+
 captured.sheets.forEach(s=>{const t=JSON.stringify(s.rows);if(/NaN|undefined/.test(t))throw new Error(s.name+' : NaN/undefined');});
-console.log('TSAGE: 10/10 OK');
+console.log('TSAGE: 11/11 OK');
 })().catch(e=>{console.error('ÉCHEC TSAGE:',e.stack||e.message);process.exit(1);});
