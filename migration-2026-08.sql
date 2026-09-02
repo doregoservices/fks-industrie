@@ -1,7 +1,8 @@
 -- ══════════════════════════════════════════════════════════════════
--- MIGRATION COMPLÈTE FKS Industrie v4 — Supabase SQL Editor → Run
--- Sûr : create/alter IF NOTExists uniquement — aucune donnée perdue.
--- Corrige : purchases.status, roastings.estimated, pay_slips (11 col), sales.note.
+-- MIGRATION COMPLÈTE FKS Industrie v5 — Supabase SQL Editor → Run
+-- Sûr : create/alter IF NOT EXISTS uniquement — aucune donnée perdue.
+-- v5 : employees.zone/tax_shares, pay_slips.primes/transport_exo,
+--      sales.note, purchases.status, roastings.estimated, pay_slips paie.
 -- ══════════════════════════════════════════════════════════════════
 
 create table if not exists settings(
@@ -246,6 +247,8 @@ create table if not exists employees(
   base_salary numeric default 0,
   transport numeric default 0,
   housing numeric default 0,
+  tax_shares numeric default 2,
+  zone text,
   active boolean default true
 );
 alter table employees add column if not exists id text;
@@ -258,6 +261,8 @@ alter table employees add column if not exists salary_type text;
 alter table employees add column if not exists base_salary numeric;
 alter table employees add column if not exists transport numeric;
 alter table employees add column if not exists housing numeric;
+alter table employees add column if not exists tax_shares numeric;
+alter table employees add column if not exists zone text;
 alter table employees add column if not exists active boolean;
 
 create table if not exists advances(
@@ -318,6 +323,8 @@ create table if not exists pay_slips(
   irpp numeric default 0,
   other numeric default 0,
   advances numeric default 0,
+  primes jsonb default '[]',
+  transport_exo numeric default 0,
   net numeric default 0,
   cnps_employer numeric default 0,
   its_gross numeric default 0,
@@ -354,6 +361,8 @@ alter table pay_slips add column if not exists taxable numeric;
 alter table pay_slips add column if not exists irpp numeric;
 alter table pay_slips add column if not exists other numeric;
 alter table pay_slips add column if not exists advances numeric;
+alter table pay_slips add column if not exists primes jsonb;
+alter table pay_slips add column if not exists transport_exo numeric;
 alter table pay_slips add column if not exists net numeric;
 alter table pay_slips add column if not exists cnps_employer numeric;
 alter table pay_slips add column if not exists its_gross numeric;

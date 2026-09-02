@@ -135,6 +135,8 @@ create table if not exists employees(
   base_salary numeric default 0,
   transport numeric default 0,
   housing numeric default 0,
+  tax_shares numeric default 2,
+  zone text,
   active boolean default true
 );
 create table if not exists advances(
@@ -178,6 +180,8 @@ create table if not exists pay_slips(
   irpp numeric default 0,
   other numeric default 0,
   advances numeric default 0,
+  primes jsonb default '[]',
+  transport_exo numeric default 0,
   net numeric default 0,
   cnps_employer numeric default 0,
   its_gross numeric default 0,

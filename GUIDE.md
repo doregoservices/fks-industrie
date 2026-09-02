@@ -200,6 +200,15 @@ En bas de l'écran Exploitation : graphique en barres (bleu = ventes, vert = ré
 ### QR codes
 Les fenêtres « Lien de … » (commerciales, production, caisse) affichent un **QR code** du lien : la personne scanne avec sa caméra, sans retaper l'adresse. Génération intégrée (librairie QR intégrée à l'app, aucune connexion requise).
 
+## 8 bis. Paie paramétrable (rubriques, transport, livre de paie)
+- **Prime transport exonérée d'ITS par zone** : Abidjan jusqu'à 30 000 F · Bouaké 24 000 F · autres villes 20 000 F (seuils modifiables : Paie → 🏷️ Primes & rubriques). La part au-delà du seuil est taxable. Chaque employé a une zone (fiche employé).
+- **Rubriques paramétrables** : Paie → 🏷️ Primes & rubriques → créez des primes (montant fixe ou % du salaire de base, taxable ou non). Elles s'ajoutent aux bulletins de tous les employés, montant modifiable au moment de la paie.
+- **Avances plafonnées** : une avance ne peut dépasser le salaire de l'employé, ni un cumul supérieur au salaire sur le mois.
+- **📗 Livre de paie** : Paie → 📅 Paie du mois → Livre de paie → Excel (toutes les rubriques, par période ; fonctionne avant et après génération).
+
+## 8 ter. Lien production (formulaire atelier)
+Le lien atelier suit le flux réel : 🔥 torréfaction (vert pesé, torréfié facultatif) puis ⚙️ machines + conditionnement en une saisie (unités produites ; torréfié consommé facultatif = tout le stock). Les liens peuvent être coupés (🚫) ou régénérés.
+
 ## 9. Revue complète (limites, années, données)
 
 **Aucune limite d'années** : les mois sont gérés par calcul pur (janvier − 1 = décembre de l'année précédente, etc.), testé de 1998 à 2100. Ventes, exploitations mensuelles, comparatifs 12 mois et amortissements longue durée (ex. 8 ans = 96 mois soldés automatiquement) fonctionnent sur n'importe quel horizon.
