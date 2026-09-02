@@ -17,8 +17,11 @@ await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',p
 const cred=(await DB.list('sales')).filter(x=>x.client==='Épicerie Bassam').pop();
 await createCashEntry({date:todayISO(),type:'in',account:'cash',category:'ventes',label:'Encaissement crédit — Épicerie Bassam',amount:22500,imputable:true,ref:'sale:'+cred.id});
 await DB.insert('purchases',{date:todayISO(),supplier:'Coop Test',qty:50,amount:80000,pay_method:'credit',paid_entry:null});
+await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'momo',total:9000,lines:[{product_id:p1.id,name:p1.name,qty:2,price:4500}],source:'admin'});
+await createCashEntry({date:todayISO(),type:'out',account:'momo',category:'transport',label:'Taxi livraison (MoMo)',amount:15000,imputable:true});
+await DB.insert('cash_entries',{date:todayISO(),type:'out',account:'cash',category:'treso_momo',label:'Conversion espèces vers MoMo',amount:30000,imputable:true,status:'validated',created_at:nowISO()});
 if(slips.length<1||netTot<=0)throw new Error('paie de test vide');
-console.log('✓ Données de recette : paie close '+netTot+' F net, crédit 22 500 F encaissé, achat 80 000 F à crédit');
+console.log('✓ Données : paie close '+netTot+' F net · crédit 22 500 F · achat 80 000 F · vente MoMo 9 000 F · taxi MoMo 15 000 F · direction (BQ) · conversion 585 (OD)');
 
 /* 2. Génération : 8 feuilles, 6 journaux présents */
 let captured=null;const _mk=makeXlsx;makeXlsx=(sheets,fname)=>{captured={sheets,fname};};
@@ -68,8 +71,13 @@ if(has('AC','571000')||has('AC','552100'))throw new Error('AC : compte de caisse
 console.log('✓ AC : 6021 café vert + 6081 emballages / 4011 fournisseurs — AUCUN compte de caisse (règle fournisseur)');
 
 /* 8. OD + PA : structure complète révisée */
-if(!has('OD','585000'))throw new Error('OD : virements de fonds 585000 absent');
-if(has('CA','585000'))throw new Error('OD : virement interne fuité dans CA');
+if(!has('BQ','521000'))throw new Error('BQ : banque 521000 absente (opérations direction)');
+const bqA=rowsOf('BQ').map(r=>String(r[2]));
+if(!bqA.every(a=>a==='521000'||a==='571000'||a==='552100'))throw new Error('BQ : compte hors trésorerie présent '+JSON.stringify(bqA));
+if(has('BQ','612000')||has('BQ','411100')||has('BQ','422000')||has('BQ','702000'))throw new Error('BQ : ne doit contenir QUE les opérations banque (521/571/5521)');
+if(!has('OD','585000'))throw new Error('OD : virement interne 585000 absent (conversion caisse/MoMo)');
+if(!has('CA','552100'))throw new Error('CA : règlement/paiement MoMo (5521) absent du journal caisse');
+if(has('CA','521000'))throw new Error('CA : compte banque 521 ne doit pas être dans la caisse');
 if(!has('PA','661000'))throw new Error('PA : salaires 661000 absent');
 if(!has('PA','664100'))throw new Error('PA : charges sociales 664100 absentes');
 if(!has('PA','422000'))throw new Error('PA : rémunérations dues 422000 absent');
@@ -82,7 +90,7 @@ const libPA=rowsOf('PA').map(r=>String(r[3]));
 if(!libPA.some(l=>l.includes('ITS')))throw new Error('PA : libellé ITS absent');
 if(!libPA.some(l=>l.includes('FDFP')))throw new Error('PA : libellé FDFP absent');
 if(!libPA.some(l=>l.includes('CNPS')))throw new Error('PA : libellé CNPS absent');
-console.log('✓ OD 585 · PA écriture COMPLÈTE : 661 bruts + 6641 CNPS patronal + 6641 CMU employeur + 6414 FDFP / 431 CNPS + 431 CMU + 4472 ITS + 4472 FDFP + 4211 avances + 422 net');
+console.log('✓ BQ = banque seule (521 dépôts/retraits direction) · OD 585 virements internes · CA accueille espèces ET MoMo (571/5521) · PA écriture COMPLÈTE : 661 bruts + 6641 CNPS patronal + 6641 CMU employeur + 6414 FDFP / 431 CNPS + 431 CMU + 4472 ITS + 4472 FDFP + 4211 avances + 422 net');
 
 /* 9. Codes journaux personnalisés (Réglages) */
 SETS.journals={VE:'VT',AC:'AC',CA:'CS',BQ:'BQ',PA:'PY',OD:'DIV'};

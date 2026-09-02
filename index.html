@@ -1094,6 +1094,7 @@ function defaultSettings(){
       {key:'impots_taxes',label:'Impôts et taxes — patente et licences (6412 — vignettes : 6463)',account:'641200',group:'impots'},
       {key:'treso_caisse',label:'Caisse espèces (571)',account:'571000',group:'treso'},
       {key:'treso_momo',label:'Mobile Money — monnaie électronique (5521)',account:'552100',group:'treso'},
+      {key:'banque',label:'Banques — dépôts et retraits de la direction (521)',account:'521000',group:'treso'},
       {key:'apport',label:'Capital / apports (101)',account:'101000',group:'treso'},
       {key:'clients',label:'Clients locaux — créances (4111)',account:'411100',group:'tiers'},
       {key:'fournisseurs',label:'Fournisseurs locaux — dettes (4011)',account:'401100',group:'tiers'},
@@ -2204,7 +2205,7 @@ App.cashDel=id=>confirmBox('Supprimer cette opération ?','Le solde sera recalcu
 App.cashForm=async id=>{
   let e=null;
   if(id)e=(await DB.list('cash_entries',{eq:{id:id}}))[0]||null;
-  const cats=(SETS.sage_accounts||[]).filter(c=>!c.key.startsWith('treso_')&&c.key!=='apport');
+  const cats=(SETS.sage_accounts||[]).filter(c=>!c.key.startsWith('treso_')&&c.key!=='apport'&&c.key!=='banque');
   const c1=(!e||e.type==='out')?'':'on in';const c2=(e&&e.type==='out')?'on out':'';
   modal(id?'Modifier l\'opération de caisse':'Nouvelle opération de caisse',
     '<div class="field"><span>Type</span><div class="toggle" id="cT"><button type="button" class="'+c1+'" onclick="App.cashDir(this,\'in\')">↓ Entrée (reçu)</button><button type="button" class="'+c2+'" onclick="App.cashDir(this,\'out\')">↑ Sortie (payé)</button></div></div>'
@@ -2742,7 +2743,7 @@ App.expCaisse=async()=>{
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
   const J=(SETS.journals||{});
   const jl=k=>(J[k]||k);
-  const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',virement_interne:'585000'};
+  const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',virement_interne:'585000',banque:'521000'};
   const acc=k=>sagAcc(k)||DEF[k]||'';
   const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
   const L={VE:[],AC:[],CA:[],BQ:[],PA:[],OD:[]};
@@ -2783,23 +2784,23 @@ App.expCaisse=async()=>{
   cash.filter(e=>inR(e.date)).forEach(e=>{
     const amt=Number(e.amount)||0,lib=e.label,d=e.date,cat=e.category;
     if(e.imputable===false){
-      if(e.od==='transfer'){push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);}
-      else{push('OD',d,A(e),lib,amt,'');push('OD',d,acc('virement_interne'),lib,'',amt);}
+      if(e.od==='transfer'){push('BQ',d,acc('banque'),lib,amt,'');push('BQ',d,A(e),lib,'',amt);}
+      else{push('BQ',d,A(e),lib,amt,'');push('BQ',d,acc('banque'),lib,'',amt);}
       return;}
-    if(cat==='ventes'){const jr=e.account==='momo'?'BQ':'CA';
+    if(cat==='ventes'){const jr='CA';
       push(jr,d,A(e),lib,amt,'');push(jr,d,acc('clients'),lib,'',amt);return;}
-    if(cat==='achat_vert'||cat==='emballages'){const jr=e.account==='momo'?'BQ':'CA';
+    if(cat==='achat_vert'||cat==='emballages'){const jr='CA';
       const rfr=String(e.ref||'');const lie=rfr.indexOf('purchase:')===0&&purById[rfr.slice(9)];
       if(!lie){push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,acc('fournisseurs'),lib,'',amt);}
       push(jr,d,acc('fournisseurs'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
-    if(cat==='salaires'){const jr=e.account==='momo'?'BQ':'CA';
+    if(cat==='salaires'){const jr='CA';
       push(jr,d,acc('personnel_net'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
-    if(cat==='personnel_avances'&&e.type==='out'){const jr=e.account==='momo'?'BQ':'CA';
+    if(cat==='personnel_avances'&&e.type==='out'){const jr='CA';
       push(jr,d,acc('personnel_avances'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='apport'){push('OD',d,A(e),lib,amt,'');push('OD',d,sagAcc('apport')||'101000',lib,'',amt);return;}
     if(cat==='treso_caisse'||cat==='treso_momo'){
       push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);return;}
-    const jr=e.account==='momo'?'BQ':'CA';
+    const jr='CA';
     const cc=sagAcc(cat)||'';
     if(e.type==='in'){push(jr,d,A(e),lib,amt,'');push(jr,d,cc,lib,'',amt);}
     else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
@@ -2826,11 +2827,12 @@ App.expCaisse=async()=>{
   const det=[['DATE','TYPE','CATÉGORIE','LIBELLÉ','MOYEN','ENTRÉE','SORTIE','JOURNAL SAGE']];
   cash.filter(e=>inR(e.date)).forEach(e=>{
     let jr='—';
-    if(e.imputable===false)jr=jl('OD');
-    else if(e.category==='ventes'||e.category==='achat_vert'||e.category==='emballages')jr=e.account==='momo'?jl('BQ'):jl('CA');
-    else if(e.category==='salaires')jr=e.account==='momo'?jl('BQ'):jl('CA');
+    if(e.imputable===false)jr=jl('BQ');
+    else if(e.category==='treso_caisse'||e.category==='treso_momo')jr=jl('OD');
+    else if(e.category==='ventes'||e.category==='achat_vert'||e.category==='emballages')jr=jl('CA');
+    else if(e.category==='salaires')jr=jl('CA');
     else if(e.category==='apport')jr=jl('OD');
-    else jr=e.account==='momo'?jl('BQ'):jl('CA');
+    else jr=jl('CA');
     det.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',catLabel(e.category),e.label,e.account==='momo'?'Mobile Money':'Espèces',e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'',jr]);});
   makeXlsx(
     [{name:'Synthèse',rows:syn,widths:[30,8,12,16,16,12]}]

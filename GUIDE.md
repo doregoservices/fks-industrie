@@ -84,14 +84,16 @@ Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne
 | Opération | Écriture Sage |
 |---|---|
 | Vente (comptant ou à crédit) | VE : **4111 Clients** au débit, **702 Ventes** au crédit — **jamais de compte de caisse dans VE** |
-| Encaissement d'une vente (immédiat ou crédit) | CA (espèces) / BQ (MoMo) : **571-5521 Caisse** au débit, **4111 Clients** au crédit |
+| Encaissement d'une vente (immédiat ou crédit, espèces ou MoMo) | **CA** : **571 Caisse / 5521 MoMo** au débit, **4111 Clients** au crédit |
 | Achat (café vert, emballages — payé ou à crédit) | AC : **6021/6081** au débit, **4011 Fournisseurs** au crédit — **jamais de compte de caisse dans AC** |
-| Règlement d'un achat | CA-BQ : **4011 Fournisseurs** au débit, **571-5521** au crédit |
-| Dépense (loyer 622, transport 612, électricité 6052, entretien 624, patente 6412…) | CA-BQ : **compte de charge / 571-5521** |
+| Règlement d'un achat (espèces ou MoMo) | **CA** : **4011 Fournisseurs** au débit, **571-5521** au crédit |
+| Dépense (loyer 622, transport 612, électricité 6052, entretien 624, patente 6412…) | **CA** : **compte de charge / 571-5521** — MoMo inclus dans le journal de caisse |
 | Avance sur salaire | CA : **4211 Avances / 571** |
 | Paie clôturée | PA — **écriture complète** : *débit* **661** salaires bruts, **6641** CNPS patronal (retraite+PF+AT+maternité), **6641** CMU employeur, **6414** FDFP ; *crédit* **431** CNPS (retenue salarié + part patronale), **431** CMU (½ salarié + ½ employeur), **4472** ITS, **4472** FDFP à reverser (DGI), **428** autres retenues, **4211** avances déduites, **422** net à payer |
-| Paiement des salaires | CA-BQ : **422 / 571-5521** |
-| Envoi / appro de la direction, transfert caisse↔MoMo | OD via **585 Virements de fonds** (opérations non imputables, hors résultat) |
+| Paiement des salaires (espèces ou MoMo) | **CA** : **422 / 571-5521** |
+| 🏦 Envoi ventes à la direction | **BQ** (Banque) : **521 Banques** au débit, **571-5521** au crédit |
+| 🏦 Approvisionnement reçu de la direction | **BQ** (Banque) : **571-5521** au débit, **521 Banques** au crédit — le journal Banque est alimenté uniquement par ces opérations |
+| Virement interne caisse↔MoMo (conversion) | OD via **585 Virements de fonds** — jamais dans la caisse ni la banque |
 
 ### 🏗️ Immobilisations et amortissements
 Écran **Immobili.** : enregistrez vos équipements (torréfacteur, moulin, groupe électrogène, véhicules…) avec coût, valeur résiduelle et durée. L'application calcule la **dotation mensuelle** (amortissement linéaire), le cumulé et la **valeur nette comptable**, et déduit automatiquement l'amortissement dans le compte d'exploitation.
@@ -172,7 +174,7 @@ Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (a
 
 ## 7. Bon à savoir
 
-- **Mobile Money** : deux caisses suivies en parallèle (Espèces / MoMo). Les transferts avec le patron sont tracés mais tagués **non imputables** — ils partent dans la feuille OD, prêts à être traités en virement interne (58x) si votre comptable le souhaite.
+- **Mobile Money** : deux caisses suivies en parallèle (Espèces / MoMo), **toutes les deux dans le journal de caisse (CA)** — encaissements 5521/4111, paiements charges/5521. Les envois et approvisionnements avec la direction alimentent le **journal de banque (BQ, compte 521)** ; seules les conversions espèces↔MoMo partent en OD (585).
 - **Ventes à crédit** : lors d'une vente, choisissez « À crédit » + nom du client. L'écran **Impayés** liste les créances avec un bouton **Encaisser**.
 - **Compte d'exploitation** : méthode des achats consommés (SI + achats − SF au coût moyen pondéré) ; produits finis valorisés au coût matière ; opérations OD avec la direction exclues du résultat.
 - **Sauvegarde** : écran Exports → **Sauvegarde complète (JSON)** — à faire régulièrement (ou laissez Supabase gérer vos données en ligne).
