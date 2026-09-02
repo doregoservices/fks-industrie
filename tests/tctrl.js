@@ -87,5 +87,16 @@ if(!sp4.m.join(' ').includes('refusé')&&!sp4.m.join(' ').includes('insuffisant'
 const bal3=await accBalance('cash');
 if(bal3<-0.005)throw new Error('solde négatif après tentative achat');
 console.log('✓ Caisse : dépense et achat refusés au-delà du solde ('+money(bal)+' F), aucun solde négatif, dépense légitime acceptée');
-console.log('TCTRL: 6/6 OK');
+/* 5. achat d emballages : refusé sans état partiel */
+const pk0=(await DB.list('packaging_entries')).length;
+const balPk=await accBalance('cash');
+$('#main').innerHTML='<input id="pkI"><input id="pkD"><input id="pkQ"><input id="pkC"><input id="pkR"><input id="pkPay">';
+$('#pkI').value='x1|Sachet';$('#pkD').value=todayISO();$('#pkQ').value='100';$('#pkC').value='9999';$('#pkR').value='';$('#pkPay').value='cash';
+const sp5=spy();
+await App.pkInSave();
+sp5.un();
+if((await DB.list('packaging_entries')).length!==pk0)throw new Error('entrée emballage orpheline créée malgré solde insuffisant !');
+if(!sp5.m.join(' ').includes('Refusé'))throw new Error('refus emballage absent');
+console.log('✓ Achat emballages au-delà du solde : refusé, aucune entrée orpheline');
+console.log('TCTRL: 7/7 OK');
 })().catch(e=>{console.error('ÉCHEC TCTRL:',e.message);process.exit(1);});

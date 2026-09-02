@@ -2486,7 +2486,8 @@ App.runGen=async period=>{
       brut_ap:s.brut_ap,cnps_base:s.cnps_base,cnps:s.cnps,taxable:s.taxable,irpp:s.its,its_gross:s.its_gross,ricf:s.ricf,its:s.its,cmu:s.cmu,other:s.other,advances:s.advances,net:s.net,
       cnps_er:s.cnps_er,pf:s.pf,mat:s.mat,at:s.at,cmu_er:s.cmu_er,fdfp:s.fdfp,cnps_employer:s.cnps_employer,cout_employeur:s.cout_employeur,paid:false});
   }
-  toast('Bulletins générés — vérifiez puis clôturez','ok');render();};
+  const negNets=slips.filter(x=>x.net<0).map(x=>x.emp.name);
+  toast('Bulletins générés — vérifiez puis clôturez'+(negNets.length?' ⚠️ NET NÉGATIF : '+negNets.join(', ')+' (retenues/avances trop fortes)':''),'ok');render();};
 App.runDel=id=>confirmBox('Supprimer ce brouillon de paie ?','Les bulletins non clôturés seront supprimés. Les avances seront de nouveau en attente.','Supprimer',async()=>{
   const slips=await DB.list('pay_slips',{eq:{run_id:id}});
   for(const s of slips)await DB.remove('pay_slips',s.id);
@@ -3127,7 +3128,7 @@ App.pSendProd=async()=>{
   if(!lines.length)return toast('Indiquez les unités produites (au moins un produit)','bad');
   const cafeU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
   const cafe=lines.reduce((a,l)=>a+l.qty*cafeU(prods.filter(x=>x.id===l.product_id)[0]||{}),0);
-  const res=formSend('production',$('#qOp').value||'Atelier',{date:$('#qD').value||todayISO(),roasted_used:kg,lines:lines,operator:$('#qOp').value});
+  const res=await formSend('production',$('#qOp').value||'Atelier',{date:$('#qD').value||todayISO(),roasted_used:kg,lines:lines,operator:$('#qOp').value});
   formOK('Transformation + conditionnement : '+num(lines.reduce((a,l)=>a+l.qty,0))+' unités ('+num2(cafe)+' kg de café)'+(kg?' · torréfié consommé '+num2(kg)+' kg · perte '+num2(kg-cafe)+' kg':' · torréfié non pesé — écart calculé par le gestionnaire'),res.offline?'Gardé sur le téléphone, envoi automatique dès le retour du réseau.':'Le gestionnaire va valider la saisie.');
 };
 async function formCaisse(name){
@@ -3187,12 +3188,11 @@ App.pkEntrySave=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id
   const items=await DB.list('packaging_items');const it=items.filter(x=>x.id===$('#peI').value)[0];
   const rec={date:$('#peD').value||todayISO(),type:$('#peT').value,qty:q,unit_cost:Number($('#peC').value)||0,amount:Math.round(q*(Number($('#peC').value)||0)),reason:$('#peR').value||e.reason||'',item_id:$('#peI').value,item_name:it?it.name:(e.item_name||'')};
   await DB.update('packaging_entries',id,rec);
-  let cash=null;
-  try{
-  cash=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0];
+  let cash=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0]||null;
+  if(cash&&rec.type==='in'&&rec.amount>0){const cacct=cash.account||'cash';const bal=await accBalance(cacct,cash.id);
+    if(rec.amount>bal+0.005){await DB.update('packaging_entries',id,e);return toast('Refusé : solde '+(cacct==='momo'?'Mobile Money':'espèces')+' insuffisant — mouvement remis à son état précédent','bad');}}
   if(cash){ if(rec.type==='in'&&rec.amount>0)await DB.update('cash_entries',cash.id,{date:rec.date,amount:rec.amount,label:'Achat emballages — '+rec.item_name});
-    else await DB.remove('cash_entries',cash.id); } }
-  catch(e){toast('Solde insuffisant — écriture de caisse non créée','bad');}
+    else await DB.remove('cash_entries',cash.id); }
   closeModal();toast('Mouvement modifié ✅'+(cash?(rec.type==='in'?' — écriture de caisse synchronisée':' — écriture de caisse retirée'):''),'ok');render();};
 App.pkItemForm=async id=>{let it={name:'',unit:'unité',alert_min:100};
   if(id)it=(await DB.list('packaging_items',{eq:{id:id}}))[0]||it;
@@ -3216,6 +3216,9 @@ App.pkInForm=async()=>{
 App.pkInSave=async()=>{const q=Number($('#pkQ').value)||0,c=Number($('#pkC').value)||0;
   if(!q)return toast('Quantité obligatoire','bad');
   const[iid,iname]=$('#pkI').value.split('|');
+  const amt=Math.round(q*c);
+  if($('#pkPay').value!=='no'&&amt>0){const bal=await accBalance($('#pkPay').value);
+    if(amt>bal+0.005)return toast('Refusé : solde '+(($('#pkPay').value)==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F) pour '+money(amt)+' F — pas de solde négatif','bad');}
   const e=await DB.insert('packaging_entries',{date:$('#pkD').value||todayISO(),type:'in',qty:q,unit_cost:c,amount:Math.round(q*c),reason:$('#pkR').value||'Achat emballages',ref:'',item_id:iid,item_name:iname,source:'admin',status:'validated'});
   if($('#pkPay').value!=='no')await createCashEntry({date:e.date,type:'out',account:$('#pkPay').value,category:'emballages',label:'Achat emballages — '+iname,amount:e.amount,imputable:true,ref:'pkentry:'+e.id});
   closeModal();toast('Entrée enregistrée','ok');render();};
