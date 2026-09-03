@@ -65,6 +65,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
 3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, types de café, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (journal Banque) et **🔄 Retrait MoMo → espèces** (transfert entre vos deux caisses, journal OD).
+5. **Dettes fournisseurs** : l'écran **Achats vert** affiche en permanence le **total des achats non réglés** (indicateur rouge + liste avec bouton 💸 **Payer**) — c'est là que se repèrent les dettes 4011.
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
 
 ### Exports Excel (écran **Exports**)
@@ -99,6 +100,7 @@ Pour Sage : il suffit d'ajouter/vérifier les numéros de compte dans la colonne
 Écran **Immobili.** : enregistrez vos équipements (torréfacteur, moulin, groupe électrogène, véhicules…) avec coût, valeur résiduelle et durée. L'application calcule la **dotation mensuelle** (amortissement linéaire), le cumulé et la **valeur nette comptable**, et déduit automatiquement l'amortissement dans le compte d'exploitation.
 
 ### 📈 Compte d'exploitation par grandes masses
+Les achats consommés sont valorisés **SI valorisé + achats du mois − SF valorisé** ; si le stock d'ouverture n'a pas de valeur d'achat connue, il est estimé au coût moyen de la période (fini les montants négatifs absurdes).
 Chaque mois, l'écran **Exploitation** présente :
 - **Produits** : ventes + variation de stock de produits finis + variation du café transformé (semi-finis des machines)
 - **Charges — 5 grandes masses** : ① achats consommés (café vert, emballages) ② services externes (loyer, transport, carburant, électricité, entretien, divers) ③ charges de personnel (bruts + CNPS patronal + CMU + FDFP) ④ impôts et taxes (patente, TOM…) ⑤ dotations aux amortissements
@@ -168,6 +170,14 @@ Préconfigurés dans l'application (modifiables dans Réglages, **à faire valid
 | **ITS (DGI, sur le brut)** | 0 % ≤ 75 000 · 16 % ≤ 240 000 · 21 % ≤ 800 000 · 24 % ≤ 2,4 M · 28 % ≤ 8 M · 32 % au-delà | barème progressif mensuel |
 | Réduction RICF | − 5 500 F par demi-part (plafond 44 000 F) | demi-parts par employé (fiche employé) |
 
+### 👔 Règle de calcul v34 (importante)
+
+- **SALAIRE BRUT (imposable)** = base + logement + heures sup + bonus + **primes taxables**. Le **transport et toutes les rubriques non taxables en sont EXCLUS**.
+- **CNPS, CMU, ITS, FDFP et charges patronales** sont calculés sur ce salaire brut.
+- **NET À PAYER = salaire brut + transport + primes non taxables − CNPS − CMU − ITS net − autres retenues − avances**.
+- **ITS affiché en 3 lignes : ITS brut (barème) − RICF = ITS net**.
+- Sage (journal PA) : 661 est débité en 2 lignes — salaires bruts + avantages/primes non imposables — pour un équilibre exact.
+
 Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (avant le 10), **DISA** (CNPS) et **État 301** (DGI) en fin d'année.
 
 ### 👔 Paie v31 — employés, archivage, bulletin pro, absences, remise à zéro
@@ -175,7 +185,7 @@ Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (a
 - **Fiches employés entièrement modifiables** : **Paie → Employés → ✎ Modifier** — nom, poste, matricule, type (mensuel/journalier), salaire de base, transport, logement, zone, demi-parts, **coches des rubriques attribuées** (elles se rempliront automatiquement à chaque paie), à tout moment.
 - **Archivage réversible** : **🗂 Archiver** déplace l'employé dans la section repliable **« Employés archivés (N) »** — il ne reçoit plus de bulletins, mais **tout son historique (paies, avances) est conservé**. **▶️ Désarchiver** le ramène dans la liste active.
 - **Absences** : saisissez les jours d'absence dans **Paie → Paie du mois**. Retenue = **salaire de base ÷ base mensuelle (30 par défaut) × jours d'absence** — uniquement sur la base, **jamais sur les primes** ; les journaliers sont payés au jours travaillés. L'absence apparaît en gain négatif sur le bulletin (déjà déduite du brut).
-- **Bulletin de paie professionnel** : dans Paie du mois, bouton **👁 Bulletin** → page dédiée imprimable (**🖨 Imprimer/PDF**) : en-tête société + période, matricule, table **GAINS** (salaire de base **hors primes**, transport avec partie exonérée et zone, primes attribuées, absences en négatif), **BRUT**, **RETENUES** (CNPS, CMU, ITS, avances), **NET À PAYER**, ligne imposable explicative, **CHARGES PATRONALES** détaillées, **COÛT TOTAL EMPLOYEUR**, zones de signatures, pied de page Doregoservices.
+- **Bulletin de paie professionnel** : dans Paie du mois, bouton **👁 Bulletin** → page dédiée imprimable (**🖨 Imprimer/PDF**). Structure claire : **GAINS** = salaire de base + primes taxables → **SALAIRE BRUT imposable** (le transport et les rubriques non taxables en sont EXCLUS) ; **GAINS NON IMPOSABLES** = transport (partie exonérée + zone), primes non taxables, retenue d'absences → **TOTAL GAINS À PAYER** ; **RETENUES** = CNPS, CMU, **ITS net** avec détail **ITS brut − RICF = ITS net** ; **NET À PAYER** ; charges patronales détaillées, coût total employeur, signatures.
 - **Avances sur salaire** : dès l'enregistrement d'une avance, la **sortie de caisse correspondante est créée** (compte Sage 4211) ; elle est déduite automatiquement du net à la paie suivante. Supprimer une avance supprime aussi sa sortie de caisse.
 - **Remise à zéro de la base en ligne** : **Réglages → zone sensible → « 🧹 Vider la base en ligne (après tests) »** supprime **toutes** les données (ventes, achats, caisse, paie, employés, liens…) en gardant les **réglages** (société, taux, comptes Sage, e-mails, utilisateurs). Le bouton local, lui, n'efface que les données de l'appareil.
 
@@ -184,6 +194,7 @@ Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (a
 - **Mobile Money** : deux caisses suivies en parallèle (Espèces / MoMo), **toutes les deux dans le journal de caisse (CA)** — encaissements 5521/4111, paiements charges/5521. **Pour retirer de l'argent MoMo en espèces : Caisse → « 🔄 Retrait MoMo → espèces »** — deux écritures liées sont créées (sortie MoMo + entrée espèces), solde vérifié, export Sage en OD via 585 ; le bouton inverse (dépôt espèces → MoMo) est dans le même écran. Les frais de l'agent MoMo, le cas échéant, se saisissent comme une dépense à part (Achats divers). Les envois et approvisionnements avec la direction alimentent le **journal de banque (BQ, compte 521)**.
 - **Ventes à crédit** : lors d'une vente, choisissez « À crédit » + nom du client. L'écran **Impayés** liste les créances avec un bouton **Encaisser**.
 - **Compte d'exploitation** : méthode des achats consommés (SI + achats − SF au coût moyen pondéré) ; produits finis valorisés au coût matière ; opérations OD avec la direction exclues du résultat.
+- **Saisies reçues d'autres appareils** : les ventes/production/caisse envoyées via les liens arrivent dans **📥 À valider** ; l'application les détecte automatiquement (vérification toutes les 30 s, notification) et les données se rafraîchissent sans recharger.
 - **Sauvegarde** : écran Exports → **Sauvegarde complète (JSON)** — à faire régulièrement (ou laissez Supabase gérer vos données en ligne).
 - **Réinitialiser la démo** : Réglages → zone sensible (n'efface pas les données Supabase).
 

@@ -36,12 +36,16 @@ const pRend=s1.primes.filter(p=>p.id==='pz1')[0];
 if(!pRend||Math.abs(pRend.amount-0.05*e1.base_salary)>1)throw new Error('prime % mal calculée');
 const pRisque=s1.primes.filter(p=>p.id==='pz2')[0];
 if(!pRisque||pRisque.amount!==15000)throw new Error('prime fixe absente');
-const expTax=s1.brut_ap-30000-pRend.amount;
-if(Math.abs(s1.taxable-expTax)>1)throw new Error('imposable : attendu '+expTax+', eu '+s1.taxable);
-if(!(s1.brut_ap>e1.base_salary+e1.transport))throw new Error('primes non incluses au brut');
+if(Math.abs(s1.taxable-s1.brut_ap)>1)throw new Error('imposable doit égaler le salaire brut : '+s1.taxable+' vs '+s1.brut_ap);
+const primesTaxX=s1.primes.filter(p=>p.taxable!==false).reduce((a,p)=>a+Number(p.amount||0),0);
+const expBrut=Math.round(Number(s1.base)+Number(s1.housing||0)+Number(s1.bonus||0)+primesTaxX);
+if(Math.abs(s1.brut_ap-expBrut)>1)throw new Error('brut attendu (base+logement+bonus+primes taxables, SANS transport) '+expBrut+', eu '+s1.brut_ap);
+const primesNTX=s1.primes.filter(p=>p.taxable===false).reduce((a,p)=>a+Number(p.amount||0),0);
+const expNet=Math.round(s1.brut_ap+Number(s1.transport||0)+primesNTX-s1.cnps-(s1.cmu||0)-(s1.its!=null?s1.its:s1.irpp)-(s1.other||0)-(s1.advances||0));
+if(Math.abs(s1.net-expNet)>2)throw new Error('net attendu = brut + transport + primes non taxables − retenues ('+expNet+'), eu '+s1.net);
 if(e2){const s2=slips.filter(x=>x.employee_id===e2.id)[0];
   if(s2&&Number(s2.transport_exo)!==20000)throw new Error('exo autres villes attendue 20000, eue '+s2.transport_exo);}
-console.log('✓ Bulletins : exo transport 30000 (Abidjan) / 20000 (autres) · prime 5 % non taxable retirée de l imposable · prime fixe taxable incluse');
+console.log('✓ Bulletins : SALAIRE BRUT = base+logement+bonus+primes taxables (SANS transport ni non taxables) · imposable = brut · exo info 30000/20000 · net = brut + transport + primes NT − retenues');
 
 /* 5. bulletin : lignes paramétrées visibles */
 await App.slipView(s1.id);

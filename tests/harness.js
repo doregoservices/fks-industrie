@@ -23,6 +23,7 @@ global.URL={createObjectURL(){return 'blob:x'},revokeObjectURL(){}};
 global.fetch=(u,o)=>Promise.resolve({ok:false,status:0,json:()=>Promise.resolve({}),text:()=>Promise.resolve('')});
 global.OfflineReady=false;
 global.requestAnimationFrame=f=>setTimeout(f,0);
+const _siShim=setInterval;global.setInterval=(fn,ms,...a)=>{const t=_siShim(fn,ms,...a);if(t&&t.unref)t.unref();return t;};
 // ---- eval unique app+tests ----
 const fs=require('fs');
 let src='';

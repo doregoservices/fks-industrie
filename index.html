@@ -1053,7 +1053,8 @@ function setDbAdapter(){const base=(CFG.mode==='supabase'&&CFG.url&&CFG.anon)?Su
     bump(){this._v++;this._cache={};},
     async list(t,f){const v=this._v,k=t+'@'+v;
       let a=this._cache[k];
-      if(a===undefined){a=await base.list(t);if(!Array.isArray(a))a=[];if(this._v===v)this._cache[k]=a;}
+      const stale=(typeof CFG!=='undefined'&&CFG.mode==='supabase'&&S&&S.user)&&(Date.now()-(this._cache['ts@'+t]||0)>25000);
+      if(a===undefined||stale){a=await base.list(t);if(!Array.isArray(a))a=[];if(this._v===v){this._cache[k]=a;this._cache['ts@'+t]=Date.now();}}
       let r=a;if(f&&f.eq)for(const q in f.eq)r=r.filter(x=>String(x[q])===String(f.eq[q]));
       return r.slice();},
     async insert(t,o){const fix=r=>(r&&r.id)?r:Object.assign({id:uid(),created_at:(r&&r.created_at)||nowISO()},r||{});
@@ -1650,8 +1651,13 @@ async function scAchats(){
   const list=(await DB.list('purchases')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const cash=await DB.list('cash_entries');
   const totKg=list.reduce((s,p)=>s+Number(p.qty_kg||0),0),totAmt=list.reduce((s,p)=>s+Number(p.amount||0),0);
+  const unpaid=list.filter(p=>!cash.some(c=>c.ref==='purchase:'+p.id));
+  const dettes=unpaid.reduce((a,p)=>a+Number(p.amount||0),0);
   $('#main').innerHTML='<div class="card"><h2>🛁 Achats de café vert<span class="spacer"></span><button class="btn sm" onclick="App.achatForm()">+ Nouvel achat</button></h2>'
-  +'<div class="grid g3" style="margin-bottom:12px"><div class="kpi"><div class="t">Total acheté</div><div class="v">'+num2(totKg)+' kg</div></div><div class="kpi"><div class="t">Montant total</div><div class="v">'+money(totAmt)+'</div></div><div class="kpi"><div class="t">Prix moyen</div><div class="v">'+money(totKg?totAmt/totKg:0)+'/kg</div></div></div>'
+  +'<div class="grid g4" style="margin-bottom:12px"><div class="kpi"><div class="t">Total acheté</div><div class="v">'+num2(totKg)+' kg</div></div><div class="kpi"><div class="t">Montant total</div><div class="v">'+money(totAmt)+'</div></div><div class="kpi"><div class="t">Prix moyen</div><div class="v">'+money(totKg?totAmt/totKg:0)+'/kg</div></div><div class="kpi"><div class="t">Dettes fournisseurs</div><div class="v" style="color:'+(dettes>0?'var(--bad)':'var(--ok)')+'">'+money(dettes)+'</div><div class="s">'+unpaid.length+' achat(s) non réglé(s)</div></div></div>'
+  +(unpaid.length?'<div class="alert al-wait" style="margin-bottom:12px">🛁 <b>Dettes fournisseurs — '+money(dettes)+' F à payer</b> : '
+    +unpaid.slice(0,6).map(p=>esc(p.supplier)+' ('+dFR(p.date)+') <b>'+money(p.amount)+'</b> <button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">💸 Payer</button>').join(' · ')
+    +(unpaid.length>6?' … et '+(unpaid.length-6)+' autre(s)':'')+' — écriture Sage : CA 4011 Fournisseurs / 571-5521</div>':'')
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th class="r">Qté (kg)</th><th class="r">Prix/kg</th><th class="r">Montant</th><th>Règlement</th><th></th></tr></thead><tbody>'
   +list.map(p=>{const paid=cash.some(c=>c.ref==='purchase:'+p.id);
     return '<tr><td>'+dFR(p.date)+'</td><td>'+esc(p.supplier)+'</td><td class="r">'+num2(p.qty_kg)+'</td><td class="r">'+money(p.price_per_kg)+'</td><td class="r"><b>'+money(p.amount)+'</b></td><td>'+(paid?'<span class="badge b-ok">Payé</span>':'<span class="badge b-wait">Non payé</span>')+'</td>'
@@ -2284,23 +2290,24 @@ function computeSlip(emp,x,P){
   if(emp.salary_type==='daily'&&days)base=base*days;
   const primes=(x.primes||[]).map(p=>({id:p.id,name:p.name,amount:Math.round(Number(p.amount)||0),taxable:p.taxable!==false}));
   const primesSum=primes.reduce((a,p)=>a+p.amount,0);
-  const gross=base+Number(emp.transport||0)+Number(emp.housing||0)+bonus+ot*Number(x.ot_rate||0)+primesSum;
+  const primesTaxSum=primes.filter(p=>p.taxable).reduce((a,p)=>a+p.amount,0);
+  const primesNonTax=primes.filter(p=>!p.taxable).reduce((a,p)=>a+p.amount,0);
   const absDed=emp.salary_type==='daily'?0:Math.round(base*abs/(Number(P.day_basis)||30));
-  const brutAP=Math.round(gross-absDed);
+  const brutAP=Math.round(base+Number(emp.housing||0)+bonus+ot*Number(x.ot_rate||0)+primesTaxSum-absDed);
+  const gross=brutAP+Number(emp.transport||0)+primesNonTax;
   const cnpsBase=Math.min(brutAP,Number(P.cnps_plafond_retraite)||0);
   const cnps=Math.round(cnpsBase*(Number(P.cnps_retraite_e)||0)/100);
   const cmu=Math.round((Number(P.cmu_forfait)||0)/2);
   const EXO=P.transport_exo||{abidjan:30000,bouake:24000,autres:20000};
   const seuil=Number((EXO[emp.zone||'abidjan']!=null?EXO[emp.zone||'abidjan']:EXO.abidjan))||0;
   const transportExo=Math.min(Number(emp.transport||0),seuil);
-  const primesNonTax=primes.filter(p=>!p.taxable).reduce((a,p)=>a+p.amount,0);
-  const taxable=Math.max(0,brutAP-transportExo-primesNonTax);
+  const taxable=Math.max(0,brutAP);
   const itsGross=irppCalc(taxable,P.its_brackets);
   const demi=Number(emp.tax_shares!=null?emp.tax_shares:2)||0;
   const ricfRaw=Math.min((Number(P.ricf_par_demi_part)||0)*demi,Number(P.ricf_plafond)||0);
   const ricf=itsGross>0?ricfRaw:0;
   const its=Math.max(0,itsGross-ricf);
-  const net=brutAP-cnps-cmu-its-other-adv;
+  const net=brutAP+Number(emp.transport||0)+primesNonTax-cnps-cmu-its-other-adv;
   const plaf=Math.min(brutAP,Number(P.pf_plafond)||0),plafM=Math.min(brutAP,Number(P.mat_plafond)||0),plafA=Math.min(brutAP,Number(P.at_plafond)||0);
   const er={retraite:Math.round(cnpsBase*(Number(P.cnps_retraite_er)||0)/100),
     pf:Math.round(plaf*(Number(P.pf_rate)||0)/100),
@@ -2313,7 +2320,7 @@ function computeSlip(emp,x,P){
     cnps_base:cnpsBase,cnps:cnps,cmu:cmu,its_gross:itsGross,ricf:ricf,its:its,taxable:taxable,transport_exo:transportExo,primes:primes,
     bonus:bonus,ot_hours:ot,other:other,advances:adv,net:Math.round(net),
     cnps_er:er.retraite,pf:er.pf,mat:er.mat,at:er.at,cmu_er:er.cmu,fdfp:er.fdfp,
-    cnps_employer:cnpsEr,cout_employeur:brutAP+cnpsEr+er.fdfp};
+    cnps_employer:cnpsEr,cout_employeur:Math.round(brutAP+Number(emp.transport||0)+primesNonTax+cnpsEr+er.fdfp)};
 }
 async function scPaie(){
   const tab=S.tab.paie||'emp';
@@ -2560,14 +2567,18 @@ async function scBulletin(){
   const zone=emp.zone||'abidjan';
   const zlb=zone==='bouake'?'Bouaké':zone==='autres'?'Autres villes':'Abidjan';
   const gains=[['Salaire de base (sans primes)',s.base]];
-  if(Number(s.transport))gains.push(['Prime transport — dont '+money(s.transport_exo||0)+' exonérés d\'ITS (zone '+zlb+')',s.transport]);
   if(Number(s.housing))gains.push(['Prime logement',s.housing]);
-  (s.primes||[]).filter(p=>Number(p.amount)>0).forEach(p=>gains.push([p.name+(p.taxable!==false?'':' (non taxable)'),p.amount]));
+  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable!==false).forEach(p=>gains.push([p.name,p.amount]));
   if(Number(s.bonus))gains.push(['Prime exceptionnelle',s.bonus]);
   if(s.ot_hours)gains.push(['Heures supplémentaires ('+num2(s.ot_hours)+' h)',null]);
-  if(Number(s.abs_ded))gains.push(['Retenue absences ('+num2(s.absence_days)+' j à base ÷ '+(Number(P.day_basis)||30)+')',-Math.abs(Number(s.abs_ded))]);
-  const ret=[['CNPS retraite '+P.cnps_retraite_e+' % (base '+money(s.cnps_base)+')',s.cnps],['CMU (part salarié)',s.cmu||0],['ITS (barème 2024, imposable '+money(s.taxable!=null?s.taxable:s.brut_ap)+')',its]];
-  if(Number(s.ricf))ret.push(['RICF (déjà déduit du ITS ci-dessus)',0]);
+  const nonImp=[];
+  if(Number(s.transport))nonImp.push(['Prime transport — dont '+money(s.transport_exo||0)+' exonérés d\'ITS, HORS salaire brut (zone '+zlb+')',s.transport]);
+  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable===false).forEach(p=>nonImp.push([p.name+' (non taxable — hors salaire brut)',p.amount]));
+  if(Number(s.abs_ded))nonImp.push(['Retenue absences ('+num2(s.absence_days)+' j × base ÷ '+(Number(P.day_basis)||30)+')',-Math.abs(Number(s.abs_ded))]);
+  const totGains=(s.gross!=null?Number(s.gross):Number(s.brut_ap)+nonImp.reduce((a,g)=>a+Number(g[1]||0),0));
+  const ret=[['CNPS retraite '+P.cnps_retraite_e+' % (base '+money(s.cnps_base)+')',s.cnps],['CMU (part salarié)',s.cmu||0],['ITS net retenu (barème 2024 sur '+money(s.taxable!=null?s.taxable:s.brut_ap)+')',its]];
+  const itsG=s.its_gross!=null?Number(s.its_gross):its;const ricfV=Number(s.ricf)||0;
+  if(ricfV)ret.push(['dont RICF déjà déduit (ITS brut '+money(itsG)+' − RICF '+money(ricfV)+')',0]);
   if(Number(s.other))ret.push(['Autres retenues',s.other]);
   if(Number(s.advances))ret.push(['Avances sur salaire',s.advances]);
   const logo=C.logo?'<img src="'+C.logo+'" style="height:56px;object-fit:contain">':'';
@@ -2578,12 +2589,15 @@ async function scBulletin(){
   +'<div style="flex:1;text-align:right">Matricule : '+esc(s.employee_id||'').slice(0,8)+'<div class="mut">Période : '+monthLabel(s.run_period)+'</div></div></div>'
   +'<table class="tbl"><thead><tr><th>GAINS</th><th class="r">Montant</th></tr></thead><tbody>'
   +gains.map(g=>'<tr><td>'+g[0]+'</td><td class="r">'+(g[1]===null?'incluses':money(g[1]))+'</td></tr>').join('')
-  +'<tr class="tot"><td>SALAIRE BRUT</td><td class="r">'+money(s.brut_ap)+'</td></tr></tbody></table>'
+  +'<tr class="tot"><td>SALAIRE BRUT — imposable CNPS/ITS (sans transport ni rubriques non taxables)</td><td class="r">'+money(s.brut_ap)+'</td></tr></tbody></table>'
+  +(nonImp.length?'<table class="tbl" style="margin-top:8px"><thead><tr><th>GAINS NON IMPOSABLES / AJUSTEMENTS (hors salaire brut)</th><th class="r">Montant</th></tr></thead><tbody>'
+  +nonImp.map(g=>'<tr><td>'+g[0]+'</td><td class="r">'+money(g[1])+'</td></tr>').join('')
+  +'<tr class="tot"><td>TOTAL GAINS À PAYER</td><td class="r">'+money(totGains)+'</td></tr></tbody></table>':'')
   +'<table class="tbl" style="margin-top:8px"><thead><tr><th>RETENUES</th><th class="r">Montant</th></tr></thead><tbody>'
   +ret.map(r=>'<tr><td>'+r[0]+'</td><td class="r">'+(r[1]?'− '+money(r[1]):(r[0].indexOf('RICF')>=0?money(s.ricf):'—'))+'</td></tr>').join('')
   +'<tr class="tot"><td>TOTAL RETENUES</td><td class="r">− '+money(s.cnps+(s.cmu||0)+its+(s.other||0)+(s.advances||0))+'</td></tr>'
   +'<tr><td style="background:#e8f5e9;font-weight:800;font-size:16px">NET À PAYER</td><td class="r" style="background:#e8f5e9;font-weight:800;font-size:16px;color:#1e8449">'+money(s.net)+'</td></tr></tbody></table>'
-  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable ITS : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' = brut − '+money(s.transport_exo||0)+' (transport exonéré, zone '+zlb+') − primes non taxables. Base CNPS : '+money(s.cnps_base)+'.</div>'
+  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable fiscal : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' = SALAIRE BRUT '+money(s.brut_ap)+' (le transport et les rubriques non taxables en sont exclus). DÉTAIL ITS : brut barème '+money(s.its_gross!=null?s.its_gross:its)+' − RICF '+money(s.ricf||0)+' = ITS net '+money(its)+'. Base CNPS : '+money(s.cnps_base)+'.</div>'
   +'<table class="tbl" style="margin-top:8px"><thead><tr><th>CHARGES PATRONALES</th><th class="r">Montant</th></tr></thead><tbody>'
   +'<tr><td>CNPS retraite patronale '+P.cnps_retraite_er+' %</td><td class="r">'+money(s.cnps_er||0)+'</td></tr>'
   +'<tr><td>Prestations familiales '+P.pf_rate+' %</td><td class="r">'+money(s.pf||0)+'</td></tr>'
@@ -2790,12 +2804,15 @@ App.expCaisse=async()=>{
   if(sl.length){
     const SUM=k=>sl.reduce((a,x)=>a+Number(x[k]||0),0);
     const brut=SUM('brut_ap');
+    const primesNTot=sl.reduce((a,x)=>a+((x.primes||[]).filter(p=>p.taxable===false).reduce((b,p)=>b+Number(p.amount||0),0)),0);
+    const avNT=SUM('transport')+primesNTot;
     const cnpsSal=SUM('cnps'),cmuSal=SUM('cmu'),cnpsEr=SUM('cnps_employer'),cmuEr=SUM('cmu_er');
     const fdfp=SUM('fdfp'),its=SUM('its'),retenues=SUM('other');
     const net=SUM('net'),adv=SUM('advances');
     const dt=closed[sl[0].run_id].paid_date||sl[0].created_at;
     const lib='Paie '+ (sl[0].run_period||'');
     push('PA',dt,acc('salaires'),lib+' — salaires bruts',brut,'');
+    if(avNT)push('PA',dt,acc('salaires'),lib+' — avantages et primes non imposables (transport, rubriques NT)',avNT,'');
     if(cnpsEr)push('PA',dt,acc('charges_sociales'),lib+' — CNPS patronal (retraite+PF+AT+maternité)',cnpsEr,'');
     if(cmuEr)push('PA',dt,acc('charges_sociales'),lib+' — CMU employeur',cmuEr,'');
     if(fdfp)push('PA',dt,acc('fdfp'),lib+' — FDFP (taxe d’apprentissage + formation continue)',fdfp,'');
@@ -3232,7 +3249,7 @@ async function scEmballages(){
   +(st.packaging||[]).map(p=>'<tr><td><b>'+esc(p.name)+'</b></td><td class="r">'+num2(p.in)+'</td><td class="r">'+num2(p.out)+'</td><td class="r"><b>'+num2(p.stock)+'</b> '+esc(p.unit)+'</td><td class="r">'+money(p.cmp)+'</td><td class="r">'+money(p.value)+'</td><td><button class="btn sm sec" onclick="App.pkItemForm(\''+p.id+'\')">✎</button></td></tr>').join('')
   +'</tbody></table></div></div>'
   +'<div class="card"><h3>Journal des mouvements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Article</th><th>Type</th><th class="r">Qté</th><th class="r">Montant</th><th>Motif</th><th></th></tr></thead><tbody>'
-  +ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(e.item_name||'')+'</td><td>'+(e.type==='in'?'<span class="badge b-ok">Entrée</span>':'<span class="badge b-no">Sortie</span>')+'</td><td class="r">'+num2(e.qty)+'</td><td class="r">'+(e.amount?money(e.amount):'—')+'</td><td>'+esc(e.reason||'')+'</td><td><button class="btn sm sec" onclick="App.pkEntryEdit(\'packaging_entries\',\''+e.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'packaging_entries\',\''+e.id+'\')">✕</button></td></tr>').join('')
+  +ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(e.item_name||'')+'</td><td>'+(e.type==='in'?'<span class="badge b-ok">Entrée</span>':'<span class="badge b-no">Sortie</span>')+'</td><td class="r">'+num2(e.qty)+'</td><td class="r">'+(e.amount?money(e.amount):'—')+'</td><td>'+esc(e.reason||'')+'</td><td><button class="btn sm sec" onclick="App.pkEntryEdit(\''+e.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'packaging_entries\',\''+e.id+'\')">✕</button></td></tr>').join('')
   +(ents.length?'':'<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>')
   +'</tbody></table></div></div>';
 }
@@ -3478,11 +3495,11 @@ async function computeIncome(period){
   const achVertAmt=achV.reduce((a,p)=>a+Number(p.amount||0),0),achVertKg=achV.reduce((a,p)=>a+Number(p.qty_kg||0),0);
   const achEmb=pkEnt.filter(e=>e.type==='in'&&inM(e.date)).reduce((a,e)=>a+Number(e.amount||0),0);
   const gSI=greenKgAt(prevStart),gSF=greenKgAt(end);
-  const gSIv=Math.round(gSI*cmpVertAt(prevStart)),gSFv=Math.round(gSF*cmpVertAt(end));
-  const consVert=gSIv+achVertAmt-gSFv;
-  const embSIv=Math.round(pkItems.reduce((a,it)=>a+pkQtyAt(it.id,prevStart)*cmpPkAt(it.id,prevStart),0));
+  const cmpSIv=cmpVertAt(prevStart)||cmpVertAt(end);const gSIv=Math.round(gSI*cmpSIv),gSFv=Math.round(gSF*cmpVertAt(end));
+  const consVert=Math.max(0,gSIv+achVertAmt-gSFv);
+  const embSIv=Math.round(pkItems.reduce((a,it)=>a+pkQtyAt(it.id,prevStart)*(cmpPkAt(it.id,prevStart)||cmpPkAt(it.id,end)),0));
   const embSFv=Math.round(pkItems.reduce((a,it)=>a+pkQtyAt(it.id,end)*cmpPkAt(it.id,end),0));
-  const consEmb=embSIv+achEmb-embSFv;
+  const consEmb=Math.max(0,embSIv+achEmb-embSFv);
   /* --- CHARGES directes par grandes masses (caisse imputable) --- */
   const SKIP=['achat_vert','emballages','treso_caisse','treso_momo','apport'];
   const G={services:{},personnel:0,impots:{},hors:0};
@@ -3604,7 +3621,7 @@ function incomeRows(inc){
   L.push([]);
   L.push([{v:'CHARGES D\'EXPLOITATION — PAR GRANDES MASSES',__style:1}]);
   L.push([{v:'1. Achats consommés',__style:1}]);
-  L.push(['   Café vert (SI '+inc.gSIv+' + achats '+inc.achVertAmt+' − SF '+inc.gSFv+')',inc.consVert]);
+  L.push(['   Café vert consommé (SI valorisé '+inc.gSIv+' + achats '+inc.achVertAmt+' − SF '+inc.gSFv+')',inc.consVert]);
   L.push(['   Emballages (SI '+inc.embSIv+' + achats '+inc.achEmb+' − SF '+inc.embSFv+')',inc.consEmb]);
   L.push([{v:'   Total achats consommés',__style:1},{v:inc.consVert+inc.consEmb,__style:1}]);
   L.push([{v:'2. Services externes et autres charges externes',__style:1}]);
@@ -3827,7 +3844,7 @@ async function scExploitation(){
   +L('Ventes de produits finis',inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'
   +'<div><h3>Charges par grandes masses</h3><table class="tbl"><tbody>'
-  +grpRow('1. Achats consommés',L('   Café vert (SI+achats−SF)',inc.consVert)+L('   Emballages',inc.consEmb),inc.consVert+inc.consEmb)
+  +grpRow('1. Achats consommés',L('   Café vert consommé (SI valorisé + achats − SF final)',inc.consVert)+L('   Emballages',inc.consEmb),inc.consVert+inc.consEmb)
   +grpRow('2. Services externes',Object.keys(inc.services).map(k=>L('   '+sagLbl(k),inc.services[k])).join('')||L('   (aucune)',0),inc.servicesTot)
   +grpRow('3. Personnel',(dPe?
      L('   Salaires et traitements bruts',inc.personnel.brut)
@@ -3937,6 +3954,16 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
   render();
   if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 })();
+
+/* ---- Réception quasi temps réel : ventes/production/caisse envoyées depuis d'autres appareils ---- */
+setInterval(async()=>{try{
+  if(typeof CFG==='undefined'||CFG.mode!=='supabase'||!S.user||typeof document!=='undefined'&&document.hidden)return;
+  const nb=await pendingCount();
+  if(S._pendSeen===undefined){S._pendSeen=nb;return;}
+  if(nb>S._pendSeen){toast('📥 '+(nb-S._pendSeen)+' nouvelle(s) saisie(s) reçue(s) via les liens — À valider','ok');S._pendSeen=nb;
+    if(['dashboard','validation'].indexOf(S.route)>=0)render();}
+  else if(nb<S._pendSeen)S._pendSeen=nb;
+}catch(e){}},30000);
 </script>
 </body>
 </html>
