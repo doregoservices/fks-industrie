@@ -1971,6 +1971,7 @@ async function prodHistTab(){
 }
 App.delRow=(t,id)=>confirmBox('Supprimer cet enregistrement ?','Les stocks seront recalculés d\'autant. Action définitive.','Supprimer',async()=>{
   if(t==='productions'){const ents=await DB.list('packaging_entries');for(const e of ents.filter(x=>x.ref==='production:'+id))await DB.remove('packaging_entries',e.id);}
+  if(t==='packaging_entries'){const pe=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(pe&&pe.type==='in'){const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0];if(ce)await DB.remove('cash_entries',ce.id);}}
   await DB.remove(t,id);render();});
 async function prodAdjTab(){
   S.adjEdit=null;
@@ -2186,7 +2187,7 @@ async function scCaisse(){
   $('#main').innerHTML='<div class="card"><h2>💰 Caisse</h2>'
   +'<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Solde espèces</div><div class="v">'+(st.bal.cash<-0.005?'<span style="color:var(--bad)">'+money(st.bal.cash)+' ⚠️</span>':money(st.bal.cash))+'</div></div><div class="kpi"><div class="t">Solde Mobile Money</div><div class="v">'+(st.bal.momo<-0.005?'<span style="color:var(--bad)">'+money(st.bal.momo)+' ⚠️</span>':money(st.bal.momo))+'</div></div></div>'
   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" onclick="App.cashForm()">+ Écrire une opération</button>'
-  +'<button class="btn sec" onclick="App.odForm(\'od_transfer\')">📤 Envoi ventes direction</button><button class="btn sec" onclick="App.odForm(\'od_funding\')">📥 Appro direction reçue</button></div>'
+  +'<button class="btn sec" onclick="App.odForm(\'od_transfer\')">📤 Envoi ventes direction</button><button class="btn sec" onclick="App.odForm(\'od_funding\')">📥 Appro direction reçue</button><button class="btn sec" onclick="App.swapForm()">🔄 Retrait MoMo → espèces</button></div>'
   +'<div class="row" style="align-items:flex-end">'+fld('Du','<input type="date" value="'+filter.from+'" onchange="S.caisseFilter.from=this.value;render()">')
   +fld('Au','<input type="date" value="'+filter.to+'" onchange="S.caisseFilter.to=this.value;render()">')
   +'<div class="field"><span>&nbsp;</span><div style="display:flex;gap:6px;flex-wrap:wrap">'+'<button class="btn sm sec" onclick="S.caisseFilter={from:\''+todayISO().slice(0,8)+'01\',to:\'\'};render()">📅 Ce mois</button><button class="btn sm sec" onclick="S.caisseFilter={from:\'\',to:\'\'};render()">↩︎ Tout afficher</button>'+'</div></div></div>'
@@ -2201,7 +2202,10 @@ async function scCaisse(){
   +'</div>';
 }
 function catLabel(k){if(k==='od_transfer'||k==='od_funding')return OD_LABELS[k];return sagLbl(k);}
-App.cashDel=id=>confirmBox('Supprimer cette opération ?','Le solde sera recalculé. Action définitive.','Supprimer',async()=>{await DB.remove('cash_entries',id);render();});
+App.cashDel=async id=>{const e=(await DB.list('cash_entries',{eq:{id:id}}))[0];const pair=e&&String(e.ref||'').indexOf('swap:')===0;
+  confirmBox('Supprimer cette opération ?',pair?'Ceci est un transfert espèces ↔ MoMo : les DEUX lignes (sortie et entrée) seront supprimées et les deux soldes recalculés.':'Le solde sera recalculé. Action définitive.','Supprimer',async()=>{
+    if(pair){for(const x of(await DB.list('cash_entries')).filter(y=>y.ref===e.ref))await DB.remove('cash_entries',x.id);}
+    else await DB.remove('cash_entries',id);render();});};
 App.cashForm=async id=>{
   let e=null;
   if(id)e=(await DB.list('cash_entries',{eq:{id:id}}))[0]||null;
@@ -2229,6 +2233,26 @@ App.cashSave=async id=>{if(App._cashBusy)return;App._cashBusy=true;try{const amt
   else await createCashEntry(rec);
   closeModal();toast(id?'Opération modifiée ✅':'Opération enregistrée','ok');render();}finally{App._cashBusy=false;}};
 App.cashEdit=App.cashForm;App.achatEdit=App.achatForm;App.venteEdit=App.venteForm;
+App.swapForm=()=>{
+  modal('🔄 Retrait Mobile Money → espèces',
+    '<div class="field"><span>Sens du transfert</span><div class="toggle" id="swT"><button type="button" class="on in" onclick="App.swapDir(this,\'momo2cash\')">📱 MoMo → 💵 Espèces (retrait)</button><button type="button" onclick="App.swapDir(this,\'cash2momo\')">💵 Espèces → 📱 MoMo (dépôt)</button></div></div>'
+    +'<div class="row">'+fld('Date','<input id="swD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="swM" type="number" inputmode="numeric">')+'</div>'
+    +fld('Note','<input id="swN" placeholder="ex : retrait agent MoMo (facultatif)">')
+    +'<div class="help">Deux écritures liées sont créées : sortie Mobile Money + entrée espèces (ou inverse). Le solde du compte source est vérifié — pas de solde négatif. Les frais prélevés par l\'agent MoMo, s\'il y en a, se saisissent comme une dépense à part (catégorie Achats divers).</div>',
+    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.swapSave()">Enregistrer le transfert</button>');
+  App._swap='momo2cash';};
+App.swapDir=(btn,v)=>{$$('#swT button').forEach(b=>b.className='');btn.className='on '+(v==='momo2cash'?'in':'out');App._swap=v;};
+App.swapSave=async()=>{if(App._swapBusy)return;App._swapBusy=true;try{
+  const amt=Number($('#swM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
+  const d=$('#swD').value||todayISO();const note=($('#swN').value?' — '+$('#swN').value:'');
+  const m2c=App._swap!=='cash2momo';const from=m2c?'momo':'cash',to=m2c?'cash':'momo';
+  const lbl=(m2c?'Retrait Mobile Money → espèces':'Dépôt espèces → Mobile Money')+note;
+  const sid=uid();
+  const out=await createCashEntry({date:d,type:'out',account:from,category:from==='momo'?'treso_momo':'treso_caisse',label:lbl,amount:amt,imputable:true,ref:'swap:'+sid});
+  try{await createCashEntry({date:d,type:'in',account:to,category:to==='momo'?'treso_momo':'treso_caisse',label:lbl,amount:amt,imputable:true,ref:'swap:'+sid});}
+  catch(e2){await DB.remove('cash_entries',out.id);return toast('Transfert annulé — '+e2.message,'bad');}
+  closeModal();toast('Transfert enregistré ✅ '+money(amt)+' F (visible dans le journal OD de Sage)', 'ok');render();
+  }finally{App._swapBusy=false;}};
 App.odForm=(kind)=>{
   modal(kind==='od_transfer'?'📤 Envoi des ventes à la direction':'📥 Approvisionnement reçu de la direction',
     '<div class="row">'+fld('Date','<input id="dD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="dM" type="number" inputmode="numeric">')+'</div>'

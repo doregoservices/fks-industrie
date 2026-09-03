@@ -64,7 +64,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
 3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
 3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, types de café, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
-4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (marquées « OD », elles ne polluent pas Sage).
+4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (journal Banque) et **🔄 Retrait MoMo → espèces** (transfert entre vos deux caisses, journal OD).
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
 
 ### Exports Excel (écran **Exports**)
@@ -117,8 +117,15 @@ Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin,
 4. Le **conditionnement** n'a plus rien à peser : il déduit les types selon les recettes (et refuse si le stock d'un type est insuffisant) ; les **ajustements** acceptent aussi le niveau « Café transformé » pour les recomptes.
 5. L'**exploitation** valorise ces semi-finis au coût moyen du vert consommé et leur variation entre dans les produits du mois ; l'export « Mouv. stocks » détaille vert → torréfié → types → produits finis.
 
-### 🏷️ Emballages
-Écran **Emballages** : articles (sachets, étiquettes, cartons…), achats (avec sortie de caisse automatique optionnelle), sorties/pertes, valeur du stock au coût moyen. Sur chaque **produit**, définissez la **nomenclature** (ex. 1 sachet + 1 étiquette par unité) : chaque conditionnement consomme alors les emballages **automatiquement**.
+### 🏷️ Emballages — workflow complet
+
+1. **Créer les articles** — écran **Emballages → + Article** : nom (sachet 250 g, étiquette, carton…), unité, **seuil d'alerte stock bas** (bandeau ⚠️ rouge dès le seuil atteint, visible aussi sur le tableau de bord).
+2. **Définir la nomenclature sur chaque produit** — écran **Produits → ✎ Modifier** : liste des emballages nécessaires **par unité produite** (ex. Café moulu 500 g = 1 sachet + 1 étiquette). C'est ce qui déclenche la consommation automatique.
+3. **Acheter les emballages** — **Emballages → + Achat / entrée** : date, article, quantité, coût unitaire, moyen (espèces/MoMo). Effets : stock **entrée** + **sortie de caisse automatique** (refusée si le solde est insuffisant) + écriture Sage **AC 6081/4011** et **CA 4011/571-5521**. Le stock est valorisé au **coût moyen pondéré**.
+4. **Produire → consommation automatique** — à chaque conditionnement (écran **Production/Conditionnement**, y compris via les liens terrain), les sorties d'emballages sont créées **automatiquement** selon la nomenclature : quantité = nomenclature × unités produites, motif « Production — nom du produit ». Aucune écriture de caisse (consommation interne), mais la valeur suit le stock.
+5. **Sorties / pertes manuelles** — **Emballages → − Sortie / perte** : casse, don, ajustement d'inventaire, avec motif. Sans impact caisse.
+6. **Corriger** — **✎** modifie un mouvement (une entrée resynchronise son écriture de caisse ; refusée si le solde devient insuffisant) ; **✕** supprime le mouvement **et** son écriture de caisse liée s'il y en a une.
+7. **Suivre** — valeur du stock en temps réel, alertes seuil, journal des mouvements complet, tout est exporté (stocks, exploitation, Sage).
 
 ### 📤 Points quotidiens & rapport mensuel par email
 - **Point quotidien** : dès que toutes les ventes d'une journée sont validées, le point part **automatiquement** sur l'email du boss (si configuré) : ventes par commerciale, encaissements, caisse du jour — avec fichier Excel joint.
@@ -174,7 +181,7 @@ Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (a
 
 ## 7. Bon à savoir
 
-- **Mobile Money** : deux caisses suivies en parallèle (Espèces / MoMo), **toutes les deux dans le journal de caisse (CA)** — encaissements 5521/4111, paiements charges/5521. Les envois et approvisionnements avec la direction alimentent le **journal de banque (BQ, compte 521)** ; seules les conversions espèces↔MoMo partent en OD (585).
+- **Mobile Money** : deux caisses suivies en parallèle (Espèces / MoMo), **toutes les deux dans le journal de caisse (CA)** — encaissements 5521/4111, paiements charges/5521. **Pour retirer de l'argent MoMo en espèces : Caisse → « 🔄 Retrait MoMo → espèces »** — deux écritures liées sont créées (sortie MoMo + entrée espèces), solde vérifié, export Sage en OD via 585 ; le bouton inverse (dépôt espèces → MoMo) est dans le même écran. Les frais de l'agent MoMo, le cas échéant, se saisissent comme une dépense à part (Achats divers). Les envois et approvisionnements avec la direction alimentent le **journal de banque (BQ, compte 521)**.
 - **Ventes à crédit** : lors d'une vente, choisissez « À crédit » + nom du client. L'écran **Impayés** liste les créances avec un bouton **Encaisser**.
 - **Compte d'exploitation** : méthode des achats consommés (SI + achats − SF au coût moyen pondéré) ; produits finis valorisés au coût matière ; opérations OD avec la direction exclues du résultat.
 - **Sauvegarde** : écran Exports → **Sauvegarde complète (JSON)** — à faire régulièrement (ou laissez Supabase gérer vos données en ligne).

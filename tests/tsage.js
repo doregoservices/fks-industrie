@@ -144,6 +144,33 @@ const deb11=ca1111.filter(r=>accStart11(r)==='4211'&&Number(r[4])>0).reduce((a,r
 if(cred11!==10000||deb11!==10000)throw new Error('4211 : crédit PA '+cred11+' / débit CA '+deb11+' (attendu 10000/10000)');
 console.log('✓ Avance : CA D 4211 puis PA C 4211 — compte soldé, journaux équilibrés');
 
+/* 12. Retrait MoMo -> espèces : bouton swap, paire liée, OD 585, suppression des 2 lignes */
+{
+const bm=await accBalance('momo'),bc0=await accBalance('cash');
+if(bm<=0)throw new Error('solde MoMo nul pour le test');
+const amt12=Math.max(1000,Math.floor(bm/2));
+App._swap='momo2cash';
+$('#main').innerHTML='<input id="swM"><input id="swD"><input id="swN">';
+$('#swM').value=String(amt12);$('#swD').value=todayISO();$('#swN').value='retrait test';
+await App.swapSave();
+const pair12=(await DB.list('cash_entries')).filter(x=>String(x.ref||'').indexOf('swap:')===0);
+if(pair12.length!==2)throw new Error('transfert : '+pair12.length+' écritures au lieu de 2');
+if(Math.abs(await accBalance('momo')-(bm-amt12))>0.01)throw new Error('solde MoMo non décrémenté');
+if(Math.abs(await accBalance('cash')-(bc0+amt12))>0.01)throw new Error('solde espèces non incrémenté');
+const _mk12=makeXlsx;let cap12=null;makeXlsx=(sh)=>{cap12=sh;};const _dl12=dlCsv;dlCsv=()=>{};
+await App.expCaisse();makeXlsx=_mk12;dlCsv=_dl12;
+const odRows12=[];cap12.forEach(sh=>sh.rows.forEach(r=>{if(Array.isArray(r)&&r.length===6&&String(r[3]||'').includes('Retrait Mobile Money'))odRows12.push([String(r[2]),Number(r[4])||0,Number(r[5])||0]);}));
+if(odRows12.length!==4)throw new Error('OD : '+odRows12.length+' lignes retrait au lieu de 4');
+const hasLeg=(acc12,side)=>odRows12.some(x=>x[0]===acc12&&side==='D'?x[1]>0:x[2]>0);
+if(!hasLeg('585000','D')||!hasLeg('552100','C')||!hasLeg('571000','D')||!hasLeg('585000','C'))throw new Error('OD retrait incomplet : '+JSON.stringify(odRows12));
+const _cf12=confirmBox;confirmBox=(t,m,l,fn)=>{Promise.resolve(fn()).catch(()=>{});};
+await App.cashDel(pair12[0].id);await new Promise(r=>setTimeout(r,40));
+confirmBox=_cf12;
+if((await DB.list('cash_entries')).filter(x=>String(x.ref||'').indexOf('swap:')===0).length)throw new Error('suppression : la paire swap reste entière');
+if(Math.abs(await accBalance('momo')-bm)>0.01||Math.abs(await accBalance('cash')-bc0)>0.01)throw new Error('soldes non restaurés après suppression');
+console.log('✓ Retrait MoMo → espèces : 2 écritures liées, soldes exacts, OD D585/C5521 + D571/C585, suppression paire complète');
+}
+
 captured.sheets.forEach(s=>{const t=JSON.stringify(s.rows);if(/NaN|undefined/.test(t))throw new Error(s.name+' : NaN/undefined');});
-console.log('TSAGE: 11/11 OK');
+console.log('TSAGE: 12/12 OK');
 })().catch(e=>{console.error('ÉCHEC TSAGE:',e.stack||e.message);process.exit(1);});
