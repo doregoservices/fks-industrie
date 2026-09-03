@@ -54,7 +54,25 @@ const hb=$('#main').innerHTML;
 for(const m of ['BULLETIN DE PAIE','NET À PAYER','GAINS','RETENUES','CHARGES PATRONALES','COÛT TOTAL EMPLOYEUR','exonérés d','Imprimer / PDF','Signature employé'])if(!hb.includes(m))throw new Error('bulletin incomplet : '+m+' manquant');
 console.log('✓ Bulletin professionnel : en-tête société, gains détaillés (base sans primes, exo zone), retenues, charges patronales, signatures, impression');
 
-/* 5. remise à zéro de la base */
+/* 6. gardes de paie : double clôture + suppression d'une paie clôturée refusées */
+await DB.insert('cash_entries',{date:todayISO(),type:'in',account:'cash',category:'apport',label:'appro garde',amount:5000000,status:'validated',created_at:nowISO()});
+$('#main').innerHTML='<input id="pcD"><select id="pcA"></select>';
+$('#pcD').value=todayISO();$('#pcA').value='cash';
+await App.runCloseGo(s1.run_id);
+const _t7=toast;let msg7='';toast=(m)=>{msg7=String(m);return _t7(m);};
+await App.runCloseGo(s1.run_id);
+if(!msg7.includes('déjà clôturée'))throw new Error('double clôture non refusée : '+msg7);
+const outs7=(await DB.list('cash_entries')).filter(x=>x.ref==='payrun:'+s1.run_id);
+if(outs7.length!==1)throw new Error('sorties salaires pour ce run: '+outs7.length);
+msg7='';
+await App.runDel(s1.run_id);
+await new Promise(r=>setTimeout(r,40));
+if(!(await DB.list('pay_runs',{eq:{id:s1.run_id}}))[0])throw new Error('paie clôturée supprimée !');
+if(!msg7.includes('Impossible'))throw new Error('suppression paie clôturée non refusée : '+msg7);
+toast=_t7;
+console.log('✓ Gardes paie : double clôture refusée (1 seule sortie de caisse) · suppression d\'une paie clôturée refusée');
+
+/* 7. remise à zéro de la base */
 CFG={mode:'supabase',url:'https://x.supabase.co',anon:'k'};
 S.route='parametres';location.hash='#/parametres';await render();
 if(!$('#main').innerHTML.includes('Vider la base en ligne'))throw new Error('bouton vidage base absent');
@@ -68,5 +86,5 @@ if(!ok)throw new Error('dbWipe non exécutable');
 if((await DB.list('sales')).length|| (await DB.list('productions')).length||((await DB.list('employees')).filter(e=>true)).length)throw new Error('base non vidée');
 const st=(await DB.list('settings')).length;
 console.log('✓ Remise à zéro : toutes les données supprimées'+(st?' (réglages conservés : '+st+')':''));
-console.log('TEMPR: 6/6 OK');
+console.log('TEMPR: 7/7 OK');
 })().catch(e=>{console.error('ÉCHEC TEMPR:',e.message);process.exit(1);});

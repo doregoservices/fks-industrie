@@ -2220,14 +2220,14 @@ App.cashForm=async id=>{
     $('#oC').value=e.category||'divers';}
   App._cash=e?e.type:'in';};
 App.cashDir=(btn,v)=>{$$('#cT button').forEach(b=>b.className='');btn.className='on '+v;App._cash=v;};
-App.cashSave=async id=>{const amt=Number($('#oM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
+App.cashSave=async id=>{if(App._cashBusy)return;App._cashBusy=true;try{const amt=Number($('#oM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
   const rec={date:$('#oD').value||todayISO(),type:App._cash,account:$('#oA').value,category:$('#oC').value,label:$('#oL').value||catLabel($('#oC').value),amount:amt};
   const old=id?(await DB.list('cash_entries',{eq:{id:id}}))[0]||null:null;
   const base=old?await accBalance(rec.account,id):await accBalance(rec.account);
   if(rec.type==='out'&&rec.amount>base+0.005)return toast('Refusé : solde '+(rec.account==='momo'?'Mobile Money':'espèces')+' ('+money(base)+' F) insuffisant pour '+money(rec.amount)+' F — pas de solde négatif','bad');
   if(id)await DB.update('cash_entries',id,rec);
   else await createCashEntry(rec);
-  closeModal();toast(id?'Opération modifiée ✅':'Opération enregistrée','ok');render();};
+  closeModal();toast(id?'Opération modifiée ✅':'Opération enregistrée','ok');render();}finally{App._cashBusy=false;}};
 App.cashEdit=App.cashForm;App.achatEdit=App.achatForm;App.venteEdit=App.venteForm;
 App.odForm=(kind)=>{
   modal(kind==='od_transfer'?'📤 Envoi des ventes à la direction':'📥 Approvisionnement reçu de la direction',
@@ -2361,7 +2361,7 @@ App.advForm=async()=>{
     +'<div class="row">'+fld('Date','<input id="avD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="avM" type="number" inputmode="numeric">')+'</div>'
     +fld('Note','<input id="avN" placeholder="motif (facultatif)">'),
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.advSave()">Enregistrer</button>');};
-App.advSave=async()=>{const amt=Number($('#avM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
+App.advSave=async()=>{if(App._advBusy)return;App._advBusy=true;try{const amt=Number($('#avM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
   const[eid,ename]=$('#avE').value.split('|');
   const emp=(await DB.list('employees',{eq:{id:eid}}))[0]||{};
   const sal=emp.salary_type==='daily'?Math.round((Number(emp.base_salary)||0)*(Number(SETS.payroll.day_basis)||30)):Number(emp.base_salary)||0;
@@ -2372,7 +2372,7 @@ App.advSave=async()=>{const amt=Number($('#avM').value)||0;if(!amt)return toast(
   const av=await DB.insert('advances',{employee_id:eid,employee_name:ename,date:$('#avD').value||todayISO(),amount:amt,note:$('#avN').value,run_id:null});
   try{await createCashEntry({date:$('#avD').value||todayISO(),type:'out',account:'cash',category:'personnel_avances',label:'Avance sur salaire — '+ename+($('#avN').value?' · '+$('#avN').value:''),amount:amt,ref:'advance:'+av.id});}
   catch(err){await DB.remove('advances',av.id);return toast('Avance annulée — '+err.message,'bad');}
-  closeModal();toast('Avance enregistrée et sortie de caisse créée (plafond : '+money(sal)+')','ok');render();};
+  closeModal();toast('Avance enregistrée et sortie de caisse créée (plafond : '+money(sal)+')','ok');render();}finally{App._advBusy=false;}};
 App.advDel=id=>confirmBox('Supprimer cette avance ?','La sortie de caisse correspondante sera également supprimée et le solde recalculé.','Supprimer',async()=>{const ces=await DB.list('cash_entries');const ce=ces.filter(e=>String(e.ref||'')==='advance:'+id)[0];if(ce)await DB.remove('cash_entries',ce.id);await DB.remove('advances',id);toast('Avance supprimée','ok');render();});
 async function paieRunTab(){
   const runs=(await DB.list('pay_runs')).sort((a,b)=>(b.period||'').localeCompare(a.period||''));
@@ -2502,6 +2502,8 @@ App.runGen=async period=>{
   const negNets=slips.filter(x=>x.net<0).map(x=>x.emp.name);
   toast('Bulletins générés — vérifiez puis clôturez'+(negNets.length?' ⚠️ NET NÉGATIF : '+negNets.join(', ')+' (retenues/avances trop fortes)':''),'ok');render();};
 App.runDel=id=>confirmBox('Supprimer ce brouillon de paie ?','Les bulletins non clôturés seront supprimés. Les avances seront de nouveau en attente.','Supprimer',async()=>{
+  const run=(await DB.list('pay_runs',{eq:{id:id}}))[0];
+  if(run&&run.status==='closed')return toast('Impossible : paie déjà clôturée et payée (sortie de caisse « Salaires » liée)','bad');
   const slips=await DB.list('pay_slips',{eq:{run_id:id}});
   for(const s of slips)await DB.remove('pay_slips',s.id);
   await DB.remove('pay_runs',id);toast('Brouillon supprimé');render();});
@@ -2510,8 +2512,11 @@ App.runClose=id=>modal('Clôturer & payer',
   +fld('Date de paiement','<input id="pcD" type="date" value="'+todayISO()+'">')
   +fld('Payé sur','<select id="pcA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option></select>'),
   '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.runCloseGo(\''+id+'\')">Confirmer le paiement</button>');
-App.runCloseGo=async id=>{
+App.runCloseGo=async id=>{if(App._rcBusy)return;App._rcBusy=true;try{
   const run=(await DB.list('pay_runs',{eq:{id:id}}))[0];
+  if(run&&run.status==='closed')return toast('Paie déjà clôturée — pas de double sortie de caisse','bad');
+  const dup=(await DB.list('cash_entries')).filter(x=>x.ref==='payrun:'+id)[0];
+  if(dup)return toast('Une sortie de caisse « Salaires » existe déjà pour cette paie','bad');
   const slips=await DB.list('pay_slips',{eq:{run_id:id}});
   const tot=slips.reduce((s,x)=>s+Number(x.net||0),0);
   {const bal=await accBalance($('#pcA').value);if(tot>bal+0.005)return toast('Clôture refusée : solde '+(($('#pcA').value)==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F < '+money(tot)+' F à payer)','bad');}
@@ -2520,7 +2525,7 @@ App.runCloseGo=async id=>{
   for(const s of slips)await DB.update('pay_slips',s.id,{paid:true});
   await DB.update('pay_runs',id,{status:'closed',paid_date:$('#pcD').value||todayISO(),account:$('#pcA').value,total_net:tot});
   await createCashEntry({date:$('#pcD').value||todayISO(),type:'out',account:$('#pcA').value,category:'salaires',label:'Salaires '+monthLabel(run.period)+' ('+slips.length+' employés)',amount:tot,imputable:true,ref:'payrun:'+id});
-  closeModal();toast('Paie clôturée ✅ sortie de caisse créée','ok');render();};
+  closeModal();toast('Paie clôturée ✅ sortie de caisse créée','ok');render();}finally{App._rcBusy=false;}};
 App.slipView=async id=>{S._slipId=id;go('bulletin');if(location.hash==='#/bulletin')render();};
 async function scBulletin(){
   const id=S._slipId;const s=(await DB.list('pay_slips',{eq:{id:id}}))[0];
@@ -2801,7 +2806,7 @@ App.expCaisse=async()=>{
     if(cat==='treso_caisse'||cat==='treso_momo'){
       push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);return;}
     const jr='CA';
-    const cc=sagAcc(cat)||'';
+    const cc=sagAcc(cat)||sagAcc('divers')||'605800';
     if(e.type==='in'){push(jr,d,A(e),lib,amt,'');push(jr,d,cc,lib,'',amt);}
     else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
   });
