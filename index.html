@@ -1108,6 +1108,7 @@ function defaultSettings(){
       {key:'virement_interne',label:'Virements de fonds — compte de passage (585)',account:'585000',group:'treso'}
     ],
     journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
+    fiscal:{mode:'BIC',bic:25,tee:5,tva:false,tva_rate:18,nif:''},
     exploitation:{
       is_rate:25 // impôt sur les bénéfices (estimation CI 25 %) — 0 = ne pas déduire
     },
@@ -1146,6 +1147,7 @@ async function loadSettings(){const d=defaultSettings();try{const rows=await DB.
   SETS.email=Object.assign({},d.email,SETS.email||{});
   SETS.exploitation=Object.assign({},d.exploitation,SETS.exploitation||{});
   SETS.company=Object.assign({},d.company,SETS.company||{});
+  SETS.fiscal=Object.assign({},d.fiscal,SETS.fiscal||{});
   if(!SETS.company.name||SETS.company.name==='Usine de café')SETS.company.name='FKS Industrie';
   const storedAcc=Array.isArray(SETS.sage_accounts)?SETS.sage_accounts:[];
   SETS.sage_accounts=d.sage_accounts.map(def=>{const st=storedAcc.filter(x=>x.key===def.key)[0];
@@ -1247,15 +1249,13 @@ async function seedDemo(){
   const D=n=>{const d=new Date();d.setDate(d.getDate()-n);const t=new Date();if(d.getMonth()!==t.getMonth()||d.getFullYear()!==t.getFullYear())return t.toISOString().slice(0,8)+'01';return d.toISOString().slice(0,10);};
   const PK=[{name:'Sachet 1 kg',unit:'sachet',alert_min:200},{name:'Sachet 500 g',unit:'sachet',alert_min:200},{name:'Étiquette autocollante',unit:'étiquette',alert_min:500}];
   const pkids={};for(const k of PK){const r=await Local.insert('packaging_items',Object.assign({active:true},k));pkids[k.name]=r.id;}
-  const T=[{name:'Moulu premium',alert_min:30},{name:'Moulu standard',alert_min:30},{name:'Grains (non moulu)',alert_min:20}];
-  const tids={};for(const t of T){const r=await Local.insert('coffee_types',{name:t.name,active:true,alert_min:t.alert_min});tids[t.name]=r.id;}
   const P=[{name:'Café moulu 1 kg',price:8000,t:'Moulu premium',tk:1,pk:[['Sachet 1 kg',1],['Étiquette autocollante',1]]},
     {name:'Café moulu 500 g',price:4500,t:'Moulu standard',tk:0.5,pk:[['Sachet 500 g',1],['Étiquette autocollante',1]]},
     {name:'Café grain 1 kg',price:9000,t:'Grains (non moulu)',tk:1,pk:[['Sachet 1 kg',1],['Étiquette autocollante',1]]},
     {name:'Café saveur gingembre 500 g',price:5000,t:'Moulu standard',tk:0.5,pk:[['Sachet 500 g',1],['Étiquette autocollante',1]]},
     {name:'Café saveur poivre de Guinée 500 g',price:5000,t:'Moulu standard',tk:0.5,pk:[['Sachet 500 g',1],['Étiquette autocollante',1]]}];
   const pids={};for(const p of P){const r=await Local.insert('products',{name:p.name,price:p.price,weight_g:p.name.includes('1 kg')?1000:500,unit:'sachet',active:true,alert_min:20,
-    type_id:tids[p.t],type_name:p.t,type_kg:p.tk,recipes:[{type_id:tids[p.t],name:p.t,qty:p.tk}],
+    type_name:p.t,type_kg:p.tk,recipes:[{name:p.t,qty:p.tk}],
     packaging:p.pk.map(x=>({pack_id:pkids[x[0]],name:x[0],qty:x[1]}))});pids[p.name]=r.id;}
   const A=[{name:'Awa Koné',phone:'07 00 00 00 01'},{name:'Fatou Bamba',phone:'07 00 00 00 02'},{name:'Koffi Yao',phone:'07 00 00 00 03'}];
   const aids={};for(const a of A){const r=await Local.insert('sales_agents',Object.assign({token:rndToken(),active:true},a));aids[a.name]=r.id;}
@@ -1263,12 +1263,10 @@ async function seedDemo(){
   await Local.insert('purchases',{date:D(7),supplier:'Coopérative de Divo',qty_kg:800,price_per_kg:1500,amount:1200000,pay_method:'momo',note:'',paid_entry:null});
   await Local.insert('roastings',{date:D(12),green_in:500,roasted_out:418,operator:'Bakary',note:'',source:'admin'});
   await Local.insert('roastings',{date:D(4),green_in:300,roasted_out:249,operator:'Bakary',note:'',source:'admin'});
-  await Local.insert('transformations',{date:D(10),roasted_used:280,lines:[{type_id:tids['Moulu premium'],name:'Moulu premium',qty:120},{type_id:tids['Moulu standard'],name:'Moulu standard',qty:100},{type_id:tids['Grains (non moulu)'],name:'Grains (non moulu)',qty:56}],operator:'Machine 1 — Broyage',note:'',source:'admin'});
-  await Local.insert('transformations',{date:D(2),roasted_used:240,lines:[{type_id:tids['Moulu premium'],name:'Moulu premium',qty:60},{type_id:tids['Moulu standard'],name:'Moulu standard',qty:120},{type_id:tids['Grains (non moulu)'],name:'Grains (non moulu)',qty:58}],operator:'Machine 1 — Broyage',note:'',source:'admin'});
   const lines1=[{product_id:pids['Café moulu 1 kg'],name:'Café moulu 1 kg',qty:120,price:8000},{product_id:pids['Café moulu 500 g'],name:'Café moulu 500 g',qty:150,price:4500}];
   const lines2=[{product_id:pids['Café grain 1 kg'],name:'Café grain 1 kg',qty:60,price:9000},{product_id:pids['Café saveur gingembre 500 g'],name:'Café saveur gingembre 500 g',qty:80,price:5000},{product_id:pids['Café saveur poivre de Guinée 500 g'],name:'Café saveur poivre de Guinée 500 g',qty:70,price:5000}];
-  await Local.insert('productions',{date:D(11),roasted_used:0,type_lines:[{type_id:tids['Moulu premium'],name:'Moulu premium',qty:120},{type_id:tids['Moulu standard'],name:'Moulu standard',qty:75}],lines:lines1,operator:'Équipe A',note:'',source:'admin'});
-  await Local.insert('productions',{date:D(3),roasted_used:0,type_lines:[{type_id:tids['Grains (non moulu)'],name:'Grains (non moulu)',qty:60},{type_id:tids['Moulu standard'],name:'Moulu standard',qty:75}],lines:lines2,operator:'Équipe B',note:'',source:'admin'});
+  await Local.insert('productions',{date:D(11),roasted_used:0,lines:lines1,operator:'Équipe A',note:'',source:'admin'});
+  await Local.insert('productions',{date:D(3),roasted_used:0,lines:lines2,operator:'Équipe B',note:'',source:'admin'});
   const mkSale=async(date,agent,lines,pay_mode,client)=>{const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
     const s=await Local.insert('sales',{date,agent_id:aids[agent],agent_name:agent,pay_mode,client:client||'',total,lines,source:'form',status:'validated',credit_status:pay_mode==='credit'?'due':'paid'});
     if(pay_mode!=='credit')await Local.insert('cash_entries',{date,type:'in',account:pay_mode==='momo'?'momo':'cash',category:'ventes',label:'Ventes '+agent,amount:total,imputable:true,ref:'sale:'+s.id,source:'form',status:'validated'});};
@@ -1501,7 +1499,7 @@ async function scDashboard(){
    +'</div>'
    +'<div class="grid g2" style="margin-top:12px">'
    +'<div class="kpi"><div class="t">Stock café vert</div><div class="v">'+num2(st.greenStock)+' kg</div><div class="s">Achats '+num2(st.greenIn)+' kg · torréfié '+num2(st.greenUsed)+' kg</div></div>'
-   +'<div class="kpi"><div class="t">Stock café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div><div class="s">Rendement torréfaction : <b>'+num2(st.roastYield)+' %</b>'+((st.types||[]).length?' · '+num2(st.types.reduce((a,t)=>a+t.stock,0))+' kg à transformer':'')+'</div></div>'
+   +'<div class="kpi"><div class="t">Stock café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div><div class="s">Rendement torréfaction : <b>'+num2(st.roastYield)+' %</b>'+'</div></div>'
    +'</div>'
    +'<div class="grid g2" style="margin-top:12px">'
    +'<div class="kpi"><div class="t">Stock produits finis (valeur)</div><div class="v">'+money(st.products.reduce((a,p)=>a+p.stock*p.price,0))+'</div><div class="s">'+st.products.length+' produits suivis</div></div>'
@@ -1585,19 +1583,13 @@ async function scProduits(){
   const st=await computeStats();
   const tstock={};(st.types||[]).forEach(t=>tstock[t.id]=t);
   $('#main').innerHTML='<div class="card"><h2>📦 Produits finis<span class="spacer"></span><button class="btn sm" onclick="App.prodForm()">+ Ajouter</button></h2>'
-  +'<div class="help" style="margin-bottom:10px">La liste n\'est pas figée. Chaque produit indique le <b>type de café</b> (produit par les machines) qu\'il consomme au conditionnement.</div>'
+  +'<div class="help" style="margin-bottom:10px">La liste n\'est pas figée. Chaque produit indique les <b>kg de café torréfié par unité</b> (étape supprimée : le conditionnement consomme le torréfié directement, rendement unique vert → torréfié → conditionné.)</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th>Conditionnement</th><th>Type de café</th><th class="r">Prix de vente</th><th class="r">Alerte stock</th><th></th></tr></thead><tbody>'
   +list.map(p=>{const rec=(p.recipes||[])[0]||{};
     return '<tr'+(p.active?'':' style="opacity:.5"')+'><td><b>'+esc(p.name)+'</b></td><td>'+(p.weight_g?num(p.weight_g)+' g':'—')+'</td><td>'+(rec.name?esc(rec.name)+' <span class="mut">('+num2(rec.qty)+' kg/u)</span>':'<span class="mut">— torréfié direct</span>')+'</td><td class="r">'+money(p.price)+'</td><td class="r">'+(p.alert_min?num(p.alert_min):'—')+'</td>'
    +'<td class="r" style="white-space:nowrap"><button class="btn sm sec" onclick="App.prodForm(\''+p.id+'\')">Modifier</button> <button class="btn sm '+(p.active?'sec':'ok')+'" onclick="App.prodToggle(\''+p.id+'\')">'+(p.active?'Désactiver':'Réactiver')+'</button></td></tr>';}).join('')
   +'</tbody></table></div></div>'
-  +'<div class="card"><h2>☕ Types de café transformés<span class="spacer"></span><button class="btn sm" onclick="App.typeForm()">+ Ajouter</button></h2>'
-  +'<div class="help" style="margin-bottom:10px">Ce que produisent les <b>machines</b> après torréfaction (moutures, grains, assemblages…). Le conditionnement pioche dans ces types selon la recette de chaque produit.</div>'
-  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th><th></th></tr></thead><tbody>'
-  +(ctypes.length?ctypes.map(t=>{const ts=tstock[t.id]||{made:0,used:0,stock:0};
-    return '<tr'+(t.active!==false?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b></td><td class="r">'+num2(ts.made)+' kg</td><td class="r">'+num2(ts.used)+' kg</td><td class="r"><b>'+num2(ts.stock)+' kg</b></td>'
-    +'<td class="r" style="white-space:nowrap"><button class="btn sm sec" onclick="App.typeForm(\''+t.id+'\')">Modifier</button> <button class="btn sm '+(t.active!==false?'sec':'ok')+'" onclick="App.typeToggle(\''+t.id+'\')">'+(t.active!==false?'Désactiver':'Réactiver')+'</button></td></tr>';}).join(''):'<tr><td colspan="5" class="mut">Aucun type — le conditionnement consomme alors le café torréfié directement.</td></tr>')
-  +'</tbody></table></div></div>';
+  
 }
 App.prodToggle=async id=>{const p=(await DB.list('products',{eq:{id:id}}))[0];await DB.update('products',id,{active:!p.active});render();};
 App.prodForm=async id=>{
@@ -1610,9 +1602,8 @@ App.prodForm=async id=>{
   modal(id?'Modifier le produit':'Nouveau produit',
     fld('Nom du produit','<input id="pName" value="'+esc(p.name)+'" placeholder="ex : Café saveur cannelle 250 g">')
     +'<div class="row">'+fld('Poids (g) — informatif','<input id="pW" type="number" inputmode="numeric" value="'+(p.weight_g||'')+'">')+fld('Prix de vente (FCFA)','<input id="pP" type="number" inputmode="numeric" value="'+(p.price||'')+'">')+fld('Alerte stock bas','<input id="pA" type="number" inputmode="numeric" value="'+(p.alert_min||0)+'">')+'</div>'
-    +(ctypes.length?'<div class="row">'+fld('Type de café (après machines)','<select id="pT">'+ctypes.map(t=>'<option value="'+t.id+'"'+((rec.type_id||p.type_id)===t.id?' selected':'')+'>'+esc(t.name)+'</option>').join('')+'</select>')
-      +fld('Kg de ce type par unité','<input id="pTk" type="number" step="0.01" min="0" inputmode="decimal" value="'+(rec.qty||p.type_kg||(p.weight_g?p.weight_g/1000:''))+'">')+'</div>'
-      +'<div class="help" style="margin-bottom:10px">Au conditionnement, chaque unité produite consommera automatiquement cette quantité de ce type (+ les emballages ci-dessous).</div>':'')
+    +'<div class="row">'+fld('Kg de café torréfié par unité (consommé au conditionnement)','<input id="pTk" type="number" step="0.01" min="0" inputmode="decimal" value="'+(rec.qty||p.type_kg||(p.weight_g?p.weight_g/1000:''))+'">')+'</div>'
+    +'<div class="help" style="margin-bottom:10px">Chaque unité produite consommera automatiquement cette quantité de café torréfié (+ les emballages ci-dessous).</div>'
     +'<div class="field"><span>Emballages consommés par unité produite (automatique à chaque conditionnement)</span>'
     +(packs.length?packs.map(k=>{const cur=bom.filter(b=>b.pack_id===k.id)[0];
       return '<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px">'+esc(k.name)+'</span><input style="max-width:110px" id="bom_'+k.id+'" type="number" inputmode="numeric" min="0" step="0.01" value="'+(cur?cur.qty:0)+'"></div>';}).join(''):'<div class="help">Créez d\'abord des articles dans l\'écran Emballages.</div>')
@@ -1621,11 +1612,8 @@ App.prodForm=async id=>{
 };
 App.prodSave=async id=>{const rec={name:$('#pName').value.trim(),weight_g:Number($('#pW').value)||0,price:Number($('#pP').value)||0,alert_min:Number($('#pA').value)||0};
   if(!rec.name)return toast('Nom obligatoire','bad');
-  if($('#pT')){const tSel=$('#pT').value;const tk=Number($('#pTk').value)||0;
-    const ctypes=await DB.list('coffee_types');
-    const t=ctypes.filter(x=>x.id===tSel)[0];
-    if(t&&tk>0){rec.type_id=t.id;rec.type_name=t.name;rec.type_kg=tk;rec.recipes=[{type_id:t.id,name:t.name,qty:tk}];}
-    else{rec.type_id=null;rec.type_name=null;rec.type_kg=0;}}
+  if($('#pTk')){const tk=Number($('#pTk').value)||0;rec.type_kg=tk;
+    if(tk>0)rec.recipes=[{qty:tk}];}
   const packs=await DB.list('packaging_items');const bom=[];
   packs.forEach(k=>{const el=$('#bom_'+k.id);const q=el?Number(el.value)||0:0;if(q>0)bom.push({pack_id:k.id,name:k.name,qty:q});});
   rec.packaging=bom;
@@ -1722,10 +1710,7 @@ async function scStocks(){
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Alertes seuils</div><div class="v" style="color:'+(alertCount?'var(--bad)':'var(--ok)')+'">'+alertCount+'</div><div class="s">'+(alertCount?'sous le seuil → voir ⚠️ ci-dessous':'tout est au-dessus des seuils ✓')+'</div></div></div>'
-  +((st.types||[]).length?'<h3>☕ Café transformé par les machines</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Type</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
-   +st.types.map(t=>{const tc=ctypes.filter(c=>c.id===t.id)[0]||{};const low=t.active&&tc.alert_min&&t.stock<=Number(tc.alert_min);
-     return '<tr'+(t.active?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(tc.alert_min)+' kg</span>':'')+'</td><td class="r">'+num2(t.made)+' kg</td><td class="r">'+num2(t.used)+' kg</td><td class="r"><b>'+num2(t.stock)+' kg</b></td></tr>';}).join('')
-   +'</tbody></table></div>':'')
+  
   +'<h3>📦 Produits finis</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Produits</th><th class="r">Vendus</th><th class="r">Stock</th></tr></thead><tbody>'
   +prods.filter(p=>p.active!==false).map(p=>{const u=units[p.id]||units[p.name]||0;const low=p.active&&p.alert_min&&u<=Number(p.alert_min);
     const soldN=sales.reduce((a,x)=>a+((x.lines||[]).filter(l=>l.product_id===p.id||l.name===p.name).reduce((b,l)=>b+Number(l.qty||0),0)),0);
@@ -1762,9 +1747,7 @@ async function prodStockHead(){
   }catch(e){}
   const warn=(st.roastedStock<-0.005?'<div class="alert al-bad" style="margin-bottom:12px">⚠️ Stock torréfié négatif (<b>'+num2(st.roastedStock)+' kg</b>) : le rendement réel des machines est plus faible que l\'estimation — pesez le torréfié obtenu à la prochaine torréfaction pour recaler les stocks.</div>':'')+(st.greenStock<-0.005?'<div class="alert al-bad" style="margin-bottom:12px">⚠️ Stock café vert négatif (<b>'+num2(st.greenStock)+' kg</b>) : des achats de café vert ne sont pas encore enregistrés.</div>':'');
   return baro+warn+'<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Stock café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div><div class="kpi"><div class="t">Stock torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div><div class="s">'+(st.types&&st.types.length?'à transformer par les machines':'à conditionner directement')+'</div></div></div>'
-  +((st.types||[]).length?'<div class="tblwrap" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>☕ Café transformé par les machines (après torréfaction)</th><th class="r">Produit par machines</th><th class="r">Conditionné</th><th class="r">Stock</th></tr></thead><tbody>'
-   +st.types.map(t=>'<tr'+(t.active?'':' style="opacity:.5"')+'><td><b>'+esc(t.name)+'</b></td><td class="r">'+num2(t.made)+' kg</td><td class="r">'+num2(t.used)+' kg</td><td class="r"><b>'+num2(t.stock)+' kg</b></td></tr>').join('')
-   +'</tbody></table></div>':'');
+  ;
 }
 async function prodRoastTab(){
   S.roastEdit=null;
@@ -1815,14 +1798,7 @@ async function prodTransTab(){
     return '<div class="qcard"><div class="nm">'+esc(p.name)+(kg?'<div class="pr">☕ '+num2(kg)+' kg café/u</div>':'')+'</div><div class="qty"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',-1)">−</button><input id="cq_'+p.id+'" type="number" min="0" inputmode="numeric" value="0" oninput="App.trCondCalc()"><button class="btn sm sec" onclick="App.step(\'cq_'+p.id+'\',1)">+</button></div></div>';}).join('')
   +'</div></div><div id="cTot" class="pill" style="margin:6px 0 12px">Café conditionné, perte et rendement apparaîtront ici</div>'
   +'<button class="btn blk" id="condBtn" onclick="App.condSave()">Enregistrer la transformation &amp; conditionnement</button> <a href="javascript:void(0)" id="condCancel" onclick="App.condCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a>'
-  +(ctypes.length?'<details style="margin-top:14px"><summary style="cursor:pointer;font-size:13.5px;color:#8a6a4f">Option : peser le café en vrac avant conditionnement (transformation seule)</summary><div style="height:10px"></div>'
-    +'<div class="row">'+fld('Date','<input id="tD" type="date" value="'+todayISO()+'">')+fld('Torréfié consommé (kg)','<input id="tIn" type="number" step="0.1" inputmode="decimal" oninput="App.trCalc()">')+'</div>'
-    +'<div class="field"><span>Quantités obtenues par type (kg pesés)</span>'
-    +ctypes.map(t=>'<div class="row" style="margin-bottom:6px"><span style="flex:1;font-size:13.5px"><b>'+esc(t.name)+'</b> <span class="mut">stock '+num2(stock[t.id]||0)+' kg</span></span><input style="max-width:110px" id="tq_'+t.id+'" type="number" step="0.1" min="0" inputmode="decimal" oninput="App.trCalc()"></div>').join('')
-    +'</div>'
-    +'<div class="row">'+fld('Opérateur / machine','<input id="tOp">')+fld('Note','<input id="tN">')+'</div>'
-    +'<div id="tCalc" class="pill" style="margin:6px 0 10px">Perte et rendement machines apparaîtront ici</div>'
-    +'<button class="btn" id="trBtn" onclick="App.trSave()">Enregistrer la transformation seule (vrac en stock)</button></details>':'')
+  
   +'<div style="height:16px"></div>'
   +(conds.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Torréfié consommé</th><th>Production</th><th class="r">Café conditionné</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
    +conds.slice(0,12).map(p=>{const x=Number(p.roasted_used)||0;
@@ -1831,11 +1807,7 @@ async function prodTransTab(){
      return '<tr><td>'+dFR(p.date)+'</td><td class="r">'+num2(x)+' kg</td><td>'+(p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td class="r"><b>'+num2(cafe)+' kg</b>'+typesH+'</td><td class="r" style="color:var(--bad)">'+(x>0?num2(x-cafe)+' kg':'—')+'</td><td class="r"><b>'+(x>0?num2(100*cafe/x)+' %':'—')+'</b></td><td>'+esc(p.operator||'')+'</td>'
       +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.condEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>';}).join('')
    +'</tbody></table></div>':'')
-  +(transf.length?'<div style="height:8px"></div><div class="tblwrap"><table class="tbl"><thead><tr><th>Transformations seules (vrac)</th><th class="r">Torréfié</th><th>Obtenu</th><th class="r">Perte</th><th></th></tr></thead><tbody>'
-   +transf.slice(0,6).map(t=>{const out=(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0);const inn=Number(t.roasted_used)||0;
-     return '<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(inn)+' kg</td><td>'+num2(out)+' kg '+((t.lines||[]).map(l=>esc(l.name)).join(', ')||'')+'</td><td class="r">'+num2(inn-out)+' kg</td>'
-      +'<td><button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>';}).join('')
-   +'</tbody></table></div>':'');
+  
 }
 App.trCondCalc=()=>{const x=Number(($('#cIn')||{value:0}).value)||0;
   const ctx=App._condCtx||{};const prods=ctx.prods||[];const stk=Number(ctx.roasted)||0;
@@ -1962,13 +1934,11 @@ async function prodHistTab(){
   const tUsed=transf.reduce((s,t)=>s+Number(t.roasted_used||0),0),tOut=transf.reduce((s,t)=>(t.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
   const pUsedTypes=prod.reduce((s,p)=>(p.type_lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
   return '<div class="grid g3" style="margin-bottom:12px">'
-  +'<div class="kpi"><div class="t">Rendement torréfaction</div><div class="v">'+num2(tin?100*tout/tin:0)+' %</div><div class="s">'+num2(tout)+' kg obtenus / '+num2(tin)+' kg verts</div></div>'
+  +'<div class="kpi"><div class="t">Rendement torréfaction (unique)</div><div class="v">'+num2(tin?100*tout/tin:0)+' %</div><div class="s">'+num2(tout)+' kg obtenus / '+num2(tin)+' kg verts</div></div>'
   +'<div class="kpi"><div class="t">Kg torréfiés conditionnés</div><div class="v">'+num2(used)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Unités produites</div><div class="v">'+num(units)+'</div><div class="s">'+num2(units?(used+pUsedTypes)/units:0)+' kg par unité</div></div>'
-  +'<div class="kpi"><div class="t">Rendement machines</div><div class="v">'+num2(tUsed?100*tOut/tUsed:0)+' %</div><div class="s">'+num2(tOut)+' kg obtenus / '+num2(tUsed)+' kg torréfiés</div></div></div>'
-  +(transf.length?'<h3>⚙️ Transformations (machines)</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Torréfié utilisé (kg)</th><th>Types obtenus</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
-   +transf.map(t=>'<tr><td>'+dFR(t.date)+'</td><td class="r">'+num2(t.roasted_used)+'</td><td>'+(t.lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')+'</td><td class="r">'+num2(Number(t.roasted_used)-(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0))+'</td><td class="r"><b>'+(Number(t.roasted_used)>0?num2(100*(t.lines||[]).reduce((a,l)=>a+Number(l.qty||0),0)/t.roasted_used)+' %':'—')+'</b></td><td>'+esc(t.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'transformations\',\''+t.id+'\')">✕</button></td></tr>').join('')
-   +'</tbody></table></div><div style="height:16px"></div>':'')
+  
+  
   +'<h3>🔥 Torréfactions</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Vert (kg)</th><th class="r">Torréfié (kg)</th><th class="r">Perte</th><th class="r">Rendement</th><th>Opérateur</th><th></th></tr></thead><tbody>'
   +roast.map(r=>'<tr><td>'+dFR(r.date)+'</td><td class="r">'+num2(r.green_in)+'</td><td class="r">'+num2(r.roasted_out)+'</td><td class="r">'+(r.estimated?'—':num2(Number(r.green_in)-Number(r.roasted_out))+' kg')+'</td><td class="r"><b>'+(r.estimated?'—':num2(100*r.roasted_out/r.green_in)+' %')+'</b></td><td>'+esc(r.operator||'')+'</td><td><button class="btn sm sec" onclick="App.roastEdit(\'roastings\',\''+r.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'roastings\',\''+r.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div><div style="height:16px"></div><h3>📦 Conditionnements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th class="r">Matière consommée</th><th>Production</th><th>Opérateur</th><th></th></tr></thead><tbody>'
@@ -2443,7 +2413,8 @@ async function paieRunTab(){
     if(run.status!=='closed'){
       html+='<div class="row"><button class="btn danger" onclick="App.runDel(\''+run.id+'\')">Supprimer le brouillon</button><button class="btn ok" onclick="App.runClose(\''+run.id+'\')">💰 Clôturer &amp; payer ('+money(totNet)+')</button></div>';
     }else{
-      html+='<div class="alert al-ok">Paie payée le '+dFR(run.paid_date)+' — '+(run.account==='momo'?'Mobile Money':'espèces')+'. Une sortie de caisse « Salaires » a été créée automatiquement.</div>';
+      html+='<div class="alert al-ok">Paie payée le '+dFR(run.paid_date)+' — '+(run.account==='momo'?'Mobile Money':'espèces')+'. Une sortie de caisse « Salaires » a été créée automatiquement.</div>'
+      +'<button class="btn sm" style="margin-top:8px" onclick="App.ediITS(\''+run.period+'\')">📄 EDI Annexe ITS (DGI) — '+monthLabel(run.period)+'</button>';
     }
   }
   if(runs.length){
@@ -2728,7 +2699,7 @@ async function scExports(){
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 EDI Annexe ITS (DGI)</button> <button class="btn sec" onclick="App.ediTVA()">📄 EDI Annexe TVA (DGI)</button></div>'
   +'</div>';
 }
 App.expFilterRange=()=>{const f=S.expFilter||{};const to=f.to||todayISO();const from=f.from||'2000-01-01';return{from,to};};
@@ -2890,6 +2861,37 @@ App.expCaisse=async()=>{
   dlCsv('Sage_6_journaux_'+to+'.csv',csv);
   toast('Sage 6 journaux téléchargé (xlsx + csv) ✅ '+((Math.abs(gD-gC)<0.01)?'— équilibré ✔':'— ⚠️ ÉCART')) ;
 };
+function dlTxt(name,txt){download(name,new Blob(['\ufeff'+txt],{type:'text/plain;charset=utf-8'}));}
+App.ediTVA=async period=>{period=period||S.expPeriod||monthISO();
+  const inc=await computeIncome(period);const F=SETS.fiscal||{};const C=SETS.company||{};const t=inc.tva||{};
+  const d=new Date().toISOString().slice(0,10);
+  const txt=['ANNEXE-TVA;PERIODE='+period+';NIF='+(F.nif||'')+';RAISON='+(C.name||'')+';TAUX='+(t.rate||18)+';DECLARATION=MENSUELLE;EMIS_LE='+d,
+    'VENTES_TTC;'+Math.round(inc.ventes),
+    'BASE_HT;'+(t.ventesHT!=null?t.ventesHT:Math.round(inc.ventes)),
+    'TVA_COLLECTEE;'+(t.col||0),
+    'ACHATS_ET_CHARGES_TTC;'+(t.achatTTC||0),
+    'TVA_DEDUCTIBLE;'+(t.ded||0),
+    'TVA_A_PAYER;'+(t.due||0),
+    'RELEVE;GENERE_PAR=CafePro_Doregoservices;FIN'].join('\r\n');
+  dlTxt('EDI_Annexe_TVA_'+period+'.txt',txt);
+  toast('📄 EDI Annexe TVA '+monthLabel(period)+' généré — TVA à payer '+money(t.due||0)+' F','ok');};
+App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
+  const C=SETS.company||{};const F=SETS.fiscal||{};
+  const runs=await DB.list('pay_runs',{eq:{period:period}});
+  const run=runs.filter(r=>r.status==='closed')[0];
+  if(!run)return toast('Aucune paie clôturée pour '+monthLabel(period)+' — générez puis clôturez la paie d\'abord','bad');
+  const slips=await DB.list('pay_slips',{eq:{run_id:run.id}});
+  if(!slips.length)return toast('Aucun bulletin pour cette période','bad');
+  const d=new Date().toISOString().slice(0,10);
+  const rows=[['ANNEXE-ITS;PERIODE='+period+';NIF='+(F.nif||'')+';RAISON='+(C.name||'')+';EMIS_LE='+d],['MATRICULE;NOM;BRUT_IMPOSABLE;BASE_ITS;ITS_BRUT;RICF;ITS_NET']];
+  let tb=0,tn=0;
+  slips.forEach(x=>{const b=Math.round(Number(x.brut_ap)||0);const bs=Math.round(Number(x.taxable!=null?x.taxable:x.brut_ap)||0);
+    const ig=Math.round(Number(x.its_gross!=null?x.its_gross:(x.its!=null?x.its:x.irpp))||0);
+    const rc=Math.round(Number(x.ricf)||0);const it=Math.round(Number(x.its!=null?x.its:x.irpp)||0);
+    tb+=b;tn+=it;rows.push([String(x.employee_id||'').slice(0,8),String(x.employee_name||'').replace(/;/g,','),b,bs,ig,rc,it]);});
+  rows.push(['TOTAL','',''+tb,'','','',''+tn]);rows.push(['RELEVE;GENERE_PAR=CafePro_Doregoservices;FIN']);
+  dlTxt('EDI_Annexe_ITS_'+period+'.txt',rows.map(r=>r.join(';')).join('\r\n'));
+  toast('📄 EDI Annexe ITS '+monthLabel(period)+' généré — '+slips.length+' employés, ITS net total '+money(tn)+' F','ok');};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
@@ -2980,7 +2982,7 @@ App.impGo=async tb=>{const d=App.impData;let done=0,skipped=0;
 async function scParametres(){
   const m=$('#main');
   const accts=SETS.sage_accounts||[];
-  const P=SETS.payroll;
+  const P=SETS.payroll;const F=SETS.fiscal||{};
   m.innerHTML='<div class="card"><h2>⚙️ Réglages</h2>'
   +'<h3>🏢 Société</h3><div class="row">'+fld('Nom de la société','<input id="stCo" value="'+esc((SETS.company||{}).name||'')+'">')+fld('Codes journaux Sage (6)', '<div class="row" style="gap:6px">'+[['VE','Ventes'],['AC','Achats'],['CA','Caisse'],['BQ','Banque/MoMo'],['PA','Paie'],['OD','OD']].map(x=>'<input id="jrn_'+x[0]+'" title="'+x[1]+'" value="'+esc(((SETS.journals||{})[x[0]])||x[0])+'" style="max-width:64px;text-align:center">').join('')+'</div><span class="help">Un code par journal Sage (modifiable)</span>')+'</div>'
   +'<div class="field"><span>Logo de la société (affiché dans l\'app et les emails au boss)</span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
@@ -3010,6 +3012,17 @@ async function scParametres(){
   +P.its_brackets.map((b,i)=>'<div class="row" style="margin-bottom:6px">'+fld('Jusqu\'à (FCFA)','<input type="number" inputmode="numeric" data-bi="'+i+'" data-bf="up" value="'+(b.upTo==null?'':b.upTo)+'" placeholder="∞">')+fld('Taux (%)','<input type="number" inputmode="numeric" step="0.01" data-bi="'+i+'" data-bf="rate" value="'+b.rate+'">')+'</div>').join('')+'</div></div>'
   +'<div class="help" style="margin-bottom:8px">Sources : CNPS / DGI — réforme ITS du 1<sup>er</sup> janvier 2024 (fusion IS + IGR + Contribution nationale). SMIG : 75 000 F. <b>Faites valider par votre comptable.</b></div>'
   +'<button class="btn sm" onclick="App.savePayroll()">Enregistrer les taux</button>'
+  +'<div class="hr"></div><h3>🏛️ Fiscalité — BIC / TEE &amp; TVA</h3>'
+  +'<div class="row">'
+  +fld('Impôt sur les bénéfices','<select id="fiMode"><option value="BIC"'+(F.mode==='TEE'?'':' selected')+'>BIC — pourcentage du résultat</option><option value="TEE"'+(F.mode==='TEE'?' selected':'')+'>TEE — pourcentage du chiffre d\'affaires</option></select>')
+  +fld('Taux BIC (%)','<input id="fiBic" type="number" step="0.1" inputmode="numeric" value="'+(F.bic!=null?F.bic:25)+'">')
+  +fld('Taux TEE (%) — 4, 5 ou 6','<input id="fiTee" type="number" step="0.1" inputmode="numeric" value="'+(F.tee!=null?F.tee:5)+'">')+'</div>'
+  +'<div class="row">'
+  +fld('TVA applicable','<select id="fiTva"><option value="1"'+(F.tva?' selected':'')+'>Oui — répercussion et déclaration mensuelle</option><option value="0"'+(F.tva?'':' selected')+'>Non (par défaut)</option></select>')
+  +fld('Taux TVA (%)','<input id="fiTvaR" type="number" step="0.1" inputmode="numeric" value="'+(F.tva_rate!=null?F.tva_rate:18)+'">')
+  +fld('N° Identifiant Fiscal (NIF) — fichiers EDI DGI','<input id="fiNif" value="'+esc(F.nif||'')+'" placeholder="ex. 1943xxxX">')+'</div>'
+  +'<div class="help" style="margin:6px 0 10px"><b>BIC</b> (bénéfice industriel et commercial) ou <b>TEE</b> (taxe forfaitaire d\'activité) : appliqué au compte d\'exploitation. La <b>TVA</b>, si applicable, calcule la déclaration mensuelle (collectée − déductible) et génère le fichier EDI <b>Annexe TVA</b> de la DGI (écran Exploitation). L\'EDI <b>Annexe ITS</b> (paie) se génère depuis l\'écran Paie.</div>'
+  +'<button class="btn sm" onclick="App.saveFiscal()">Enregistrer la fiscalité</button>'
   +'<div class="hr"></div><h3>🔒 Accès</h3>'
   +(CFG.mode==='supabase'
     ?'<div class="alert al-ok">Mode en ligne (Supabase) : '+esc(CFG.url)+' — vos données sont hébergées et synchronisées.</div><button class="btn sec sm" onclick="App.cfgModal()">Modifier la connexion Supabase</button> <button class="btn sec sm" onclick="App.dbCheck()">🔍 Vérifier la base</button>'
@@ -3040,6 +3053,7 @@ async function scParametres(){
   +(CFG.mode==='supabase'?' <button class="btn danger sm" onclick="App.dbWipe()">🧹 Vider la base en ligne (après tests)</button>':'')
   +'</div>';
 }
+App.saveFiscal=async()=>{await setSetting('fiscal',{mode:$('#fiMode').value||'BIC',bic:Number($('#fiBic').value)||25,tee:Number($('#fiTee').value)||5,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||''});toast('Fiscalité enregistrée ✅','ok');render();};
 App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
 App.logoSave=async()=>{const f=$('#stLogo').files&&$('#stLogo').files[0];if(!f)return toast('Choisissez d’abord une image','bad');
   const shrink=dUrl=>new Promise(res=>{try{const img=new Image();img.onload=()=>{try{const sc=Math.min(1,256/Math.max(1,img.height||256));
@@ -3542,11 +3556,17 @@ async function computeIncome(period){
   const assetsRows=assets.map(a=>({name:a.name,category:a.category||'',cost:Number(a.cost||0),dep:assetMonthlyDep(a,period),cumul:assetCumulDep(a,period),vnc:Number(a.cost||0)-assetCumulDep(a,period)}));
   const cumulTot=assetsRows.reduce((a,x)=>a+x.cumul,0),vncTot=assetsRows.reduce((a,x)=>a+x.vnc,0);
   /* --- TOTAUX --- */
+  const tvaOn=(SETS.fiscal||{}).tva===true,tvaR=Number((SETS.fiscal||{}).tva_rate)||18;
+  const ventesHT=tvaOn?Math.round(ventes/(1+tvaR/100)):ventes;
+  const tvaCol=tvaOn?(ventes-ventesHT):0;
+  const achatTTC=tvaOn?(achVertAmt+achEmb+servicesTot):0;
+  const tvaDed=tvaOn?Math.round(achatTTC-achatTTC/(1+tvaR/100)):0;
+  const tvaDue=Math.max(0,tvaCol-tvaDed);
   const chargesTot=consVert+consEmb+servicesTot+personnel.total+impotsTot+dotations;
   const resultat=Math.round(produitsTot-chargesTot);
   const marge=ventes>0?100*resultat/ventes:0;
-  const isRate=Number((SETS.exploitation||{}).is_rate!=null?(SETS.exploitation||{}).is_rate:25);
-  const isBenef=(isRate>0&&resultat>0)?Math.round(resultat*isRate/100):0;
+  const F=SETS.fiscal||{};const fMode=F.mode==='TEE'?'TEE':'BIC';const isRate=fMode==='TEE'?(Number(F.tee)||5):(Number(F.bic)||25);
+  const isBenef=fMode==='TEE'?Math.round(ventes*isRate/100):((resultat>0)?Math.round(resultat*isRate/100):0);
   const resultatNet=resultat-isBenef;
   const ebe=resultat+dotations;              // excédent brut d'exploitation (EBITDA)
   const caf=resultatNet+dotations;           // capacité d'autofinancement (cash-flow)
@@ -3586,13 +3606,14 @@ async function computeIncome(period){
   paTot.mN=prodAnalysis.reduce((a,r)=>a+r.margeNette,0);
   return{period:period,ventes:ventes,dPF:dPF,produitsTot:produitsTot,prodAnalysis:prodAnalysis,paTot:paTot,
     indirectTot:indirectTot,qpUnit:qpUnit,unitsProduced:unitsProduced,
-    achVertAmt:achVertAmt,achVertKg:achVertKg,achEmb:achEmb,
+    achVertAmt:achVertAmt,achVertKg:achVertKg,achEmb:achEmb,matCostKg:(semiCost>0?semiCost:roastCostKg),
     gSI:gSI,gSF:gSF,gSIv:gSIv,gSFv:gSFv,cmpVertSI:cmpVertAt(prevStart),cmpVertSF:cmpVertAt(end),consVert:consVert,
     embSIv:embSIv,embSFv:embSFv,consEmb:consEmb,
     services:G.services,servicesTot:servicesTot,
     personnel:personnel,impots:G.impots,impotsRows:impotsRows,impotsTot:impotsTot,hors:G.hors,
     dotations:dotations,assetsRows:assetsRows,cumulTot:cumulTot,vncTot:vncTot,
-    chargesTot:chargesTot,resultat:resultat,marge:marge,isRate:isRate,isBenef:isBenef,
+    chargesTot:chargesTot,resultat:resultat,marge:marge,isRate:isRate,isBenef:isBenef,fMode:fMode,
+    tva:{on:tvaOn,rate:tvaR,ventesHT:ventesHT,col:tvaCol,ded:tvaDed,due:tvaDue,achatTTC:achatTTC},
     resultatNet:resultatNet,ebe:ebe,caf:caf,
     encaiss:encaiss,decaiss:decaiss,fluxTreso:fluxTreso,odNet:odNet,creances:creances,tr:tr,
     roastIn:roastIn,roastOut:roastOut,perte:roastIn-roastOut,rendement:roastIn>0?100*roastOut/roastIn:0,
@@ -3655,7 +3676,7 @@ function incomeRows(inc){
   L.push([{v:'RÉSULTAT D\'EXPLOITATION',__style:1},{v:inc.resultat,__style:1}]);
   L.push(['Marge d\'exploitation',Math.round(inc.marge*10)/10+' %']);
   L.push(['Excédent brut d\'exploitation (EBE, avant amortissements)',inc.ebe]);
-  L.push(['− Impôt sur les bénéfices (taux '+num2(inc.isRate)+' %, estimation)',inc.isBenef]);
+  L.push(['− Impôt '+(inc.fMode==='TEE'?'TEE ('+num2(inc.isRate)+' % du chiffre d\'affaires)':'BIC ('+num2(inc.isRate)+' % du résultat, estimation)'),inc.isBenef]);
   L.push([{v:'RÉSULTAT NET',__style:1},{v:inc.resultatNet,__style:1}]);
   L.push(['+ Dotations aux amortissements (non décaissées)',inc.dotations]);
   L.push([{v:'CAF / CASH-FLOW (capacité d\'autofinancement)',__style:1},{v:inc.caf,__style:1}]);
@@ -3670,7 +3691,7 @@ function incomeRows(inc){
   L.push(['Créances clients en cours (ventes à crédit non encaissées)',inc.creances]);
   L.push(['Dotations (charge non décaissée)',inc.dotations]);
   L.push(['Stocks : (achats réglés '+ (inc.achVertAmt+inc.achEmb) +') − (consommé '+ (inc.consVert+inc.consEmb) +')',inc.achVertAmt+inc.achEmb-inc.consVert-inc.consEmb]);
-  L.push(['Impôt bénéfices estimé (non encore décaissé)',inc.isBenef]);
+  L.push([(inc.fMode==='TEE'?'Taxe TEE (sur chiffre d\'affaires)':'Impôt BIC estimé (non encore décaissé)'),inc.isBenef]);
   L.push([]);
   L.push([{v:'ANNEXE — STOCKS',__style:1}]);
   L.push(['','Stock initial','Stock final','Détail']);
@@ -3752,7 +3773,7 @@ async function monthlyWorkbook(inc){
     ['Créances clients en cours',inc.creances],
     ['Dotations non décaissées',inc.dotations],
     ['Stocks : réglé − consommé',(inc.achVertAmt+inc.achEmb)-(inc.consVert+inc.consEmb)],
-    ['Impôt bénéfices estimé non décaissé',inc.isBenef]];
+    [(inc.fMode==='TEE'?'Taxe TEE (non décaissée)':'Impôt BIC estimé non décaissé'),inc.isBenef]];
   sheets.push({name:'Cash-flow',rows:cfSh,widths:[44,16]});
   const hSh=[['COMPARATIF 12 MOIS — au '+monthLabel(inc.period)],[],['MOIS','VENTES','RÉSULTAT NET','CAF','FLUX TRÉSORERIE']];
   let tV=0,tN=0,tC=0,tF=0;
@@ -3837,9 +3858,12 @@ async function scExploitation(){
   +'<div class="row">'+fld('Mois','<input type="month" value="'+period+'" onchange="S.expPeriod=this.value;render()">')+'</div>'
   +'<div class="grid g4" style="margin:10px 0">'
   +'<div class="kpi"><div class="t">Ventes</div><div class="v">'+money(inc.ventes)+'</div></div>'
-  +'<div class="kpi"><div class="t">Résultat net</div><div class="v" style="color:'+(inc.resultatNet>=0?'var(--ok)':'var(--bad)')+'">'+money(inc.resultatNet)+'</div><div class="s">après impôt estimé '+money(inc.isBenef)+'</div></div>'
+  +'<div class="kpi"><div class="t">Résultat net</div><div class="v" style="color:'+(inc.resultatNet>=0?'var(--ok)':'var(--bad)')+'">'+money(inc.resultatNet)+'</div><div class="s">après impôt '+money(inc.isBenef)+'</div></div>'
   +'<div class="kpi"><div class="t">CAF / Cash-flow</div><div class="v">'+money(inc.caf)+'</div><div class="s">net + amortissements</div></div>'
-  +'<div class="kpi"><div class="t">Flux trésorerie réel</div><div class="v">'+money(inc.fluxTreso)+'</div><div class="s">encaissé − décaissé'+(inc.odNet?(' (dont OD '+money(inc.odNet)+')'):'')+'</div></div></div>'
+  +'<div class="kpi"><div class="t">Flux trésorerie réel</div><div class="v">'+money(inc.fluxTreso)+'</div><div class="s">encaissé − décaissé'+(inc.odNet?(' (dont OD '+money(inc.odNet)+')'):'')+'</div></div></div>'+((inc.tva&&inc.tva.on)?'<div class="card"><h3>🧾 TVA — '+monthLabel(period)+'</h3><div class="tblwrap"><table class="tbl"><tbody>'
+  +L('Ventes TTC',inc.ventes)+L('Base HT (taux '+num2(inc.tva.rate)+' %)',inc.tva.ventesHT)+L('TVA collectée',inc.tva.col)+L('TVA déductible (achats et charges)',inc.tva.ded)
+  +'<tr class="tot"><td>TVA À PAYER</td><td class="r"><b>'+money(inc.tva.due)+'</b></td></tr></tbody></table></div>'
+  +'<button class="btn sm" style="margin-top:8px" onclick="App.ediTVA(\''+period+'\')">📄 Déclaration + fichier EDI Annexe TVA (DGI)</button></div>':'')
   +'<div class="grid g2"><div><h3>Produits</h3><table class="tbl"><tbody>'
   +L('Ventes de produits finis',inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'

@@ -62,8 +62,8 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 
 1. **Matin** : ouvrez **À valider** (badge rouge) → examinez les saisies de la veille → **Valider** ou **Rejeter**.
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
-3. **Production** : écran **Production** (ou le lien atelier) → ① kg verts → kg torréfiés ; ② **Machines** : kg torréfiés consommés → kg obtenus par **type de café** (moulu premium, standard, grains…) ; ③ **Conditionnement** : quantités par produit — les types de café et emballages sont déduits **automatiquement** selon les recettes. *Pertes et rendements réels se calculent seuls à chaque étape — aucun barème fixe nécessaire.*
-3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, types de café, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
+3. **Production** : écran **Production** (ou le lien atelier) → ① **Torréfaction** : kg verts → kg torréfiés (pesée unique) ; ② **Conditionnement** : une seule saisie — kg torréfiés consommés + unités produites par produit. Les emballages sont déduits **automatiquement** selon les recettes et le stock de torréfié est décrémenté directement. *Un seul rendement réel — torréfaction → conditionnement — sans pesée intermédiaire : les machines sont utilisées mais on ne pèse plus entre torréfaction et machines.*
+3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (journal Banque) et **🔄 Retrait MoMo → espèces** (transfert entre vos deux caisses, journal OD).
 5. **Dettes fournisseurs** : l'écran **Achats vert** affiche en permanence le **total des achats non réglés** (indicateur rouge + liste avec bouton 💸 **Payer**) — c'est là que se repèrent les dettes 4011.
 5. **Fin de mois** : **Paie → Paie du mois** → complétez absences/heures sup/primes → générer → vérifier → **Clôturer & payer** (écriture de salaires automatique dans la caisse).
@@ -71,7 +71,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 ### Exports Excel (écran **Exports**)
 | Export | Contenu |
 |---|---|
-| **Point complet des stocks** | Café vert, torréfié, **types de café transformés**, produits finis, **emballages**, rendements (torréfaction + machines), mouvements détaillés |
+| **Point complet des stocks** | Café vert, torréfié, produits finis, **emballages**, rendement torréfaction unique, mouvements détaillés |
 | **Export Sage 100 — 6 journaux** | **Synthèse** (équilibre Débit = Crédit par journal et total) + une feuille par journal **VE / AC / CA / BQ / PA / OD** (`Date/Journal/Compte/Libellé/Débit/Crédit`, codes paramétrables) + feuille Mouvements. Fourni en **.xlsx et .csv**, chaque ligne équilibrée |
 | **Ventes** | Détail, synthèse par commerciale, par produit |
 | **Paie** | Journal de paie mensuel + bulletins détaillés (CNPS, CMU, ITS, RICF, FDFP, coût employeur) |
@@ -111,13 +111,13 @@ Chaque mois, l'écran **Exploitation** présente :
 - **🔬 Analyse par produit (comptabilité analytique)** : pour chaque produit — quantités vendues, CA, coût unitaire (recette café au coût semi-fini + emballages au CMP), coût vendu, **marge brute et % marge**, part du CA. Incluse dans le rapport mensuel Excel (feuille « Analyse produits ») et l'email au boss.
 
 - **💰 Coût de revient complet** : les charges indirectes du mois (personnel, services, impôts, amortissements) sont réparties au prorata des unités produites → chaque produit affiche son coût de revient complet et sa **marge nette** (en plus de la marge brute matière), à l'écran et dans la feuille Excel « Analyse produits ».
-### ⚙️ Machines de transformation (types de café)
-Entre la torréfaction et le conditionnement, les **machines** (broyeur, moulin, assembleuse…) produisent les différents **types de café** :
-1. **Réglages d'abord** : écran **Produits** → carte *Types de café transformés* → créez vos types (« Moulu premium », « Moulu standard », « Grains (non moulu) »…).
-2. **Sur chaque produit fini**, choisissez le **type** et les **kg consommés par unité** (ex. sachet 1 kg → 1 kg de « Moulu premium » ; 500 g → 0,5 kg).
-3. **Chaque jour/lot** : onglet **⚙️ Transformation** → kg torréfiés consommés par les machines + kg **réellement obtenus** par type. Perte et rendement machines s'affichent instantanément.
-4. Le **conditionnement** n'a plus rien à peser : il déduit les types selon les recettes (et refuse si le stock d'un type est insuffisant) ; les **ajustements** acceptent aussi le niveau « Café transformé » pour les recomptes.
-5. L'**exploitation** valorise ces semi-finis au coût moyen du vert consommé et leur variation entre dans les produits du mois ; l'export « Mouv. stocks » détaille vert → torréfié → types → produits finis.
+### 🏛️ Fiscalité — BIC ou TEE, TVA facultative, fichiers EDI DGI
+L'impôt sur les bénéfices se paramètre dans **Réglages → 🏛️ Fiscalité — BIC / TEE & TVA** :
+1. **Choix du régime** : **BIC** (pourcentage du **résultat** — défaut 25 %) ou **TEE** (pourcentage du **chiffre d'affaires** — défaut 5 %). Les taux sont modifiables. En BIC, un résultat négatif → 0 F d'impôt ; en TEE, l'impôt est dû même à résultat négatif.
+2. **NIF** : renseignez le N° d'Identification Fiscale de l'entreprise (il part dans les fichiers EDI).
+3. **TVA facultative** : activez-la et fixez le taux (18 % par défaut). Les ventes passent en TTC → l'exploitation affiche une carte **TVA mensuelle** : base HT, TVA collectée, TVA déductible (achats et charges TTC), **TVA À PAYER**. Si la déductible dépasse la collectée, rien à payer (crédit reporté).
+4. **📄 EDI Annexe TVA (DGI)** : bouton dans la carte TVA (et Réglages → Divers) → fichier texte `EDI_Annexe_TVA_YYYY-MM.txt` prêt à déposer sur le portail DGI (déclaration mensuelle).
+5. **📄 EDI Annexe ITS (DGI)** : côté paie — générez puis **clôturez** la paie du mois d'abord, puis Réglages → Divers (ou l'écran paie) → fichier `EDI_Annexe_ITS_YYYY-MM.txt` : matricule, brut imposable, base ITS, ITS brut, RICF, ITS net, total, par employé.
 
 ### 🏷️ Emballages — workflow complet
 
@@ -207,7 +207,7 @@ Quand la paie du mois est clôturée, la masse « Personnel » affiche ligne par
 **salaires bruts** → (mémo, inclus dans le brut) **CNPS salarié**, **CMU salarié**, **ITS salarié**, **= salaires nets versés**, **dont primes et bonus** → puis les charges ajoutées : **CNPS patronal** (retraite + PF + maternité + AT + CMU employeur) et **FDFP patronal**. Tout sort directement des bulletins de paie officiellement calculés.
 
 ### Impôts et taxes : patente, TEE, ITS reconnus automatiquement
-Les sorties de caisse de la catégorie Impôts et taxes sont ventilées selon le libellé : écrivez « Patente … », « TEE … » ou « ITS … » dans l'opération de caisse et la ligne correspondante apparaît dans l'exploitation. Les autres libellés restent groupés.
+Les sorties de caisse de la catégorie Impôts et taxes sont ventilées selon le libellé : écrivez « Patente … », « TEE … » ou « ITS … » dans l'opération de caisse et la ligne correspondante apparaît dans l'exploitation. Les autres libellés restent groupés. *(L'impôt BIC/TEE **estimé** sur le mois reste affiché séparément, non décaissé — voir Fiscalité ci-dessus.)*
 
 ### Créer vos propres lignes
 Dans l'écran Exploitation, chaque masse Personnel et Impôts et taxes a un bouton **＋ Créer une ligne** (gestionnaire uniquement) : libellé + montant, valable pour le mois affiché (ex. « ITS patronal », « TEOM », « Prime exceptionnelle »). Les lignes créées sont marquées « ligne créée », s'ajoutent au total de la masse, se supprinent d'un clic (✕) et partent dans l'Excel mensuel.

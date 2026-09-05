@@ -60,10 +60,9 @@ ACHAT VERT ──▶ STOCK VERT ──▶ TORRÉFACTION ──▶ STOCK TORRÉFI
 ```
 
 - **Achats consommés** du mois = stock initial + achats − stock final (coût moyen pondéré) : pas de charges faussées par le stock dormant.
-- **Rendement réel** de torréfaction **ET de transformation machines** calculés à chaque lot (pas de barème théorique).
-- **Étape machines (transformation)** : après torréfaction, les machines (broyeur, moulin…) transforment le torréfié en **types de café** (« Moulu premium », « Grains »…), pesés réellement — c'est là que les types de produits se forment. Chaque **produit fini** déclare ensuite sa **recette** (ex. café 1 kg = 1 kg de « Moulu premium ») : le conditionnement déduit automatiquement les types et les emballages, sans nouvelle pesée.
-- Les stocks de semi-finis (types) sont valorisés au coût moyen du vert consommé par les machines et leur variation alimente les produits du mois.
-- **Écran 📦 Stocks** : vue consolidée temps réel (vert, torréfié, types, produits finis, emballages + valeurs + alertes seuils).
+- **Rendement réel UNIQUE** : la torréfaction est la seule pesée (kg verts → kg torréfiés). Les machines sont utilisées mais **on ne pèse plus entre torréfaction et machines** : le **conditionnement** consomme directement le torréfié (une seule saisie : kg torréfiés + unités produites).
+- Chaque **produit fini** déclare sa **recette en kg de café par unité** (ex. sachet 1 kg = 1 kg de café ; 500 g = 0,5 kg) : le stock de torréfié et les emballages sont déduits automatiquement — plus d'étape intermédiaire, plus de types de café à gérer.
+- **Écran 📦 Stocks** : vue consolidée temps réel (vert, torréfié, produits finis, emballages + valeurs + alertes seuils).
 - Alertes automatiques quand un produit fini ou un emballage passe sous son seuil.
 - **Immobilisations** : registre + dotation mensuelle automatique (linéaire, plafonnée, soldée seule).
 
