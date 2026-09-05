@@ -1619,21 +1619,6 @@ App.prodSave=async id=>{const rec={name:$('#pName').value.trim(),weight_g:Number
   rec.packaging=bom;
   if(id)await DB.update('products',id,rec);else await DB.insert('products',Object.assign({unit:'sachet',active:true},rec));
   closeModal();toast('Produit enregistré','ok');render();};
-App.typeForm=async id=>{
-  let t={name:'',alert_min:20};
-  if(id)t=(await DB.list('coffee_types',{eq:{id:id}}))[0]||t;
-  modal(id?'Modifier le type':'Nouveau type de café transformé',
-    fld('Nom du type','<input id="tName" value="'+esc(t.name)+'" placeholder="ex : Moulu premium, Grains, Assemblage maison…">')
-    +fld('Alerte stock bas (kg)','<input id="tAlert" type="number" inputmode="numeric" value="'+(t.alert_min||0)+'">'),
-    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.typeSave(\''+(id||'')+'\')">Enregistrer</button>');
-};
-App.typeSave=async id=>{const name=$('#tName').value.trim();if(!name)return toast('Nom obligatoire','bad');
-  const rec={name:name,alert_min:Number($('#tAlert').value)||0};
-  if(id)await DB.update('coffee_types',id,rec);else await DB.insert('coffee_types',Object.assign({active:true},rec));
-  closeModal();toast('Type enregistré','ok');render();};
-App.typeToggle=async id=>{const t=(await DB.list('coffee_types',{eq:{id:id}}))[0];if(!t)return;
-  await DB.update('coffee_types',id,{active:t.active===false});render();};
-
 /* ================= ACHATS CAFÉ VERT ================= */
 async function scAchats(){
   const list=(await DB.list('purchases')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -1779,7 +1764,7 @@ App.roastSave=async()=>{let i=Number($('#rIn').value)||0,o=Number($('#rOut').val
   await DB.insert('roastings',Object.assign({source:'admin'},rec));
   toast('Torréfaction enregistrée ✅'+(est?' — torréfié retenu : '+num2(o)+' kg (= vert pesé). La perte se mesurera au conditionnement':''),'ok');render();};
 async function prodTransTab(){
-  S.trEdit=null;S.condEdit=null;
+  S.condEdit=null;
   const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
   const st=await computeStats();
@@ -1820,17 +1805,7 @@ App.trCondCalc=()=>{const x=Number(($('#cIn')||{value:0}).value)||0;
   if(units<=0){c.innerHTML='Café conditionné, perte et rendement apparaîtront ici';return;}
   const perte=x-cafe;
   c.innerHTML='<b>'+num(units)+'</b> unité(s) · café conditionné <b>'+num2(cafe)+' kg</b>'+(x>0?' · perte <b>'+num2(perte)+' kg</b> · rendement <b>'+num2(100*cafe/x)+' %</b>'+(perte<0?' ⚠️ conditionné supérieur au consommé !':''):' · non pesé → consommé = stock ('+num2(stk)+' kg) · perte <b>'+num2(Math.max(stk-cafe,0))+' kg</b>'+(stk>cafe?'':' ⚠️ stock torréfié insuffisant'))+(pkParts.length?'<br>Emballages : '+pkParts.join(' · '):'');};
-App.trCancel=()=>{S.trEdit=null;render();};
 App.condCancel=()=>{S.condEdit=null;render();};
-App.trEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];
-  const t=(await DB.list('transformations',{eq:{id:id}}))[0];if(!t)return;
-  S.trEdit=id;
-  $('#tD').value=t.date;$('#tIn').value=Number(t.roasted_used)||'';
-  (t.lines||[]).forEach(l=>{const inp=$('#tq_'+l.type_id);if(inp)inp.value=Number(l.qty)||'';});
-  $('#tOp').value=t.operator||'';$('#tN').value=t.note||'';
-  const b=$('#trBtn');if(b)b.textContent='💾 Enregistrer la modification';
-  const c=$('#trCancel');if(c)c.style.display='inline';
-  App.trCalc();try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
 App.condEdit=async id=>{const p=(await DB.list('productions',{eq:{id:id}}))[0];if(!p)return;
   S.condEdit=id;
   $('#cD').value=p.date||todayISO();$('#cIn').value=Number(p.roasted_used)||'';
@@ -1840,49 +1815,9 @@ App.condEdit=async id=>{const p=(await DB.list('productions',{eq:{id:id}}))[0];i
   const b=$('#condBtn');if(b)b.textContent='💾 Enregistrer la modification';
   const c=$('#condCancel');if(c)c.style.display='inline';
   try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
-App.trCalc=()=>{const i=Number($('#tIn').value)||0;
-  const ins=$$('input[id^=tq_]');let out=0,parts=[];ins.forEach(x=>{const v=Number(x.value)||0;out+=v;if(v>0)parts.push(num2(v)+' kg');});
-  const c=$('#tCalc');
-  if(i>0){const p=i-out;c.innerHTML='Obtenu : <b>'+num2(out)+' kg</b>'+(parts.length?' ('+parts.join(' + ')+')':'')+' · Perte machines : <b>'+num2(p)+' kg</b> · Rendement : <b>'+num2(100*out/i)+' %</b>'+(out>i?' ⚠️ sortie supérieure à l\'entrée !':'');}
-  else c.innerHTML='Perte et rendement machines apparaîtront ici';};
-App.trSave=async()=>{const i=Number($('#tIn').value)||0;
-  const editId=S.trEdit;
-  const ctypes=await DB.list('coffee_types');
-  const lines=[];$$('input[id^=tq_]').forEach(x=>{const q=Number(x.value)||0;if(q>0){const t=ctypes.filter(y=>y.id===x.id.slice(3))[0];if(t)lines.push({type_id:t.id,name:t.name,qty:q});}});
-  const nbTypes=(await DB.list('coffee_types')).filter(t=>t.active!==false).length;
-  if(!nbTypes)return toast('Créez d\'abord vos types de café (écran Produits, section Types) — ce sont eux que les machines produisent','bad');
-  if(!i||!lines.length)return toast('Indiquez les kg de torréfié consommés ET la quantité obtenue d\'au moins un type','bad');
-  const out=lines.reduce((a,l)=>a+l.qty,0);
-  if(out>i)return toast('La somme obtenue ('+num2(out)+' kg) dépasse l\'entrée ('+num2(i)+' kg)','bad');
-  const st=await computeStats();
-  if(i>st.roastedStock)toast('⚠️ Stock torréfié : '+num2(st.roastedStock)+' kg — la saisie le rendra négatif','bad');
-const rec2={date:$('#tD').value||todayISO(),roasted_used:i,lines:lines,operator:$('#tOp').value,note:$('#tN').value};
-  if(editId){await DB.update('transformations',editId,rec2);S.trEdit=null;toast('Transformation modifiée ✅ (perte '+num2(i-out)+' kg)','ok');render();return;}
-    await DB.insert('transformations',{date:$('#tD').value||todayISO(),roasted_used:i,lines:lines,operator:$('#tOp').value,note:$('#tN').value,source:'admin'});
-  toast('Transformation enregistrée ✅ ('+num2(out)+' kg obtenus, perte '+num2(i-out)+' kg)','ok');render();};
 function prodCondTab(){return prodTransTab();}
 App.step=(id,d)=>{const el=$('#'+id);el.value=Math.max(0,(Number(el.value)||0)+d);el.dispatchEvent(new Event('input'));};
-App.condTot=()=>{const inputs=$$('input[id^=cq_]');let n=0;inputs.forEach(i=>n+=Number(i.value)||0);
-  const ctx=App._condCtx||{};
-  if(n>0&&ctx.hasTypes){
-    const use={};const stock=ctx.stock||{};
-    inputs.forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=(ctx.prods||[]).filter(x=>x.id===i.id.slice(3))[0];if(!p)return;
-      (p.recipes||[]).forEach(r=>{use[r.type_id]=(use[r.type_id]||0)+Number(r.qty||0)*q;});});
-    const parts=Object.keys(use).map(k=>{const t=(ctx.types||[]).filter(x=>x.id===k)[0];const nm=t?t.name:k;
-      const st=stock[k]!=null?stock[k]:0;return num2(use[k])+' kg '+esc(nm)+(use[k]>st?' ⚠️ stock '+num2(st):'');});
-    const pkUse={};inputs.forEach(i=>{const q=Number(i.value)||0;if(q<=0)return;const p=(ctx.prods||[]).filter(x=>x.id===i.id.slice(3))[0];if(!p)return;
-      (p.packaging||[]).forEach(b=>{pkUse[b.name||b.pack_id]=(pkUse[b.name||b.pack_id]||0)+Number(b.qty||0)*q;});});
-    const pkParts=Object.keys(pkUse).map(k=>num(pkUse[k])+' '+esc(k));
-    $('#cTot').innerHTML='<b>'+num(n)+'</b> unité(s) → consommera '+parts.join(' · ')+(pkParts.length?' + emballages : '+pkParts.join(' · '):'');
-  }else $('#cTot').innerHTML=n>0?'<b>'+num(n)+'</b> unité(s) à produire':'Rien produit pour l\'instant';};
 async function createProduction(rec){
-  if(!rec.type_lines){
-    const prods=await DB.list('products');const acc={};
-    for(const l of (rec.lines||[])){const p=prods.filter(x=>x.id===l.product_id||x.name===l.name)[0];
-      if(p&&(p.recipes||[]).length)(p.recipes).forEach(r=>{const k=r.type_id||r.name;acc[k]=(acc[k]||0)+Number(r.qty||0)*Number(l.qty||0);});}
-    const ctypes=await DB.list('coffee_types');
-    rec.type_lines=Object.keys(acc).map(k=>{const t=ctypes.filter(x=>x.id===k)[0];return{type_id:k,name:t?t.name:k,qty:Math.round(acc[k]*1000)/1000};});
-  }
   const pr=await DB.insert('productions',Object.assign({created_at:nowISO()},rec));
   try{await consumePackagingForProduction(pr);}catch(e){console.warn('emballages',e);}
   return pr;
@@ -1956,7 +1891,7 @@ async function prodAdjTab(){
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
   return '<div class="alert al-info">💡 <b>Stocks de départ</b> : c\'est ici — choisissez le niveau, une quantité <b>positive</b>, motif « Stock initial ». Sinon : casse, don, perte ou erreur d\'inventaire → quantité négative (positive pour un retour).</div>'
   +'<div class="row">'+fld('Date','<input id="jD" type="date" value="'+todayISO()+'">')
-  +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\';if($(\'#jT\'))$(\'#jT\').style.display=this.value===\'type\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="type">Café transformé par les machines (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
+  +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
   +'<div class="field" id="jP" style="display:none"><span>Produit</span><select>'+prods.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select></div>'
   +(ctypes.length?'<div class="field" id="jT" style="display:none"><span>Type de café transformé</span><select>'+ctypes.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></div>':'')
   +'<div class="row">'+fld('Quantité (+ ou −)','<input id="jQ" type="number" inputmode="numeric" step="0.1" placeholder="ex : -5 ou 10">')+fld('Motif','<input id="jR" placeholder="casse, don, inventaire…">')+'</div>'
@@ -1978,7 +1913,7 @@ App.adjEdit=async function(){const args=[].slice.call(arguments);const id=args.l
 App.adjCancel=()=>{S.adjEdit=null;render();};
 
 App.adjSave=async()=>{const q=Number($('#jQ').value)||0;if(!q)return toast('Quantité obligatoire','bad');
-  const lvl=$('#jL').value;let pid=null,pname=null,tid=null;
+  const lvl=$('#jL').value;if(!lvl)return toast('Choisissez le niveau','bad');let pid=null,pname=null,tid=null;
   if(lvl==='product'){const sel=$('#jP select');pid=sel.value;pname=sel.options[sel.selectedIndex].text;}
   if(lvl==='type'&&$('#jT select')){const sel=$('#jT select');tid=sel.value;pname=sel.options[sel.selectedIndex].text;}
   const rec={date:$('#jD').value||todayISO(),level:lvl,qty:q,reason:$('#jR').value};
@@ -2196,7 +2131,7 @@ App.cashForm=async id=>{
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.cashSave('+(id?"'"+id+"'":'')+')">Enregistrer</button>');
   if(e){$('#oD').value=e.date||todayISO();$('#oM').value=Number(e.amount)||'';$('#oL').value=e.label||'';
     $('#oA').value=e.account==='momo'?'momo':'cash';
-    if(e.category&&!cats.some(c=>c.key===e.category)){$('#oC').innerHTML+='<option value="'+e.category+'">'+esc(catLabel(e.category))+'</option>';}
+    if(e.category&&!cats.some(c=>c.key===e.category)){$('#oC').innerHTML+='<option value="'+esc(e.category)+'">'+esc(catLabel(e.category))+'</option>';}
     $('#oC').value=e.category||'divers';}
   App._cash=e?e.type:'in';};
 App.cashDir=(btn,v)=>{$$('#cT button').forEach(b=>b.className='');btn.className='on '+v;App._cash=v;};
@@ -3662,11 +3597,11 @@ function incomeRows(inc){
   }
   L.push(['   CNPS patronal (retraite + PF + maternité + AT + CMU employeur)',inc.personnel.pat+(inc.personnel.extra||0)]);
   L.push(['   FDFP patronal (formation professionnelle)',inc.personnel.fdfp]);
-  (inc.personnel.custom||[]).forEach(x=>L.push(['   '+x.label+'  (ligne créée)',x.amount]));
+  (inc.personnel.custom||[]).forEach(x=>L.push(['   '+esc(x.label)+'  (ligne créée)',x.amount]));
   if(inc.personnel.fallback)L.push(['   (estimation via caisse — paie du mois non clôturée)']);
   L.push([{v:'   Total personnel',__style:1},{v:inc.personnel.total,__style:1}]);
   L.push([{v:'4. Impôts et taxes',__style:1}]);
-  (inc.impotsRows||Object.keys(inc.impots).map(k=>({label:sagLbl(k),amount:inc.impots[k]}))).forEach(r=>L.push(['   '+r.label+(r.custom?'  (ligne créée)':''),r.amount]));
+  (inc.impotsRows||Object.keys(inc.impots).map(k=>({label:sagLbl(k),amount:inc.impots[k]}))).forEach(r=>L.push(['   '+esc(r.label)+(r.custom?'  (ligne créée)':''),r.amount]));
   L.push([{v:'   Total impôts et taxes',__style:1},{v:inc.impotsTot,__style:1}]);
   L.push([{v:'5. Dotations aux amortissements',__style:1}]);
   L.push(['   Amortissement linéaire des immobilisations (voir annexe)',inc.dotations]);
@@ -3877,11 +3812,11 @@ async function scExploitation(){
     :L('   Salaires (via caisse)',inc.personnel.brut))
    +L('   CNPS patronal (retraite + PF + maternité + AT + CMU employeur)',inc.personnel.pat+(inc.personnel.extra||0))
    +L('   FDFP patronal (formation professionnelle)',inc.personnel.fdfp)
-   +(inc.personnel.custom||[]).map(x=>xlRow('   '+x.label,x.amount,x.id)).join('')
+   +(inc.personnel.custom||[]).map(x=>xlRow('   '+esc(x.label),x.amount,x.id)).join('')
    +(inc.personnel.fallback?'<tr><td class="help">estimation via caisse — paie non clôturée</td><td></td></tr>':'')
    +addBtn('personnel'),inc.personnel.total)
   +grpRow('4. Impôts et taxes',((inc.impotsRows&&inc.impotsRows.length)
-    ?inc.impotsRows.map(r=>r.custom?xlRow('   '+r.label,r.amount,r.id):L('   '+r.label,r.amount)).join('')
+    ?inc.impotsRows.map(r=>r.custom?xlRow('   '+esc(r.label),r.amount,r.id):L('   '+esc(r.label),r.amount)).join('')
     :L('   (aucun)',0))+addBtn('impots'),inc.impotsTot)
   +grpRow('5. Amortissements',L('   Dotations du mois',inc.dotations),inc.dotations)
   +'<tr class="tot"><td>TOTAL CHARGES</td><td class="r"><b>'+money(inc.chargesTot)+'</b></td></tr></tbody></table></div></div>'
