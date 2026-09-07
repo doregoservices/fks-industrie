@@ -62,7 +62,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 
 1. **Matin** : ouvrez **À valider** (badge rouge) → examinez les saisies de la veille → **Valider** ou **Rejeter**.
 2. **Achats de café vert** : écran **Achats vert** → le règlement part automatiquement dans la caisse.
-3. **Production** : écran **Production** (ou le lien atelier) → ① **Torréfaction** : kg verts → kg torréfiés (pesée unique) ; ② **Conditionnement** : une seule saisie — kg torréfiés consommés + unités produites par produit. Les emballages sont déduits **automatiquement** selon les recettes et le stock de torréfié est décrémenté directement. *Un seul rendement réel — torréfaction → conditionnement — sans pesée intermédiaire : les machines sont utilisées mais on ne pèse plus entre torréfaction et machines.*
+3. **Production** : écran **Production** (ou le lien atelier) → ① **Torréfaction** : kg verts → kg torréfiés (pesée unique) ; ② **Conditionnement** : une seule saisie — kg torréfiés consommés + unités produites par produit. Les emballages sont déduits **automatiquement** selon les recettes et le stock de torréfié est décrémenté directement. *Un seul rendement réel — torréfaction → conditionnement — sans pesée intermédiaire : les machines sont utilisées mais on ne pèse plus entre torréfaction et machines.* **Les stocks de café vert et de café torréfié ne peuvent jamais devenir négatifs** : toute saisie (torréfaction, conditionnement, saisie atelier validée, ajustement) qui consommerait plus que le stock disponible est **refusée** avec le montant disponible affiché.
 3 bis. **📦 Stocks** : un seul écran pour tout voir — café vert (+ valeur au coût moyen), torréfié, produits finis (produits/vendus/stock + alertes ⚠️), emballages (+ valeur). Bouton direct depuis l'accueil.
 4. **Caisse** : opérations courantes + boutons **Envoi ventes direction** / **Appro direction reçue** (journal Banque) et **🔄 Retrait MoMo → espèces** (transfert entre vos deux caisses, journal OD).
 5. **Dettes fournisseurs** : l'écran **Achats vert** affiche en permanence le **total des achats non réglés** (indicateur rouge + liste avec bouton 💸 **Payer**) — c'est là que se repèrent les dettes 4011.
@@ -174,6 +174,7 @@ Préconfigurés dans l'application (modifiables dans Réglages, **à faire valid
 
 - **SALAIRE BRUT (imposable)** = base + logement + heures sup + bonus + **primes taxables**. Le **transport et toutes les rubriques non taxables en sont EXCLUS**.
 - **CNPS, CMU, ITS, FDFP et charges patronales** sont calculés sur ce salaire brut.
+- **Charges patronales** : CNPS retraite patronale + prestations familiales + maternité + accidents du travail + CMU employeur + FDFP + **ITS employeur (1,2 % du salaire brut, taux modifiable)** — ligne dédiée sur le bulletin, dans le coût total employeur, l'exploitation et l'export Sage (6413 + dette État).
 - **NET À PAYER = salaire brut + transport + primes non taxables − CNPS − CMU − ITS net − autres retenues − avances**. La **prime de transport est versée au prorata des jours d'absence** (base ÷ 30 × jours travaillés) — le bulletin affiche la conversion (ex. 10 000 → 9 333 F pour 2 jours d'absence).
 - **ITS affiché en 3 lignes : ITS brut (barème) − RICF = ITS net**.
 - Sage (journal PA) : 661 est débité en 2 lignes — salaires bruts + avantages/primes non imposables — pour un équilibre exact.

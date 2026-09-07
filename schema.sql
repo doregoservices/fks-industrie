@@ -199,6 +199,7 @@ create table if not exists pay_slips(
   cout_employeur numeric default 0,
   matricule text,
   transport_full numeric default 0,
+  its_er numeric default 0,
   paid boolean default false
 );
 create table if not exists pending_entries(
@@ -268,6 +269,7 @@ alter table employees add column if not exists tax_shares numeric default 2;
 alter table employees add column if not exists matricule text;
 alter table pay_slips add column if not exists matricule text;
 alter table pay_slips add column if not exists transport_full numeric default 0;
+alter table pay_slips add column if not exists its_er numeric default 0;
 alter table pay_slips add column if not exists its_gross numeric default 0;
 alter table pay_slips add column if not exists ricf numeric default 0;
 alter table pay_slips add column if not exists its numeric default 0;
