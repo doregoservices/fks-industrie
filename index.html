@@ -1708,7 +1708,7 @@ async function scStocks(){
   const tmap={};(st.types||[]).forEach(t=>tmap[t.id]=t);
   const alertCount=(st.packaging||[]).filter(x=>x.stock<=Number(x.alert_min||0)&&Number(x.alert_min||0)>0).length+((st.products||[]).filter(p=>p.alert_min&&p.stock<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
   $('#main').innerHTML='<div class="card"><h2>📦 Tous les stocks</h2>'
-  +(zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode) — voir Production → 📋 Historique → ✎ pour corriger.</div>':'')
+  +(zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode) — <button class="btn sm" style="margin-left:6px" onclick="App.fixZeroCond()">🔧 Corriger automatiquement</button> ou ✎ dans Production → 📋 Historique.</div>':'')
   +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div></div>'
@@ -1899,7 +1899,7 @@ async function prodHistTab(){
   const used=prod.reduce((s,p)=>s+Number(p.roasted_used||0),0),units=prod.reduce((s,p)=>s+(p.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0),0);
   const tUsed=transf.reduce((s,t)=>s+Number(t.roasted_used||0),0),tOut=transf.reduce((s,t)=>(t.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
   const pUsedTypes=prod.reduce((s,p)=>(p.type_lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
-  return (zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode de saisie) : le café de ces sachets est resté dans le stock torréfié et fausse stocks et exploitation. Cliquez ✎ sur chaque ligne pour indiquer le kg torréfié réellement consommé.</div>':'')
+  return (zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode de saisie) : le café de ces sachets est resté dans le stock torréfié et fausse stocks et exploitation. Corrigez en un clic : <button class="btn sm" style="margin:0 6px" onclick="App.fixZeroCond()">🔧 Corriger automatiquement</button> ou ✎ ligne par ligne.</div>':'')
   +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Rendement torréfaction (unique)</div><div class="v">'+num2(tin?100*tout/tin:0)+' %</div><div class="s">'+num2(tout)+' kg obtenus / '+num2(tin)+' kg verts</div></div>'
   +'<div class="kpi"><div class="t">Kg torréfiés conditionnés</div><div class="v">'+num2(used)+' kg</div></div>'
@@ -1912,6 +1912,21 @@ async function prodHistTab(){
   +prod.map(p=>'<tr><td>'+dFR(p.date)+'</td><td class="r">'+(Number(p.roasted_used)>0?num2(p.roasted_used)+' kg torréfié':((p.type_lines||[]).map(l=>num2(l.qty)+' kg '+esc(l.name)).join('<br>')||'—'))+'</td><td>'+ (p.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td>'+esc(p.operator||'')+'</td><td><button class="btn sm sec" onclick="App.delRow(\'productions\',\''+p.id+'\')">✕</button></td></tr>').join('')
   +'</tbody></table></div>';
 }
+App.fixZeroCond=()=>confirmBox('Corriger les conditionnements à 0 kg ?','Pour chaque conditionnement de l\'ancien mode, le café réellement contenu dans les sachets (recette × unités produites) sera inscrit comme torréfié consommé — dans la limite du stock disponible. Lots impossibles : torréfaction non enregistrée à saisir (🔥) ou quantités à revoir (✎).','🔧 Corriger',async()=>{
+  const prods=await DB.list('products');const all=await DB.list('productions');
+  const kgU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
+  const zero=all.filter(p=>!Number(p.roasted_used)&&(p.lines||[]).some(l=>Number(l.qty)>0)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  if(!zero.length)return toast('Aucun conditionnement à 0 kg — tout est déjà cohérent ✅','ok');
+  let st=await computeStats();let fixed=0;const skipped=[];
+  for(const pz of zero){
+    const cafe=(pz.lines||[]).reduce((a,l)=>{const pp=prods.filter(x=>x.id===l.product_id||x.name===l.name)[0]||{};return a+Number(l.qty||0)*kgU(pp);},0);
+    if(!cafe){skipped.push(dFR(pz.date)+' : produit sans recette café');continue;}
+    if(cafe>st.roastedStock+0.001){skipped.push(dFR(pz.date)+' : il manque '+num2(cafe-Math.max(st.roastedStock,0))+' kg de torréfié — enregistrez la torréfaction du jour (🔥) puis relancez');continue;}
+    await DB.update('productions',pz.id,{roasted_used:Math.round(cafe*1000)/1000});
+    st=await computeStats();fixed++;}
+  render();
+  if(skipped.length)modal('Corrections : '+fixed+' OK · '+skipped.length+' à revoir','<div class="alert al-ok">'+fixed+' conditionnement(s) corrigé(s) ✅ — stocks et exploitation recalculés.</div><div class="alert al-bad" style="margin-top:6px">'+skipped.map(x=>esc(x)).join('<br>')+'</div>');
+  else toast('✅ '+fixed+' conditionnement(s) corrigé(s) — stocks et exploitation recalculés','ok');});
 App.delRow=(t,id)=>confirmBox('Supprimer cet enregistrement ?','Les stocks seront recalculés d\'autant. Action définitive.','Supprimer',async()=>{
   if(t==='productions'){const ents=await DB.list('packaging_entries');for(const e of ents.filter(x=>x.ref==='production:'+id))await DB.remove('packaging_entries',e.id);}
   if(t==='packaging_entries'){const pe=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(pe&&pe.type==='in'){const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0];if(ce)await DB.remove('cash_entries',ce.id);}}
