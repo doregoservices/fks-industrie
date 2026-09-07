@@ -3496,7 +3496,8 @@ async function computeIncome(period){
   const semiSIv=Math.round(ctypes.reduce((a,t)=>a+typeQtyAt(t.id,t.name,prevStart)*semiCostPrev,0));
   const semiSFv=Math.round(ctypes.reduce((a,t)=>a+typeQtyAt(t.id,t.name,end)*semiCost,0));
   const dSemi=semiSFv-semiSIv;
-  const produitsTot=ventes+dPF+dSemi;
+  const tvaOn=(SETS.fiscal||{}).tva===true,tvaR=Number((SETS.fiscal||{}).tva_rate)||18;
+  const produitsTot=(tvaOn?Math.round(ventes/(1+tvaR/100)):ventes)+dPF+dSemi;
   /* --- CHARGE 1 : achats consommés (via inventaire) --- */
   const achV=pur.filter(p=>inM(p.date));
   const achVertAmt=achV.reduce((a,p)=>a+Number(p.amount||0),0),achVertKg=achV.reduce((a,p)=>a+Number(p.qty_kg||0),0);
@@ -3550,17 +3551,17 @@ async function computeIncome(period){
   const assetsRows=assets.map(a=>({name:a.name,category:a.category||'',cost:Number(a.cost||0),dep:assetMonthlyDep(a,period),cumul:assetCumulDep(a,period),vnc:Number(a.cost||0)-assetCumulDep(a,period)}));
   const cumulTot=assetsRows.reduce((a,x)=>a+x.cumul,0),vncTot=assetsRows.reduce((a,x)=>a+x.vnc,0);
   /* --- TOTAUX --- */
-  const tvaOn=(SETS.fiscal||{}).tva===true,tvaR=Number((SETS.fiscal||{}).tva_rate)||18;
   const ventesHT=tvaOn?Math.round(ventes/(1+tvaR/100)):ventes;
   const tvaCol=tvaOn?(ventes-ventesHT):0;
   const achatTTC=tvaOn?(achVertAmt+achEmb+servicesTot):0;
   const tvaDed=tvaOn?Math.round(achatTTC-achatTTC/(1+tvaR/100)):0;
   const tvaDue=Math.max(0,tvaCol-tvaDed);
-  const chargesTot=consVert+consEmb+servicesTot+personnel.total+impotsTot+dotations;
+  const chargesHT=tvaOn?Math.max(0,consVert+consEmb+servicesTot-tvaDed):(consVert+consEmb+servicesTot);
+  const chargesTot=chargesHT+personnel.total+impotsTot+dotations;
   const resultat=Math.round(produitsTot-chargesTot);
   const marge=ventes>0?100*resultat/ventes:0;
   const F=SETS.fiscal||{};const fMode=F.mode==='TEE'?'TEE':'BIC';const isRate=fMode==='TEE'?(Number(F.tee)||5):(Number(F.bic)||25);
-  const isBenef=fMode==='TEE'?Math.round(ventes*isRate/100):((resultat>0)?Math.round(resultat*isRate/100):0);
+  const isBenef=fMode==='TEE'?Math.round((tvaOn?ventesHT:ventes)*isRate/100):((resultat>0)?Math.round(resultat*isRate/100):0);
   const resultatNet=resultat-isBenef;
   const ebe=resultat+dotations;              // excédent brut d'exploitation (EBITDA)
   const caf=resultatNet+dotations;           // capacité d'autofinancement (cash-flow)
@@ -3630,7 +3631,7 @@ function incomeRows(inc){
   L.push(['Période : '+monthLabel(inc.period)+' — montants en FCFA']);
   L.push([]);
   L.push([{v:'PRODUITS D\'EXPLOITATION',__style:1}]);
-  L.push(['Ventes de produits finis',inc.ventes]);
+  L.push(['Ventes de produits finis'+(inc.tva&&inc.tva.on?' (hors TVA)':''),inc.tva&&inc.tva.on?inc.tva.ventesHT:inc.ventes]);
   L.push(['Variation de stock de produits finis',inc.dPF]);
   L.push([{v:'TOTAL PRODUITS',__style:1},{v:inc.produitsTot,__style:1}]);
   L.push([]);
@@ -3860,7 +3861,7 @@ async function scExploitation(){
   +'<tr class="tot"><td>TVA À PAYER</td><td class="r"><b>'+money(inc.tva.due)+'</b></td></tr></tbody></table></div>'
   +'<button class="btn sm" style="margin-top:8px" onclick="App.ediTVA(\''+period+'\')">📄 Déclaration + fichier EDI Annexe TVA (DGI)</button></div>':'')
   +'<div class="grid g2"><div><h3>Produits</h3><table class="tbl"><tbody>'
-  +L('Ventes de produits finis',inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
+  +L('Ventes de produits finis'+(inc.tva.on?' (hors TVA — TVA à part dans la carte dédiée)':''),inc.tva.on?inc.tva.ventesHT:inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'
   +'<div><h3>Charges par grandes masses</h3><table class="tbl"><tbody>'
   +grpRow('1. Achats consommés',L('   Café vert consommé (SI valorisé + achats − SF final)',inc.consVert)+L('   Emballages',inc.consEmb),inc.consVert+inc.consEmb)
