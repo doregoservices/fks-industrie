@@ -1124,9 +1124,6 @@ function defaultSettings(){
     ],
     journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
     fiscal:{mode:'BIC',bic:25,tee:5,tva:false,tva_rate:18,nif:''},
-    exploitation:{
-      is_rate:25 // impôt sur les bénéfices (estimation CI 25 %) — 0 = ne pas déduire
-    },
     payroll:{ // Taux Côte d'Ivoire en vigueur (réforme ITS 2024) — modifiables dans Réglages
       cnps_retraite_e:6.3,        // CNPS retraite : part salarié (%)
       cnps_retraite_er:7.7,       // CNPS retraite : part patronale (%)
@@ -3007,9 +3004,8 @@ async function scParametres(){
   +'<button class="btn sm" onclick="App.savePayroll()">Enregistrer les taux</button>'
   +'<div class="hr"></div><h3>🏛️ Fiscalité — BIC / TEE &amp; TVA</h3>'
   +'<div class="row">'
-  +fld('Impôt sur les bénéfices','<select id="fiMode"><option value="BIC"'+(F.mode==='TEE'?'':' selected')+'>BIC — pourcentage du résultat</option><option value="TEE"'+(F.mode==='TEE'?' selected':'')+'>TEE — pourcentage du chiffre d\'affaires</option></select>')
-  +fld('Taux BIC (%)','<input id="fiBic" type="number" step="0.1" inputmode="numeric" value="'+(F.bic!=null?F.bic:25)+'">')
-  +fld('Taux TEE (%) — 4, 5 ou 6','<input id="fiTee" type="number" step="0.1" inputmode="numeric" value="'+(F.tee!=null?F.tee:5)+'">')+'</div>'
+  +fld('Impôt sur les bénéfices — choix unique','<select id="fiMode" onchange="App.fiModeChange()"><option value="BIC"'+(F.mode==='TEE'?'':' selected')+'>BIC — pourcentage du résultat</option><option value="TEE"'+(F.mode==='TEE'?' selected':'')+'>TEE — pourcentage du chiffre d\'affaires</option></select>')
+  +fld('<span id="fiRateL">'+(F.mode==='TEE'?'Taux TEE (%) — % du chiffre d\'affaires':'Taux BIC (%) — % du résultat')+'</span>','<input id="fiRate" type="number" step="0.1" inputmode="numeric" value="'+(F.mode==='TEE'?(F.tee!=null?F.tee:5):(F.bic!=null?F.bic:25))+'">')+'</div>'
   +'<div class="row">'
   +fld('TVA applicable','<select id="fiTva"><option value="1"'+(F.tva?' selected':'')+'>Oui — répercussion et déclaration mensuelle</option><option value="0"'+(F.tva?'':' selected')+'>Non (par défaut)</option></select>')
   +fld('Taux TVA (%)','<input id="fiTvaR" type="number" step="0.1" inputmode="numeric" value="'+(F.tva_rate!=null?F.tva_rate:18)+'">')
@@ -3039,14 +3035,19 @@ async function scParametres(){
     +'<div class="alert al-info">🕐 <b>Point quotidien automatique : 22h00</b> · rapport mensuel : le 3 du mois à 10h00 (programme installé côté Supabase — cron-emails.sql). Les boutons ✉️ de l\'app permettent un envoi manuel à tout moment.</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="App.saveEmail()">Enregistrer</button><button class="btn sm sec" onclick="App.emailTest()">Envoyer un email de test</button></div>'
     :'<div class="alert al-info">L\'envoi automatique nécessite le mode en ligne (Supabase). Sans cela, utilisez les boutons « ✉️ Préparer l\'email » qui ouvrent votre messagerie avec le rapport prêt. Connectez Supabase puis revenez ici.</div>')
-  +'<div class="hr"></div><h3>📈 Exploitation — impôt sur les bénéfices</h3>'
-  +'<div class="row">'+fld('Taux d\'impôt sur les bénéfices (%)','<input id="xpIs" type="number" inputmode="numeric" step="0.1" value="'+((SETS.exploitation||{}).is_rate!=null?(SETS.exploitation||{}).is_rate:25)+'">')+'<button class="btn sm" style="margin-bottom:12px" onclick="App.saveExpl()">Enregistrer</button></div>'
   +'<div class="help">Appliqué au résultat d\'exploitation lorsqu\'il est bénéficiaire, pour donner le résultat net et le cash-flow. Mettre 0 pour ne pas le déduire. Taux standard CI : 25 % — à confirmer avec votre comptable.</div>'
   +'<div class="hr"></div><h3>⚠️ Zone sensible</h3><button class="btn danger sm" onclick="App.resetAll()">Réinitialiser toutes les données locales</button>'
   +(CFG.mode==='supabase'?' <button class="btn danger sm" onclick="App.dbWipe()">🧹 Vider la base en ligne (après tests)</button>':'')
   +'</div>';
 }
-App.saveFiscal=async()=>{await setSetting('fiscal',{mode:$('#fiMode').value||'BIC',bic:Number($('#fiBic').value)||25,tee:Number($('#fiTee').value)||5,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||''});toast('Fiscalité enregistrée ✅','ok');render();};
+App.fiModeChange=()=>{const m=$('#fiMode').value||'BIC';const prev=SETS.fiscal||{};const lbl=$('#fiRateL');const inp=$('#fiRate');if(!lbl||!inp)return;
+  if(m==='TEE'){lbl.textContent='Taux TEE (%) — % du chiffre d\'affaires';inp.value=(prev.tee!=null?prev.tee:5);}
+  else{lbl.textContent='Taux BIC (%) — % du résultat';inp.value=(prev.bic!=null?prev.bic:25);}};
+App.saveFiscal=async()=>{const m=$('#fiMode').value||'BIC';const rate=Number($('#fiRate').value)||0;const prev=SETS.fiscal||{};
+  if(rate<=0)return toast('Indiquez le taux ('+(m==='TEE'?'TEE':'BIC')+' en %)','bad');
+  const rec={mode:m,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||''};
+  if(m==='TEE'){rec.tee=rate;rec.bic=prev.bic!=null?prev.bic:25;}else{rec.bic=rate;rec.tee=prev.tee!=null?prev.tee:5;}
+  await setSetting('fiscal',rec);toast('Fiscalité enregistrée ✅ — '+(m==='TEE'?'TEE '+rate+' % du chiffre d\'affaires':'BIC '+rate+' % du résultat'),'ok');render();};
 App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
 App.logoSave=async()=>{const f=$('#stLogo').files&&$('#stLogo').files[0];if(!f)return toast('Choisissez d’abord une image','bad');
   const shrink=dUrl=>new Promise(res=>{try{const img=new Image();img.onload=()=>{try{const sc=Math.min(1,256/Math.max(1,img.height||256));
@@ -3091,7 +3092,6 @@ App.xlSave=async(sec,per)=>{const lbl=$('#xlLbl').value.trim(),amt=Number($('#xl
   const arr=(SETS.extra_lines||[]).slice();arr.push({id:'xl'+Date.now(),section:sec,period:per,label:lbl,amount:amt});
   await setSetting('extra_lines',arr);closeModal();toast('Ligne ajoutée','ok');render();};
 App.xlDel=async id=>{await setSetting('extra_lines',(SETS.extra_lines||[]).filter(x=>x.id!==id));toast('Ligne supprimée','ok');render();};
-App.saveExpl=async()=>{await setSetting('exploitation',{is_rate:Number($('#xpIs').value)||0});toast('Enregistré','ok');};
 App.dbWipe=()=>confirmBox('Vider toute la base en ligne ?','TOUTES les données seront supprimées : ventes, achats, production, caisse, paie, employés, commerciales, emballages, tokens… Les réglages (société, taux, comptes Sage, emails, utilisateurs) sont conservés. Utile pour repartir de zéro après les tests.','Tout vider',async()=>{
   toast('Suppression en cours…');
   for(const t of DB_TABLES){
