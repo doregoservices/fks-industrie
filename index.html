@@ -1705,7 +1705,7 @@ async function scStocks(){
   const pfRows2=(st.products||[]);
   const ctypes=ctypesRaw.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const tmap={};(st.types||[]).forEach(t=>tmap[t.id]=t);
-  const alertCount=(st.packaging||[]).filter(x=>x.qty<=Number(x.alert_min||0)).length+((st.products||[]).filter(p=>p.alert_min&&p.stock<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
+  const alertCount=(st.packaging||[]).filter(x=>x.stock<=Number(x.alert_min||0)&&Number(x.alert_min||0)>0).length+((st.products||[]).filter(p=>p.alert_min&&p.stock<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
   $('#main').innerHTML='<div class="card"><h2>📦 Tous les stocks</h2>'
   +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
@@ -1718,7 +1718,7 @@ async function scStocks(){
   +'<h3>🔥 Café torréfié</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit (torréfaction)</th><th class="r">Consommé (conditionnement'+(st.roastedUsedTransf?' + machines':'')+')</th><th class="r">Ajustements</th><th class="r">STOCK</th><th class="r">Rendement torréfaction</th></tr></thead><tbody>'
   +'<tr><td>'+num2(st.roastedMade)+' kg</td><td class="r">'+num2(st.roastedUsed+st.roastedUsedTransf)+' kg</td><td class="r">'+(st.roastedAdj>=0?'+':'')+num2(st.roastedAdj)+' kg</td><td class="r"><b>'+num2(st.roastedStock)+' kg</b></td><td class="r">'+num2(st.roastYield)+' %</td></tr></tbody></table><div class="help" style="margin-top:4px">Vert torréfié '+num2(st.greenUsed)+' kg → torréfié '+num2(st.roastedMade)+' kg · le stock restant attend le conditionnement.</div></div>'
   +'<h3>📦 Produits finis</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Produits</th><th class="r">Vendus</th><th class="r">Ajust.</th><th class="r">STOCK</th></tr></thead><tbody>'
-  +pfRows2.filter(r=>r.made||r.sold||r.adjust).map(r=>{const low=r.alert_min&&r.stock<=r.alert_min;
+  +pfRows2.filter(r=>r.made||r.sold||r.adjust||(r.alert_min>0&&r.stock<=r.alert_min)).map(r=>{const low=r.alert_min&&r.stock<=r.alert_min;
     return '<tr><td><b>'+esc(r.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(r.alert_min)+'</span>':'')+'</td><td class="r">'+num2(r.made)+'</td><td class="r">'+num(r.sold)+'</td><td class="r">'+(r.adjust?(r.adjust>0?'+':'')+num(r.adjust):'—')+'</td><td class="r"><b>'+num(r.stock)+'</b></td></tr>';}).join('')
   +'</tbody></table><div class="help" style="margin-top:4px">Stock = produits − vendus + ajustements (chaque mouvement est reconstitué depuis les saisies validées).</div></div>'
   +'<h3>🏷️ Emballages</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Stock</th><th class="r">Valeur</th></tr></thead><tbody>'
