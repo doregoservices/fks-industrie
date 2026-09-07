@@ -1278,8 +1278,8 @@ async function seedDemo(){
   await Local.insert('roastings',{date:D(4),green_in:300,roasted_out:249,operator:'Bakary',note:'',source:'admin'});
   const lines1=[{product_id:pids['Café moulu 1 kg'],name:'Café moulu 1 kg',qty:120,price:8000},{product_id:pids['Café moulu 500 g'],name:'Café moulu 500 g',qty:150,price:4500}];
   const lines2=[{product_id:pids['Café grain 1 kg'],name:'Café grain 1 kg',qty:60,price:9000},{product_id:pids['Café saveur gingembre 500 g'],name:'Café saveur gingembre 500 g',qty:80,price:5000},{product_id:pids['Café saveur poivre de Guinée 500 g'],name:'Café saveur poivre de Guinée 500 g',qty:70,price:5000}];
-  await Local.insert('productions',{date:D(11),roasted_used:0,lines:lines1,operator:'Équipe A',note:'',source:'admin'});
-  await Local.insert('productions',{date:D(3),roasted_used:0,lines:lines2,operator:'Équipe B',note:'',source:'admin'});
+  await Local.insert('productions',{date:D(11),roasted_used:205,lines:lines1,operator:'Équipe A',note:'',source:'admin'});
+  await Local.insert('productions',{date:D(3),roasted_used:142,lines:lines2,operator:'Équipe B',note:'',source:'admin'});
   const mkSale=async(date,agent,lines,pay_mode,client)=>{const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
     const s=await Local.insert('sales',{date,agent_id:aids[agent],agent_name:agent,pay_mode,client:client||'',total,lines,source:'form',status:'validated',credit_status:pay_mode==='credit'?'due':'paid'});
     if(pay_mode!=='credit')await Local.insert('cash_entries',{date,type:'in',account:pay_mode==='momo'?'momo':'cash',category:'ventes',label:'Ventes '+agent,amount:total,imputable:true,ref:'sale:'+s.id,source:'form',status:'validated'});};
@@ -1702,13 +1702,10 @@ async function scStocks(){
   const [prod,sales,adj,prods,ctypesRaw,pur]=await Promise.all([DB.list('productions'),DB.list('sales'),DB.list('adjustments'),DB.list('products'),DB.list('coffee_types'),DB.list('purchases')]);
   const purAmt=pur.reduce((a,p)=>a+Number(p.amount||0),0);
   const cmpV=st.greenIn>0?purAmt/st.greenIn:0;
-  const units={};
-  prod.forEach(p=>(p.lines||[]).forEach(l=>{const k=l.product_id||l.name;units[k]=(units[k]||0)+Number(l.qty||0);}));
-  sales.forEach(x=>(x.lines||[]).forEach(l=>{const k=l.product_id||l.name;units[k]=(units[k]||0)-Number(l.qty||0);}));
-  adj.filter(a=>a.level==='product').forEach(a=>{const k=a.product_id||a.name;units[k]=(units[k]||0)+Number(a.qty||0);});
+  const pfRows2=(st.products||[]);
   const ctypes=ctypesRaw.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const tmap={};(st.types||[]).forEach(t=>tmap[t.id]=t);
-  const alertCount=(st.packaging||[]).filter(x=>x.qty<=Number(x.alert_min||0)).length+(prods.filter(p=>p.active&&p.alert_min&&(units[p.id]||units[p.name]||0)<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
+  const alertCount=(st.packaging||[]).filter(x=>x.qty<=Number(x.alert_min||0)).length+((st.products||[]).filter(p=>p.alert_min&&p.stock<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
   $('#main').innerHTML='<div class="card"><h2>📦 Tous les stocks</h2>'
   +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
@@ -1716,10 +1713,14 @@ async function scStocks(){
   +'<div class="kpi"><div class="t">Alertes seuils</div><div class="v" style="color:'+(alertCount?'var(--bad)':'var(--ok)')+'">'+alertCount+'</div><div class="s">'+(alertCount?'sous le seuil → voir ⚠️ ci-dessous':'tout est au-dessus des seuils ✓')+'</div></div></div>'
   
   +'<h3>📦 Produits finis</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Produits</th><th class="r">Vendus</th><th class="r">Stock</th></tr></thead><tbody>'
-  +prods.filter(p=>p.active!==false).map(p=>{const u=units[p.id]||units[p.name]||0;const low=p.active&&p.alert_min&&u<=Number(p.alert_min);
-    const soldN=sales.reduce((a,x)=>a+((x.lines||[]).filter(l=>l.product_id===p.id||l.name===p.name).reduce((b,l)=>b+Number(l.qty||0),0)),0);
-    return '<tr><td><b>'+esc(p.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(p.alert_min)+'</span>':'')+'</td><td class="r">'+num2(u+soldN)+'</td><td class="r">'+num(soldN)+'</td><td class="r"><b>'+num(u)+'</b></td></tr>';}).join('')
-  +'</tbody></table></div>'
+  +'<h3>☕ Café vert</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Entrées (achats)</th><th class="r">Sorties (torréfaction)</th><th class="r">Ajustements</th><th class="r">STOCK</th><th class="r">Valeur (CMP '+money(cmpV)+' F/kg)</th></tr></thead><tbody>'
+  +'<tr><td>'+num2(st.greenIn)+' kg</td><td class="r">'+num2(st.greenUsed)+' kg</td><td class="r">'+(st.greenAdj>=0?'+':'')+num2(st.greenAdj)+' kg</td><td class="r"><b>'+num2(st.greenStock)+' kg</b></td><td class="r"><b>'+money(st.greenStock*cmpV)+'</b></td></tr></tbody></table></div>'
+  +'<h3>🔥 Café torréfié</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit (torréfaction)</th><th class="r">Consommé (conditionnement'+(st.roastedUsedTransf?' + machines':'')+')</th><th class="r">Ajustements</th><th class="r">STOCK</th><th class="r">Rendement torréfaction</th></tr></thead><tbody>'
+  +'<tr><td>'+num2(st.roastedMade)+' kg</td><td class="r">'+num2(st.roastedUsed+st.roastedUsedTransf)+' kg</td><td class="r">'+(st.roastedAdj>=0?'+':'')+num2(st.roastedAdj)+' kg</td><td class="r"><b>'+num2(st.roastedStock)+' kg</b></td><td class="r">'+num2(st.roastYield)+' %</td></tr></tbody></table><div class="help" style="margin-top:4px">Vert torréfié '+num2(st.greenUsed)+' kg → torréfié '+num2(st.roastedMade)+' kg · le stock restant attend le conditionnement.</div></div>'
+  +'<h3>📦 Produits finis</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Produit</th><th class="r">Produits</th><th class="r">Vendus</th><th class="r">Ajust.</th><th class="r">STOCK</th></tr></thead><tbody>'
+  +pfRows2.filter(r=>r.made||r.sold||r.adjust).map(r=>{const low=r.alert_min&&r.stock<=r.alert_min;
+    return '<tr><td><b>'+esc(r.name)+'</b>'+(low?' <span class="badge b-no">⚠️ seuil '+num(r.alert_min)+'</span>':'')+'</td><td class="r">'+num2(r.made)+'</td><td class="r">'+num(r.sold)+'</td><td class="r">'+(r.adjust?(r.adjust>0?'+':'')+num(r.adjust):'—')+'</td><td class="r"><b>'+num(r.stock)+'</b></td></tr>';}).join('')
+  +'</tbody></table><div class="help" style="margin-top:4px">Stock = produits − vendus + ajustements (chaque mouvement est reconstitué depuis les saisies validées).</div></div>'
   +'<h3>🏷️ Emballages</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Stock</th><th class="r">Valeur</th></tr></thead><tbody>'
   +(st.packaging||[]).map(x=>'<tr><td><b>'+esc(x.name)+'</b>'+(x.stock<=Number(x.alert_min||0)?' <span class="badge b-no">⚠️ seuil '+num(x.alert_min)+'</span>':'')+'</td><td class="r">'+num2(x.in)+'</td><td class="r">'+num2(x.out)+'</td><td class="r"><b>'+num2(x.stock)+'</b></td><td class="r">'+money(x.value)+'</td></tr>').join('')
   +'</tbody></table><div class="help" style="margin-top:6px">Valeur totale emballages : <b>'+money(st.packagingValue||0)+'</b> · Café vert : <b>'+money(st.greenStock*cmpV)+'</b> au coût moyen de '+money(cmpV)+' F/kg'+(cmpV?'':' (aucun achat encore)')+'</div></div>'
@@ -3496,8 +3497,11 @@ async function computeIncome(period){
   const semiSIv=Math.round(ctypes.reduce((a,t)=>a+typeQtyAt(t.id,t.name,prevStart)*semiCostPrev,0));
   const semiSFv=Math.round(ctypes.reduce((a,t)=>a+typeQtyAt(t.id,t.name,end)*semiCost,0));
   const dSemi=semiSFv-semiSIv;
+  const roastSIv=Math.round(roastedKgAt(prevStart)*(cmpVertAt(prevStart)||cmpVertAt(end)));
+  const roastSFv=Math.round(roastedKgAt(end)*cmpVertAt(end));
+  const dRoast=roastSFv-roastSIv;
   const tvaOn=(SETS.fiscal||{}).tva===true,tvaR=Number((SETS.fiscal||{}).tva_rate)||18;
-  const produitsTot=(tvaOn?Math.round(ventes/(1+tvaR/100)):ventes)+dPF+dSemi;
+  const produitsTot=(tvaOn?Math.round(ventes/(1+tvaR/100)):ventes)+dPF+dRoast+dSemi;
   /* --- CHARGE 1 : achats consommés (via inventaire) --- */
   const achV=pur.filter(p=>inM(p.date));
   const achVertAmt=achV.reduce((a,p)=>a+Number(p.amount||0),0),achVertKg=achV.reduce((a,p)=>a+Number(p.qty_kg||0),0);
@@ -3613,7 +3617,7 @@ async function computeIncome(period){
     encaiss:encaiss,decaiss:decaiss,fluxTreso:fluxTreso,odNet:odNet,creances:creances,tr:tr,
     roastIn:roastIn,roastOut:roastOut,perte:roastIn-roastOut,rendement:roastIn>0?100*roastOut/roastIn:0,
     slips:slips,run:run,
-    pfSIv:pfSIv,pfSFv:pfSFv,pfCost:pfCost,semiCost:semiCost,semiSIv:semiSIv,semiSFv:semiSFv,dSemi:dSemi,
+    pfSIv:pfSIv,pfSFv:pfSFv,pfCost:pfCost,semiCost:semiCost,semiSIv:semiSIv,semiSFv:semiSFv,dSemi:dSemi,dRoast:dRoast,roastSIv:roastSIv,roastSFv:roastSFv,
     transfMade:transf.filter(t=>inM(t.date)).reduce((a,t)=>(t.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+a,0),
     transfUsed:transf.filter(t=>inM(t.date)).reduce((a,t)=>a+Number(t.roasted_used||0),0),
     roastMadeM:roast.filter(r=>inM(r.date)).reduce((a,r)=>a+Number(r.roasted_out||0),0),
@@ -3632,6 +3636,7 @@ function incomeRows(inc){
   L.push([]);
   L.push([{v:'PRODUITS D\'EXPLOITATION',__style:1}]);
   L.push(['Ventes de produits finis'+(inc.tva&&inc.tva.on?' (hors TVA)':''),inc.tva&&inc.tva.on?inc.tva.ventesHT:inc.ventes]);
+  L.push(['Variation de stock café torréfié',inc.dRoast||0]);
   L.push(['Variation de stock de produits finis',inc.dPF]);
   L.push([{v:'TOTAL PRODUITS',__style:1},{v:inc.produitsTot,__style:1}]);
   L.push([]);
@@ -3861,7 +3866,7 @@ async function scExploitation(){
   +'<tr class="tot"><td>TVA À PAYER</td><td class="r"><b>'+money(inc.tva.due)+'</b></td></tr></tbody></table></div>'
   +'<button class="btn sm" style="margin-top:8px" onclick="App.ediTVA(\''+period+'\')">📄 Déclaration + fichier EDI Annexe TVA (DGI)</button></div>':'')
   +'<div class="grid g2"><div><h3>Produits</h3><table class="tbl"><tbody>'
-  +L('Ventes de produits finis'+(inc.tva.on?' (hors TVA — TVA à part dans la carte dédiée)':''),inc.tva.on?inc.tva.ventesHT:inc.ventes)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
+  +L('Ventes de produits finis'+(inc.tva.on?' (hors TVA — TVA à part dans la carte dédiée)':''),inc.tva.on?inc.tva.ventesHT:inc.ventes)+L('Variation de stock café torréfié',inc.dRoast||0)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'
   +'<div><h3>Charges par grandes masses</h3><table class="tbl"><tbody>'
   +grpRow('1. Achats consommés',L('   Café vert consommé (SI valorisé + achats − SF final)',inc.consVert)+L('   Emballages',inc.consEmb),inc.consVert+inc.consEmb)
