@@ -1035,6 +1035,20 @@ const TABLE_COLS={"settings": [["key", "text"], ["value", "text"]], "products": 
 const POLICY_EXTRA={"pending_entries": "\ndrop policy if exists \"form_insert\" on pending_entries;\ncreate policy \"form_insert\" on pending_entries for insert to anon with check (status = 'pending');", "products": "\ndrop policy if exists \"form_products\" on products;\ncreate policy \"form_products\" on products for select to anon using (active = true);", "sales_agents": "\ndrop policy if exists \"form_agents\" on sales_agents;\ncreate policy \"form_agents\" on sales_agents for select to anon using (true);", "form_tokens": "\ndrop policy if exists \"form_tokens_select\" on form_tokens;\ncreate policy \"form_tokens_select\" on form_tokens for select to anon using (true);"};
 const Supa={
   base(){return String(CFG.url||'').replace(/\/+$/,'');},
+  _cols:null,_missed:null,_warned:false,
+  async loadCols(){try{
+    const r=await fetch(this.base()+'/rest/v1/',{headers:this.headers()});
+    if(!r.ok)return false;
+    const j=await r.json();const d=(j&&j.definitions)||{};
+    this._cols={};this._missed={};
+    for(const t of DB_TABLES){const p=(d[t]&&d[t].properties)||null;this._cols[t]=p?Object.keys(p):null;}
+    return true;
+  }catch(e){return false;}},
+  flt(t,o){const cs=(this._cols&&this._cols[t])||null;if(!cs)return o;
+    const f={};let miss=false;
+    for(const k in o){if(cs.indexOf(k)>=0)f[k]=o[k];else{miss=true;if(!this._missed)this._missed={};(this._missed[t]=this._missed[t]||{})[k]=1;}}
+    if(miss&&!this._warned){this._warned=true;try{toast('⚠️ Colonnes absentes de la base en ligne ('+Object.keys(this._missed).map(t=>t+' : '+Object.keys(this._missed[t]).join(', ')).join(' · ')+') — ces champs ne sont pas encore enregistrés. Réglages → 🔍 Vérifier la base → copier le SQL → Supabase SQL Editor → Run','bad');}catch(e){}}
+    return f;},
   headers(){const tok=(SES&&SES.access_token)||CFG.anon;return{apikey:CFG.anon,Authorization:'Bearer '+tok,'Content-Type':'application/json'};},
   async req(t,q,method,body,extra){const r=await fetch(this.base()+'/rest/v1/'+t+(q?'?'+q:''),{method:method||'GET',headers:Object.assign(this.headers(),extra||{}),body:body?JSON.stringify(body):undefined});
     if(!r.ok){let m='Erreur Supabase '+r.status;if(r.status===401&&SES){m='Session expirée — reconnectez-vous.';logout();}
@@ -1044,8 +1058,8 @@ const Supa={
     let out=null;try{out=await r.json();}catch(e){}
     return out;},
   async list(t,f){f=f||{};let q='select=*';if(f.eq)for(const k in f.eq)q+='&'+k+'=eq.'+encodeURIComponent(f.eq[k]);if(f.order)q+='&order='+f.order;return (await this.req(t,q,'GET'))||[];},
-  async insert(t,o){const rows=await this.req(t,'select=*','POST',Array.isArray(o)?o:[o],{Prefer:'return=representation'})||[];return Array.isArray(o)?rows:rows[0];},
-  async update(t,id,p){const rows=await this.req(t,'id=eq.'+encodeURIComponent(id)+'&select=*','PATCH',p,{Prefer:'return=representation'});return rows?rows[0]:null;},
+  async insert(t,o){const body=Array.isArray(o)?o.map(x=>this.flt(t,x)):[this.flt(t,o)];const rows=await this.req(t,'select=*','POST',body,{Prefer:'return=representation'})||[];return Array.isArray(o)?rows:rows[0];},
+  async update(t,id,p){const rows=await this.req(t,'id=eq.'+encodeURIComponent(id)+'&select=*','PATCH',this.flt(t,p),{Prefer:'return=representation'});return rows?rows[0]:null;},
   async remove(t,id){return this.req(t,'id=eq.'+encodeURIComponent(id),'DELETE');}
 };
 function setDbAdapter(){const base=(CFG.mode==='supabase'&&CFG.url&&CFG.anon)?Supa:Local;
@@ -1389,12 +1403,12 @@ App.loginLocal=async()=>{const pin=$('#lgPin').value;
   const u=(SETS.users||[]).find(x=>x.pin&&String(x.pin)===String(pin));
   if(u){S.user={name:u.name,role:u.role||'caissier'};await afterLogin();}else toast('Code PIN incorrect','bad');};
 App.demo=async()=>{await seedDemo();if(DB&&DB.bump)DB.bump();await loadSettings();S.user={name:'Démonstration'};await afterLogin();};
-async function afterLogin(){await loadSettings();await outboxFlush();dbCheckSilent();go('dashboard');if(location.hash==='#/dashboard')render();}
+async function afterLogin(){await loadSettings();if(CFG.mode==='supabase'){try{await Supa.loadCols();}catch(e){}}await outboxFlush();dbCheckSilent();go('dashboard');if(location.hash==='#/dashboard')render();}
 async function dbCheckSilent(){try{
   if(CFG.mode!=='supabase'||!CFG.url||!CFG.anon)return;
   const p=await dbProbe();
   const n=p.miss.length+p.partial.reduce((a,x)=>a+x.cols.length,0);
-  if(n)toast('⚠️ '+n+' élément'+(n>1?'s':'')+' manquant'+(n>1?'s':'')+' dans Supabase — Réglages → 🔍 Vérifier la base','bad');
+  if(n)toast('⚠️ '+n+' élément'+(n>1?'s':'')+' manquant'+(n>1?'s':'')+' dans Supabase (ex. matricule) — Réglages → 🔍 Vérifier la base → copier le SQL → SQL Editor → Run','bad');
 }catch(e){}}
 async function dbProbe(){
   const H={apikey:CFG.anon,Authorization:'Bearer '+((SES&&SES.access_token)||CFG.anon)};
