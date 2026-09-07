@@ -137,6 +137,7 @@ create table if not exists employees(
   housing numeric default 0,
   tax_shares numeric default 2,
   zone text,
+  matricule text,
   primes jsonb default '[]',
   active boolean default true
 );
@@ -196,6 +197,8 @@ create table if not exists pay_slips(
   at numeric default 0,
   fdfp numeric default 0,
   cout_employeur numeric default 0,
+  matricule text,
+  transport_full numeric default 0,
   paid boolean default false
 );
 create table if not exists pending_entries(
@@ -262,6 +265,9 @@ create table if not exists email_log(
 );
 alter table products add column if not exists packaging jsonb default '[]';
 alter table employees add column if not exists tax_shares numeric default 2;
+alter table employees add column if not exists matricule text;
+alter table pay_slips add column if not exists matricule text;
+alter table pay_slips add column if not exists transport_full numeric default 0;
 alter table pay_slips add column if not exists its_gross numeric default 0;
 alter table pay_slips add column if not exists ricf numeric default 0;
 alter table pay_slips add column if not exists its numeric default 0;

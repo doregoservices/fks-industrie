@@ -174,7 +174,7 @@ Préconfigurés dans l'application (modifiables dans Réglages, **à faire valid
 
 - **SALAIRE BRUT (imposable)** = base + logement + heures sup + bonus + **primes taxables**. Le **transport et toutes les rubriques non taxables en sont EXCLUS**.
 - **CNPS, CMU, ITS, FDFP et charges patronales** sont calculés sur ce salaire brut.
-- **NET À PAYER = salaire brut + transport + primes non taxables − CNPS − CMU − ITS net − autres retenues − avances**.
+- **NET À PAYER = salaire brut + transport + primes non taxables − CNPS − CMU − ITS net − autres retenues − avances**. La **prime de transport est versée au prorata des jours d'absence** (base ÷ 30 × jours travaillés) — le bulletin affiche la conversion (ex. 10 000 → 9 333 F pour 2 jours d'absence).
 - **ITS affiché en 3 lignes : ITS brut (barème) − RICF = ITS net**.
 - Sage (journal PA) : 661 est débité en 2 lignes — salaires bruts + avantages/primes non imposables — pour un équilibre exact.
 
@@ -182,7 +182,7 @@ Déductions déclaratives : bordereau CNPS mensuel, reversement ITS à la DGI (a
 
 ### 👔 Paie v31 — employés, archivage, bulletin pro, absences, remise à zéro
 
-- **Fiches employés entièrement modifiables** : **Paie → Employés → ✎ Modifier** — nom, poste, matricule, type (mensuel/journalier), salaire de base, transport, logement, zone, demi-parts, **coches des rubriques attribuées** (elles se rempliront automatiquement à chaque paie), à tout moment.
+- **Fiches employés entièrement modifiables** : **Paie → Employés → ✎ Modifier** — nom, poste, **matricule libre** (refusé s'il appartient déjà à un autre employé actif ; auto-généré si laissé vide — il part sur le bulletin et le fichier EDI ITS), type (mensuel/journalier), salaire de base, transport, logement, zone, demi-parts, **coches des rubriques attribuées** (elles se rempliront automatiquement à chaque paie), à tout moment.
 - **Archivage réversible** : **🗂 Archiver** déplace l'employé dans la section repliable **« Employés archivés (N) »** — il ne reçoit plus de bulletins, mais **tout son historique (paies, avances) est conservé**. **▶️ Désarchiver** le ramène dans la liste active.
 - **Absences** : saisissez les jours d'absence dans **Paie → Paie du mois**. Retenue = **salaire de base ÷ base mensuelle (30 par défaut) × jours d'absence** — uniquement sur la base, **jamais sur les primes** ; les journaliers sont payés au jours travaillés. L'absence apparaît en gain négatif sur le bulletin (déjà déduite du brut).
 - **Bulletin de paie professionnel** : dans Paie du mois, bouton **👁 Bulletin** → page dédiée imprimable (**🖨 Imprimer/PDF**). Structure claire : **GAINS** = salaire de base + primes taxables → **SALAIRE BRUT imposable** (le transport et les rubriques non taxables en sont EXCLUS) ; **GAINS NON IMPOSABLES** = transport (partie exonérée + zone), primes non taxables, retenue d'absences → **TOTAL GAINS À PAYER** ; **RETENUES** = CNPS, CMU, **ITS net** avec détail **ITS brut − RICF = ITS net** ; **NET À PAYER** ; charges patronales détaillées, coût total employeur, signatures.
