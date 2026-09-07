@@ -1703,10 +1703,12 @@ async function scStocks(){
   const purAmt=pur.reduce((a,p)=>a+Number(p.amount||0),0);
   const cmpV=st.greenIn>0?purAmt/st.greenIn:0;
   const pfRows2=(st.products||[]);
+  const zeroP=prod.filter(p=>!Number(p.roasted_used)&&(p.lines||[]).some(l=>Number(l.qty)>0));
   const ctypes=ctypesRaw.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   const tmap={};(st.types||[]).forEach(t=>tmap[t.id]=t);
   const alertCount=(st.packaging||[]).filter(x=>x.stock<=Number(x.alert_min||0)&&Number(x.alert_min||0)>0).length+((st.products||[]).filter(p=>p.alert_min&&p.stock<=Number(p.alert_min))).length+(ctypes.filter(t=>{const ts=tmap[t.id];return t.active!==false&&t.alert_min&&ts&&ts.stock<=Number(t.alert_min)})).length;
   $('#main').innerHTML='<div class="card"><h2>📦 Tous les stocks</h2>'
+  +(zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode) — voir Production → 📋 Historique → ✎ pour corriger.</div>':'')
   +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Café vert</div><div class="v">'+num2(st.greenStock)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Café torréfié</div><div class="v">'+num2(st.roastedStock)+' kg</div></div>'
@@ -1891,12 +1893,14 @@ App.condSave=async()=>{
 async function prodHistTab(){
   const roast=(await DB.list('roastings')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prod=(await DB.list('productions')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const zeroP=prod.filter(p=>!Number(p.roasted_used)&&(p.lines||[]).some(l=>Number(l.qty)>0));
   const transf=(await DB.list('transformations')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const tin=roast.reduce((s,r)=>s+Number(r.green_in||0),0),tout=roast.reduce((s,r)=>s+Number(r.roasted_out||0),0);
   const used=prod.reduce((s,p)=>s+Number(p.roasted_used||0),0),units=prod.reduce((s,p)=>s+(p.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0),0);
   const tUsed=transf.reduce((s,t)=>s+Number(t.roasted_used||0),0),tOut=transf.reduce((s,t)=>(t.lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
   const pUsedTypes=prod.reduce((s,p)=>(p.type_lines||[]).reduce((x,l)=>x+Number(l.qty||0),0)+s,0);
-  return '<div class="grid g3" style="margin-bottom:12px">'
+  return (zeroP.length?'<div class="alert al-bad">⚠️ <b>'+zeroP.length+' conditionnement(s) sans kg de torréfié consommé</b> (ancien mode de saisie) : le café de ces sachets est resté dans le stock torréfié et fausse stocks et exploitation. Cliquez ✎ sur chaque ligne pour indiquer le kg torréfié réellement consommé.</div>':'')
+  +'<div class="grid g3" style="margin-bottom:12px">'
   +'<div class="kpi"><div class="t">Rendement torréfaction (unique)</div><div class="v">'+num2(tin?100*tout/tin:0)+' %</div><div class="s">'+num2(tout)+' kg obtenus / '+num2(tin)+' kg verts</div></div>'
   +'<div class="kpi"><div class="t">Kg torréfiés conditionnés</div><div class="v">'+num2(used)+' kg</div></div>'
   +'<div class="kpi"><div class="t">Unités produites</div><div class="v">'+num(units)+'</div><div class="s">'+num2(units?(used+pUsedTypes)/units:0)+' kg par unité</div></div>'
@@ -3454,7 +3458,8 @@ async function computeIncome(period){
   const start=period+'-01';
   const end=monthAdd(period,1)+'-01';
   const prevP=monthAdd(period,-1);
-  const prevStart=prevP+'-01';
+  const _pd=new Date(Number(prevP.slice(0,4)),Number(prevP.slice(5,7)),0); /* jour 0 = dernier jour du mois précédent */
+  const prevStart=prevP+'-'+String(_pd.getDate()).padStart(2,'0'); /* stock INITIAL = veille du 1er du mois affiché */
   const inM=d=>d>=start&&d<end;
   const[pur,roast,prod,sales,adj,prods,cash,pkItems,pkEnt,assets,transf,ctypes]=await Promise.all([
     DB.list('purchases'),DB.list('roastings'),DB.list('productions'),DB.list('sales'),DB.list('adjustments'),
@@ -3481,17 +3486,17 @@ async function computeIncome(period){
   const semiCostFor=per=>{let v=0,q=0;
     transf.filter(t=>inPer(t.date,per)).forEach(t=>{v+=Number(t.roasted_used||0)*cmpVertAt(end);(t.lines||[]).forEach(l=>q+=Number(l.qty||0));});
     return q>0?v/q:0;};
-  const pfCostFor=per=>{let g=prod.filter(p=>inPer(p.date,per)).reduce((a,p)=>a+Number(p.roasted_used||0)*cmpVertAt(end),0);
-    const sc=semiCostFor(per);
-    prod.filter(p=>inPer(p.date,per)).forEach(p=>(p.type_lines||[]).forEach(l=>g+=Number(l.qty||0)*sc));
-    let pv=0;pkEnt.filter(e=>e.type==='out'&&inPer(e.date,per)).forEach(e=>pv+=Number(e.qty||0)*cmpPkAt(e.item_id,end));
-    let u=0;prod.filter(p=>inPer(p.date,per)).forEach(p=>(p.lines||[]).forEach(l=>u+=Number(l.qty||0)));
-    return u>0?(g+pv)/u:0;};
-  const pfCost=pfCostFor(period),pfCostPrev=pfCostFor(prevP);
+  const kgUOf=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
+  const pfValAt=D=>prods.reduce((a,p)=>{
+    const cafe=kgUOf(p)*(cmpVertAt(D)||cmpVertAt(end));
+    const pkg=(p.packaging||[]).reduce((x,b)=>x+Number(b.qty||0)*(cmpPkAt(b.pack_id,D)||cmpPkAt(b.pack_id,end)||0),0);
+    return a+pfUnitsAt(p.id,p.name,D)*(cafe+pkg);},0);
+  const pfUnitsSF=prods.reduce((a,p)=>a+pfUnitsAt(p.id,p.name,end),0);
   /* --- PRODUITS --- */
   const ventes=sales.filter(s2=>inM(s2.date)).reduce((a,x)=>a+Number(x.total||0),0);
-  const pfSIv=Math.round(prods.reduce((a,p)=>a+pfUnitsAt(p.id,p.name,prevStart)*pfCostPrev,0));
-  const pfSFv=Math.round(prods.reduce((a,p)=>a+pfUnitsAt(p.id,p.name,end)*pfCost,0));
+  const pfSIv=Math.round(pfValAt(prevStart));
+  const pfSFv=Math.round(pfValAt(end));
+  const pfCost=pfUnitsSF>0?Math.round(pfSFv/pfUnitsSF):0;
   const dPF=pfSFv-pfSIv;
   const semiCost=semiCostFor(period),semiCostPrev=semiCostFor(prevP);
   const semiSIv=Math.round(ctypes.reduce((a,t)=>a+typeQtyAt(t.id,t.name,prevStart)*semiCostPrev,0));
