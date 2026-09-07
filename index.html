@@ -2472,39 +2472,57 @@ async function scBulletin(){
   const emp=(await DB.list('employees',{eq:{id:s.employee_id}}))[0]||{};
   const zone=emp.zone||'abidjan';
   const zlb=zone==='bouake'?'Bouaké':zone==='autres'?'Autres villes':'Abidjan';
-  const gains=[['Salaire de base (sans primes)',s.base]];
+  const dB=Number(P.day_basis)||30;
+  const absDed=Math.abs(Number(s.abs_ded)||0);
+  /* 1 · GAINS : base, primes imposables, puis retenue sur absences qui justifie le brut */
+  const gains=[['Salaire de base',s.base]];
   if(Number(s.housing))gains.push(['Prime logement',s.housing]);
-  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable!==false).forEach(p=>gains.push([p.name,p.amount]));
+  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable!==false).forEach(p=>gains.push([esc(p.name),p.amount]));
   if(Number(s.bonus))gains.push(['Prime exceptionnelle',s.bonus]);
   if(s.ot_hours)gains.push(['Heures supplémentaires ('+num2(s.ot_hours)+' h)',null]);
-  const nonImp=[];
-  if(Number(s.transport))nonImp.push(['Prime transport — dont '+money(s.transport_exo||0)+' exonérés d\'ITS, HORS salaire brut (zone '+zlb+')',s.transport]);
-  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable===false).forEach(p=>nonImp.push([p.name+' (non taxable — hors salaire brut)',p.amount]));
-  if(Number(s.abs_ded))nonImp.push(['Retenue absences ('+num2(s.absence_days)+' j × base ÷ '+(Number(P.day_basis)||30)+')',-Math.abs(Number(s.abs_ded))]);
-  const totGains=(s.gross!=null?Number(s.gross):Number(s.brut_ap)+nonImp.reduce((a,g)=>a+Number(g[1]||0),0));
-  const ret=[['CNPS retraite '+P.cnps_retraite_e+' % (base '+money(s.cnps_base)+')',s.cnps],['CMU (part salarié)',s.cmu||0],['ITS net retenu (barème 2024 sur '+money(s.taxable!=null?s.taxable:s.brut_ap)+')',its]];
+  if(absDed)gains.push(['Retenue sur absences ('+num2(s.absence_days)+' j × base ÷ '+dB+')',-absDed]);
+  /* 2 · RETENUES : ITS d'abord, puis CNPS, CMU, autres, avances */
+  const ret=[['ITS net retenu (barème 2024)',its],['CNPS retraite '+P.cnps_retraite_e+' % — base '+money(s.cnps_base),s.cnps],['CMU — part salarié',s.cmu||0]];
+  if(Number(s.other))ret.push(['Autres retenues',Number(s.other)]);
+  if(Number(s.advances))ret.push(['Avances sur salaire',Number(s.advances)]);
+  const totRet=Math.round(its+Number(s.cnps||0)+Number(s.cmu||0)+Number(s.other||0)+Number(s.advances||0));
   const itsG=s.its_gross!=null?Number(s.its_gross):its;const ricfV=Number(s.ricf)||0;
-  if(ricfV)ret.push(['dont RICF déjà déduit (ITS brut '+money(itsG)+' − RICF '+money(ricfV)+')',0]);
-  if(Number(s.other))ret.push(['Autres retenues',s.other]);
-  if(Number(s.advances))ret.push(['Avances sur salaire',s.advances]);
-  const logo=C.logo?'<img src="'+C.logo+'" style="height:56px;object-fit:contain">':'';
+  /* 3 · RUBRIQUES NON IMPOSABLES : versées en plus, après les retenues */
+  const ni=[];
+  if(Number(s.transport))ni.push(['Prime de transport — zone '+zlb+' (dont '+money(s.transport_exo||0)+' exonérés d\'ITS)',Number(s.transport)]);
+  (s.primes||[]).filter(p=>Number(p.amount)>0&&p.taxable===false).forEach(p=>ni.push([esc(p.name)+' — non taxable',Number(p.amount)]));
+  const totNI=ni.reduce((a,x)=>a+Number(x[1]||0),0);
+  const logo=C.logo?'<img src="'+C.logo+'" style="height:52px;object-fit:contain">':'';
+  const sec=t=>'<tr><td colspan="2" style="background:#f8f2e9;color:#5a4030;font-weight:800;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-top:1px solid #e5dbc9">'+t+'</td></tr>';
+  const line=(l,v,cls)=>'<tr><td style="padding:5px 10px'+(cls?';'+cls:'')+'">'+l+'</td><td class="r" style="padding:5px 10px;white-space:nowrap'+(cls?';'+cls:'')+'">'+v+'</td></tr>';
   $('#main').innerHTML='<div class="card" style="max-width:760px;margin:0 auto" id="bullettin">'
-  +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:2px solid #5a4030;padding-bottom:10px;margin-bottom:12px">'+logo
-  +'<div style="flex:1;text-align:center"><div style="font-size:18px;font-weight:800;color:#5a4030">BULLETIN DE PAIE</div><div style="font-size:13px">'+esc(C.name||'FKS Industrie')+' — '+monthLabel(s.run_period)+'</div></div><div style="font-size:11px;color:#888">FKS/CNPS/ITS</div></div>'
-  +'<div class="row" style="font-size:13.5px;margin-bottom:10px"><div style="flex:1"><b>'+esc(s.employee_name)+'</b><div class="mut">'+esc(s.position||'')+' · Zone '+zlb+'</div></div>'
-  +'<div style="flex:1;text-align:right">Matricule : '+esc(s.employee_id||'').slice(0,8)+'<div class="mut">Période : '+monthLabel(s.run_period)+'</div></div></div>'
-  +'<table class="tbl"><thead><tr><th>GAINS</th><th class="r">Montant</th></tr></thead><tbody>'
-  +gains.map(g=>'<tr><td>'+g[0]+'</td><td class="r">'+(g[1]===null?'incluses':money(g[1]))+'</td></tr>').join('')
-  +'<tr class="tot"><td>SALAIRE BRUT — imposable CNPS/ITS (sans transport ni rubriques non taxables)</td><td class="r">'+money(s.brut_ap)+'</td></tr></tbody></table>'
-  +(nonImp.length?'<table class="tbl" style="margin-top:8px"><thead><tr><th>GAINS NON IMPOSABLES / AJUSTEMENTS (hors salaire brut)</th><th class="r">Montant</th></tr></thead><tbody>'
-  +nonImp.map(g=>'<tr><td>'+g[0]+'</td><td class="r">'+money(g[1])+'</td></tr>').join('')
-  +'<tr class="tot"><td>TOTAL GAINS À PAYER</td><td class="r">'+money(totGains)+'</td></tr></tbody></table>':'')
-  +'<table class="tbl" style="margin-top:8px"><thead><tr><th>RETENUES</th><th class="r">Montant</th></tr></thead><tbody>'
-  +ret.map(r=>'<tr><td>'+r[0]+'</td><td class="r">'+(r[1]?'− '+money(r[1]):(r[0].indexOf('RICF')>=0?money(s.ricf):'—'))+'</td></tr>').join('')
-  +'<tr class="tot"><td>TOTAL RETENUES</td><td class="r">− '+money(s.cnps+(s.cmu||0)+its+(s.other||0)+(s.advances||0))+'</td></tr>'
-  +'<tr><td style="background:#e8f5e9;font-weight:800;font-size:16px">NET À PAYER</td><td class="r" style="background:#e8f5e9;font-weight:800;font-size:16px;color:#1e8449">'+money(s.net)+'</td></tr></tbody></table>'
-  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable fiscal : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' = SALAIRE BRUT '+money(s.brut_ap)+' (le transport et les rubriques non taxables en sont exclus). DÉTAIL ITS : brut barème '+money(s.its_gross!=null?s.its_gross:its)+' − RICF '+money(s.ricf||0)+' = ITS net '+money(its)+'. Base CNPS : '+money(s.cnps_base)+'.</div>'
-  +'<table class="tbl" style="margin-top:8px"><thead><tr><th>CHARGES PATRONALES</th><th class="r">Montant</th></tr></thead><tbody>'
+  /* — en-tête — */
+  +'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:3px double #5a4030">'
+  +'<div>'+logo+'</div>'
+  +'<div style="flex:1;text-align:center"><div style="font-size:21px;font-weight:900;letter-spacing:.06em;color:#5a4030">BULLETIN DE PAIE</div><div style="font-size:13px;margin-top:2px">'+esc(C.name||'FKS Industrie')+'</div></div>'
+  +'<div style="background:#5a4030;color:#fff;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;white-space:nowrap">'+monthLabel(s.run_period)+'</div></div>'
+  /* — identité salarié — */
+  +'<div style="display:flex;gap:8px;margin:12px 0;flex-wrap:wrap">'
+  +'<div style="flex:2;min-width:170px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Salarié</div><b style="font-size:13.5px">'+esc(s.employee_name)+'</b><div style="font-size:11.5px;color:#888">'+esc(s.position||'')+'</div></div>'
+  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Matricule</div><b style="font-size:13.5px">'+esc(String(s.employee_id||'').slice(0,8))+'</b></div>'
+  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Zone</div><b style="font-size:13.5px">'+zlb+'</b></div>'
+  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Période</div><b style="font-size:13.5px">'+monthLabel(s.run_period)+'</b></div></div>'
+  /* — corps : un seul tableau, trois sections dans l'ordre demandé — */
+  +'<table class="tbl" style="border:1px solid #e5dbc9">'
+  +sec('1 · Gains et salaire brut')
+  +gains.map(g=>line(g[0],g[1]===null?'<span style="color:#999;font-style:italic">incluses au brut</span>':(Number(g[1])<0?'<span style="color:#c0392b">− '+money(-Number(g[1]))+'</span>':money(g[1])))).join('')
+  +line('<b>SALAIRE BRUT — imposable CNPS/ITS</b>','<b style="font-size:15px">'+money(s.brut_ap)+'</b>','border-top:2px solid #5a4030;background:#fdfaf5;font-size:13px')
+  +sec('2 · Retenues sur salaire')
+  +ret.map(r=>line(r[0],'− '+money(r[1]),'color:#c0392b')).join('')
+  +(ricfV?line('<span style="color:#999;font-size:11px;font-style:italic">Détail ITS : brut barème '+money(itsG)+' − RICF '+money(ricfV)+' = net retenu '+money(its)+'</span>','<span style="color:#999;font-size:11px;font-style:italic">info</span>'):'')
+  +line('TOTAL RETENUES','<b>− '+money(totRet)+'</b>','border-top:1px solid #e5dbc9;background:#fdfaf5')
+  +(ni.length?sec('3 · Rubriques non imposables — versées avec le net')+ni.map(x=>line(x[0],'<span style="color:#1e8449">+ '+money(x[1])+'</span>')).join(''):'')
+  +line('NET À PAYER','<b style="font-size:17px">'+money(s.net)+'</b>','border-top:2px solid #5a4030;background:#e8f5e9;font-size:15px;color:#1e8449')
+  +line('<span style="font-size:11px;color:#888;font-style:italic">Brut imposable '+money(s.brut_ap)+' − retenues '+money(totRet)+' + non imposables '+money(totNI)+'</span>','<span style="font-size:11px;color:#888;font-style:italic">= '+money(s.net)+'</span>','background:#e8f5e9')
+  +'</table>'
+  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable fiscal : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' (le transport et les rubriques non taxables en sont exclus). Base CNPS : '+money(s.cnps_base)+'.'+(ricfV?' RICF : '+money(ricfV)+' ('+Number(emp.tax_shares!=null?emp.tax_shares:2)+' demi-parts).':'')+'</div>'
+  /* — charges patronales (information) — */
+  +'<table class="tbl" style="font-size:12px"><thead><tr><th style="background:#f4f0e8;color:#8a7659;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Pour information — charges patronales (à la charge de l\'employeur)</th><th class="r" style="background:#f4f0e8"></th></tr></thead><tbody>'
   +'<tr><td>CNPS retraite patronale '+P.cnps_retraite_er+' %</td><td class="r">'+money(s.cnps_er||0)+'</td></tr>'
   +'<tr><td>Prestations familiales '+P.pf_rate+' %</td><td class="r">'+money(s.pf||0)+'</td></tr>'
   +'<tr><td>Maternité '+P.mat_rate+' %</td><td class="r">'+money(s.mat||0)+'</td></tr>'
