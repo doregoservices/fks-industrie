@@ -1325,7 +1325,7 @@ async function render(){
   if(S.user&&!roleAllowed(S.route))S.route=roleHome();
   if(S.route==='f')return scForm(decodeURIComponent(String(parts[1]||'').split('?')[0]));
   if(S.route==='login'||!S.user)return scLogin();
-  const routes={dashboard:scDashboard,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets,bulletin:scBulletin};
+  const routes={dashboard:scDashboard,guide:scGuide,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets,bulletin:scBulletin};
   const app=$('#app');
   app.innerHTML=topHtml()+'<main id="main"><div class="empty">Chargement…</div></main>'+bottomHtml();
   try{await(routes[S.route]||scDashboard)();}catch(e){console.error(e);$('#main').innerHTML='<div class="card"><div class="alert al-bad">Erreur : '+esc(e.message)+'</div><button class="btn sec" onclick="render()">Réessayer</button></div>';}
@@ -1333,8 +1333,8 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.16';
-const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
+const APP_VER='35.17';
+const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
 function bottomHtml(){
@@ -1485,6 +1485,40 @@ App.cfgSave=async()=>{CFG.url=$('#cfUrl').value.trim();CFG.anon=$('#cfAnon').val
 function saveCfg2(){LS.set(CFG_KEY,JSON.stringify(CFG));setDbAdapter();}
 
 /* ================= TABLEAU DE BORD ================= */
+async function nextGuideStep(){
+  const [prods,pur,roast,prod,transf,sales,cash,adj,runs,logs]=await Promise.all([DB.list('products'),DB.list('purchases'),DB.list('roastings'),DB.list('productions'),DB.list('transformations'),DB.list('sales'),DB.list('cash_entries'),DB.list('adjustments'),DB.list('pay_runs'),DB.list('email_log')]);
+  const steps=[
+   {t:'Réglages de départ',done:!!((SETS.company&&SETS.company.name)&&(SETS.fiscal||{}).mode)},
+   {t:'Produits et recettes',done:prods.some(p=>p.active)},
+   {t:'Stocks de départ',opt:true,done:adj.some(isInitAdj)},
+   {t:'Achat de café vert',done:pur.length>0},
+   {t:'Torréfaction',done:roast.length>0},
+   {t:'Conditionnement',done:(prod.length+transf.length)>0},
+   {t:'Ventes',done:sales.length>0},
+   {t:'Caisse',done:cash.length>0},
+   {t:'Paie clôturée',done:runs.some(r=>r.status==='closed')},
+   {t:'Rapport mensuel envoyé',done:logs.some(l=>l.kind==='monthly'&&l.status==='sent')}];
+  return steps.filter(s=>!s.done&&!s.opt)[0]||steps.filter(s=>!s.done)[0]||null;}
+async function scGuide(){
+  const [prods,pur,roast,prod,transf,sales,cash,adj,runs,logs]=await Promise.all([DB.list('products'),DB.list('purchases'),DB.list('roastings'),DB.list('productions'),DB.list('transformations'),DB.list('sales'),DB.list('cash_entries'),DB.list('adjustments'),DB.list('pay_runs'),DB.list('email_log')]);
+  const steps=[
+   {t:'⚙️ Réglages de départ',go:'parametres',h:'Entreprise + régime fiscal (TEE 5 % ou BIC 25 %). Deux minutes, une seule fois.',done:!!((SETS.company&&SETS.company.name)&&(SETS.fiscal||{}).mode)},
+   {t:'🧺 Produits et recettes',go:'produits',h:'Créez chaque produit vendu avec sa recette café (ex : MOULU 1KG = 1 kg) — c\'est la base du coût de revient.',done:prods.some(p=>p.active)},
+   {t:'📦 Stocks de départ',go:'production',opt:true,h:'Du café ou des sachets existaient AVANT l\'app ? Production → ⚖️ Ajustements → cochez « Stock de départ ». Sinon, ignorez cette étape.',done:adj.some(isInitAdj)},
+   {t:'🛁 Achat de café vert',go:'achats',h:'Chaque achat (fournisseur, kg, prix) alimente le stock vert et le coût au kg. Un fournisseur nommé = compte Sage dédié (401101…).',done:pur.length>0},
+   {t:'🔥 Torréfaction',go:'production',h:'À chaque fournée : kg verts entrés, kg torréfiés sortis — le rendement se calcule tout seul.',done:roast.length>0},
+   {t:'⚙️ Conditionnement',go:'production',h:'Le torréfié devient des sachets : kg consommés + unités produites par produit.',done:(prod.length+transf.length)>0},
+   {t:'🛒 Ventes',go:'ventes',h:'Espèces, MoMo ou crédit. Nommez le client → il reçoit son compte Sage dédié (4111001…).',done:sales.length>0},
+   {t:'💰 Caisse',go:'caisse',h:'Toutes les entrées/sorties d\'argent — les charges nourrissent l\'exploitation du mois.',done:cash.length>0},
+   {t:'👥 Paie',go:'paie',h:'Paie du mois → Générer → Clôturer & payer. Sans clôture : pas de charges de personnel ni de journal PA.',done:runs.some(r=>r.status==='closed')},
+   {t:'📈 Exploitation & rapport',go:'exploitation',h:'Vérifiez le mois (résultat ≤ ventes = données saines), corrigez si un bandeau rouge apparaît, envoyez le rapport au boss.',done:logs.some(l=>l.kind==='monthly'&&l.status==='sent')}];
+  const next=steps.filter(s=>!s.done&&!s.opt)[0]||steps.filter(s=>!s.done)[0]||null;
+  const m=$('#main');
+  const item=s=>'<div class="listitem" style="'+(s===next?'border:2px solid var(--bad);border-radius:14px;padding:10px':'')+'"><div class="avatar">'+(s.done?'✅':(s===next?'👉':'⬜'))+'</div><div style="flex:1"><b>'+s.t+'</b>'+(s.opt?' <span class="mut">(optionnel)</span>':'')+'<div class="mut" style="font-size:12px">'+s.h+'</div></div>'+(s.done?'':'<button class="btn sm" onclick="go(\''+s.go+'\')">Ouvrir</button>')+'</div>';
+  m.innerHTML='<div class="card" style="max-width:760px;margin:0 auto"><h2>🧭 Assistant — par où commencer ?</h2>'
+   +(next?'<div class="alert al-warn" style="margin:10px 0"><b>👉 Prochaine étape : '+next.t+'</b> — '+next.h+' <button class="btn sm" style="margin-left:6px" onclick="go(\''+next.go+'\')">Aller</button></div>':'<div class="alert al-ok" style="margin:10px 0">🎉 Tout est en place — l\'usine est entièrement suivie. Continuez votre routine quotidienne !</div>')
+   +steps.map(item).join('')
+   +'<div class="help" style="margin-top:10px"><b>Routine quotidienne</b> : ventes au fil de l\'eau + caisse le soir · 🔥 fournées et conditionnement au fil de la journée · 📥 À valider régulièrement · paie en fin de mois.</div></div>';}
 async function scDashboard(){
   const st=await computeStats();
   const pend=await DB.list('pending_entries',{eq:{status:'pending'}});
@@ -1496,6 +1530,7 @@ async function scDashboard(){
   const dToday=await dayStatus(todayISO()).catch(()=>null);
   const dYest=await dayStatus(yst).catch(()=>null);
   const due=await monthlyDue().catch(()=>null);
+  const gnext=await nextGuideStep();
   const m=$('#main');
   m.innerHTML=
    '<div class="grid g4">'
@@ -1504,6 +1539,7 @@ async function scDashboard(){
    +'<div class="kpi"><div class="t">Ventes du jour</div><div class="v">'+money(st.salesToday)+'</div></div>'
    +'<div class="kpi"><div class="t">À valider</div><div class="v" style="color:'+(pend.length?'var(--bad)':'var(--ok)')+'">'+pend.length+'</div></div>'
    +'</div>'
+   +(gnext?'<div class="alert al-info" style="margin-top:12px">🧭 <b>Assistant</b> — prochaine étape : <b>'+gnext.t+'</b>. <a href="#/guide">Ouvrir le guide</a></div>':'')
    +'<div class="row" style="margin-top:12px">'
    +(roleAllowed('ventes')?'<button class="btn" style="flex:1;min-width:126px" onclick="App.venteForm()">🛒 Vendre</button>':'')
    +(roleAllowed('achats')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="App.achatForm()">🛁 Acheter du vert</button>':'')
@@ -1976,6 +2012,13 @@ App.adjSave=async()=>{const q=Number($('#jQ').value)||0;if(!q)return toast('Quan
   if(S.adjEdit){await DB.update('adjustments',S.adjEdit,rec);S.adjEdit=null;toast('Ajustement modifié ✅','ok');render();return;}
   await DB.insert('adjustments',rec);
   toast('Ajustement enregistré','ok');render();};
+App.tiersSave=async()=>{const L=(Array.isArray(SETS.tiers)?SETS.tiers:[]).slice();$$('#stTiers input[data-i]').forEach(i=>{const k=Number(i.getAttribute('data-i'));if(L[k])L[k].account=i.value.trim();});await setSetting('tiers',L);toast('Tiers enregistrés ✅','ok');render();};
+App.tiersDel=async i=>{const L=(Array.isArray(SETS.tiers)?SETS.tiers:[]).slice();L.splice(i,1);await setSetting('tiers',L);render();};
+App.tiersAdd=async()=>{const n=($('#tNewName')&&$('#tNewName').value||'').trim();if(!n)return toast('Nom obligatoire','bad');
+  const ty=($('#tNewType')&&$('#tNewType').value)||'client';const L=Array.isArray(SETS.tiers)?SETS.tiers:[];
+  const ac=($('#tNewAcc')&&$('#tNewAcc').value||'').trim();
+  const pre=ty==='client'?'411100':'40110';let i=1;while(L.some(t=>t.account===pre+i))i++;
+  L.push({name:n,type:ty,account:ac||(pre+i)});await setSetting('tiers',L);toast('Tiers ajouté ✅','ok');render();};
 App.fixInitStock=async period=>{
   const dS=period+'-01',dE=monthAdd(period,1)+'-01';
   const cand=(await DB.list('adjustments')).filter(x=>x.date>=dS&&x.date<dE&&!isInitAdj(x));
@@ -2019,7 +2062,7 @@ App.venteForm=async id=>{
   modal(id?'Modifier la vente':'Nouvelle vente',
     '<div class="row">'+fld('Date','<input id="vD" type="date" value="'+(sv?sv.date:todayISO())+'">')+fld('Commerciale','<select id="vA">'+agents.map(a=>'<option value="'+a.id+'|'+esc(a.name)+'">'+esc(a.name)+'</option>').join('')+'</select>')+'</div>'
     +'<div class="field"><span>Règlement</span><div class="toggle" id="vM"><button type="button" class="on in" onclick="App.payMode(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.payMode(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.payMode(this,\'credit\')">📝 Crédit</button></div></div>'
-    +'<div class="field" id="vCli" style="display:none"><span>Nom du client (crédit)</span><input id="vClient" placeholder="ex : Hôtel Ivoire Café" value="'+(sv?esc(sv.client||''):'')+'"></div>'
+    +'<div class="field" id="vCli"><span>Client (optionnel)</span><input id="vClient" placeholder="ex : Hôtel Ivoire — compte Sage dédié (4111001…) si nommé, sinon Client divers" value="'+(sv?esc(sv.client||''):'')+'"></div>'
     +'<div class="field"><span>Produits</span><div id="vLines"></div><button class="btn sm sec" onclick="App.venteLine()">+ Ajouter une ligne</button></div>'
     +'<div class="pill" id="vTot">Total : 0 F</div>',
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.venteSave()">Enregistrer la vente</button>');
@@ -2032,7 +2075,6 @@ App.venteForm=async id=>{
     $('#vA').value=av;
     const bs=$$('#vM button');const ix={cash:0,momo:1,credit:2}[sv.pay_mode];const n=(ix===0||ix)?ix:0;
     bs.forEach(b=>b.className='');if(bs[n]){bs[n].className='on '+sv.pay_mode;App._pay=sv.pay_mode;}
-    $('#vCli').style.display=sv.pay_mode==='credit'?'block':'none';
     if($('#vClient'))$('#vClient').value=sv.client||'';
     $$('#vLines .linerow').forEach(r=>r.remove());
     (sv.lines||[]).forEach(l=>{App.venteLine();const rows=$$('#vLines .linerow');const row=rows[rows.length-1];
@@ -2041,7 +2083,7 @@ App.venteForm=async id=>{
       if(!found){const op=document.createElement('option');op.value=val;op.textContent=l.name||'';sel.appendChild(op);}
       sel.value=val;row.querySelector('.lq').value=l.qty;row.querySelector('.lp2').value=l.price;});
     App.venteTot();}};
-App.payMode=(btn,v)=>{$$('#vM button').forEach(b=>b.className='');btn.className='on '+v;App._pay=v;$('#vCli').style.display=v==='credit'?'block':'none';};
+App.payMode=(btn,v)=>{$$('#vM button').forEach(b=>b.className='');btn.className='on '+v;App._pay=v;};
 App.venteLine=()=>{const prods=App._prods||[];const d=document.createElement('div');d.className='linerow';
   d.innerHTML='<select class="lp">'+prods.map(p=>'<option value="'+p.id+'|'+esc(p.name)+'|'+(p.price||0)+'">'+esc(p.name)+'</option>').join('')+'</select>'
   +'<input class="lq" type="number" min="0" value="1" inputmode="numeric" oninput="App.venteTot()">'
@@ -2787,13 +2829,24 @@ App.expCaisse=async()=>{
   const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',its_er:'641300',virement_interne:'585000',banque:'521000'};
   const acc=k=>sagAcc(k)||DEF[k]||'';
   const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
+  /* --- tiers : client/fournisseur divers par défaut, compte dédié si nommé --- */
+  const needT=[];
+  sales.forEach(s3=>{if(s3.client)needT.push({name:s3.client,type:'client'});});
+  pur.forEach(pp=>{if(pp.supplier)needT.push({name:pp.supplier,type:'fournisseur'});});
+  let TL=Array.isArray(SETS.tiers)?SETS.tiers.slice():[];let tChg=false;
+  const tFind=(n,ty)=>TL.filter(x=>x.type===ty&&String(x.name||'').trim().toLowerCase()===String(n).trim().toLowerCase())[0]||null;
+  needT.forEach(x=>{if(x.name&&!tFind(x.name,x.type)){const pre=x.type==='client'?'411100':'40110';let i=1;while(TL.some(t=>t.account===pre+i))i++;TL.push({name:String(x.name).trim(),type:x.type,account:pre+i});tChg=true;}});
+  if(tChg){TL.sort((a,b)=>(a.type+a.name).localeCompare(b.type+b.name));await setSetting('tiers',TL);}
+  const tiersOf=(ty,n)=>{const nm=String(n||'').trim();const t=nm?tFind(nm,ty):null;
+    return{a:t?t.account:(ty==='client'?acc('clients'):acc('fournisseurs')),n:t?t.name:''};};
   const L={VE:[],AC:[],CA:[],BQ:[],PA:[],OD:[]};
   const push=(jr,dt,ct,lib,de,cr)=>{if(!de&&!cr)return;L[jr].push([dFR(dt),jl(jr),ct,lib,de||'',cr||'']);};
   const A=e=>e.account==='momo'?acc('treso_momo'):acc('treso_caisse');
   /* --- VE : toutes les ventes (comptant espèces/MoMo + crédit) --- */
   sales.filter(x=>inR(x.date)).forEach(x=>{
-    const lib='Vente '+(x.agent_name||'')+(x.client?' — '+x.client:'');
-    push('VE',x.date,acc('clients'),lib,Number(x.total)||0,'');
+    const tc=tiersOf('client',x.client);
+    const lib='Vente '+(x.agent_name||'')+(tc.n?' — '+tc.n:'');
+    push('VE',x.date,tc.a,lib,Number(x.total)||0,'');
     push('VE',x.date,acc('ventes'),lib,'',Number(x.total)||0);
   });
   /* --- PA : paies clôturées de la période --- */
@@ -2833,12 +2886,13 @@ App.expCaisse=async()=>{
       if(e.od==='transfer'){push('BQ',d,acc('banque'),lib,amt,'');push('BQ',d,A(e),lib,'',amt);}
       else{push('BQ',d,A(e),lib,amt,'');push('BQ',d,acc('banque'),lib,'',amt);}
       return;}
-    if(cat==='ventes'){const jr='CA';
-      push(jr,d,A(e),lib,amt,'');push(jr,d,acc('clients'),lib,'',amt);return;}
+    if(cat==='ventes'){const jr='CA';const sc=String(e.ref||'').indexOf('sale:')===0?saleById[String(e.ref).slice(5)]:null;const tc=tiersOf('client',sc?sc.client:'');
+      push(jr,d,A(e),lib,amt,'');push(jr,d,tc.a,lib,'',amt);return;}
     if(cat==='achat_vert'||cat==='emballages'){const jr='CA';
       const rfr=String(e.ref||'');const lie=rfr.indexOf('purchase:')===0&&purById[rfr.slice(9)];
+      const tf=tiersOf('fournisseur',lie?lie.supplier:'');
       if(!lie){push('AC',d,sagAcc(cat)||'',lib,amt,'');push('AC',d,acc('fournisseurs'),lib,'',amt);}
-      push(jr,d,acc('fournisseurs'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
+      push(jr,d,tf.a,lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='salaires'){const jr='CA';
       push(jr,d,acc('personnel_net'),lib,amt,'');push(jr,d,A(e),lib,'',amt);return;}
     if(cat==='personnel_avances'&&e.type==='out'){const jr='CA';
@@ -2848,14 +2902,16 @@ App.expCaisse=async()=>{
       push('OD',d,acc('virement_interne'),lib,amt,'');push('OD',d,A(e),lib,'',amt);return;}
     const jr='CA';
     const cc=sagAcc(cat)||sagAcc('divers')||'605800';
-    if(e.type==='in'){push(jr,d,A(e),lib,amt,'');push(jr,d,cc,lib,'',amt);}
-    else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
+    if(/^4/.test(String(cc))){if(e.type==='in'){push(jr,d,A(e),lib,amt,'');push(jr,d,cc,lib,'',amt);}else{push(jr,d,cc,lib,amt,'');push(jr,d,A(e),lib,'',amt);}}
+    else if(e.type==='in'){const tc=tiersOf('client','');push('VE',d,tc.a,lib,amt,'');push('VE',d,cc,lib,'',amt);push(jr,d,A(e),lib,amt,'');push(jr,d,tc.a,lib,'',amt);}
+    else{const tf=tiersOf('fournisseur','');push('AC',d,cc,lib,amt,'');push('AC',d,tf.a,lib,'',amt);push(jr,d,tf.a,lib,amt,'');push(jr,d,A(e),lib,'',amt);}
   });
   /* --- achats non encore réglés → AC crédit fournisseurs --- */
   pur.filter(p=>inR(p.date)).forEach(p=>{
-    const lib='Achat café vert — '+p.supplier;
+    const tf=tiersOf('fournisseur',p.supplier);
+    const lib='Achat café vert — '+(tf.n||'fournisseur divers');
     push('AC',p.date,sagAcc('achat_vert')||'',lib,Number(p.amount)||0,'');
-    push('AC',p.date,acc('fournisseurs'),lib,'',Number(p.amount)||0);
+    push('AC',p.date,tf.a,lib,'',Number(p.amount)||0);
   });
   /* --- feuilles --- */
   const HEAD=['DATE','JOURNAL','COMPTE','LIBELLÉ','DÉBIT','CRÉDIT'];
@@ -2879,11 +2935,15 @@ App.expCaisse=async()=>{
     else if(e.category==='ventes'||e.category==='achat_vert'||e.category==='emballages')jr=jl('CA');
     else if(e.category==='salaires')jr=jl('CA');
     else if(e.category==='apport')jr=jl('OD');
-    else jr=jl('CA');
+    else jr=/^4/.test(String(sagAcc(e.category)||sagAcc('divers')||'605800'))?jl('CA'):(e.type==='out'?jl('AC')+' + '+jl('CA'):jl('VE')+' + '+jl('CA'));
     det.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',catLabel(e.category),e.label,e.account==='momo'?'Mobile Money':'Espèces',e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'',jr]);});
+  const tiersSheet=[['TIERS — CLIENTS & FOURNISSEURS'],[esc((SETS.company&&SETS.company.name)||'')],[],['NOM','TYPE','COMPTE SAGE']]
+    .concat((Array.isArray(SETS.tiers)?SETS.tiers:[]).map(t=>[t.name,t.type==='client'?'Client':'Fournisseur',t.account]))
+    .concat([[],['Par défaut : client divers '+acc('clients')+' · fournisseur divers '+acc('fournisseurs')+' — un tiers nommé (client d\'une vente, fournisseur d\'un achat) reçoit un compte dédié, modifiable dans Réglages.']]);
   makeXlsx(
     [{name:'Synthèse',rows:syn,widths:[30,8,12,16,16,12]}]
     .concat(KS.map(k=>({name:jl(k)+' — '+LBL6[k],rows:SH[k].rows,widths:[12,9,12,44,14,14]})))
+    .concat([{name:'Tiers',rows:tiersSheet,widths:[36,14,14]}])
     .concat([{name:'Mouvements',rows:det,widths:[12,10,26,38,14,14,14,12]}]),
     'Sage_6_journaux_'+to+'.xlsx');
   const csv=[HEAD].concat(KS.reduce((a,k)=>a.concat(L[k]),[]));
@@ -3010,6 +3070,7 @@ App.impGo=async tb=>{const d=App.impData;let done=0,skipped=0;
 
 /* ================= PARAMÈTRES ================= */
 async function scParametres(){
+  const TLIST=Array.isArray(SETS.tiers)?SETS.tiers:[];
   const m=$('#main');
   const accts=SETS.sage_accounts||[];
   const P=SETS.payroll;const F=SETS.fiscal||{};
@@ -3021,6 +3082,12 @@ async function scParametres(){
   +((SETS.company||{}).logo?'<button class="btn sm danger" onclick="App.logoDel()">Retirer</button>':'')
   +'</div><span class="help">PNG/JPG, idéalement carré, < 300 Ko.</span></div>'
   +'<button class="btn sm" onclick="App.setCo()">Enregistrer</button>'
+  +'<div class="hr"></div><h3>📇 Tiers — clients &amp; fournisseurs</h3>'
+  +'<div class="help" style="margin-bottom:8px">Toutes les écritures passent par un tiers : <b>411100 Client divers</b> / <b>401100 Fournisseur divers</b> par défaut. Un client nommé dans une vente (ou un fournisseur dans un achat) reçoit automatiquement un <b>compte dédié</b> (4111001, 4111002… / 401101, 401102…), modifiable ci-dessous.</div>'
+  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Type</th><th>Compte Sage</th><th></th></tr></thead><tbody id="stTiers">'
+  +TLIST.map((t,i)=>'<tr><td>'+esc(t.name)+'</td><td>'+(t.type==='client'?'Client':'Fournisseur')+'</td><td><input style="max-width:110px" data-i="'+i+'" value="'+esc(t.account||'')+'"></td><td><button class="btn sm danger" onclick="App.tiersDel('+i+')">✕</button></td></tr>').join('')
+  +'<tr><td><input id="tNewName" placeholder="ex : Hôtel Ivoire"></td><td><select id="tNewType"><option value="client">Client</option><option value="fournisseur">Fournisseur</option></select></td><td><input id="tNewAcc" placeholder="auto"></td><td><button class="btn sm" onclick="App.tiersAdd()">＋ Ajouter</button></td></tr>'
+  +'</tbody></table></div><button class="btn sm" onclick="App.tiersSave()">💾 Enregistrer les tiers</button>'
   +'<div class="hr"></div><h3>📗 Correspondance des comptes (Sage 100)</h3>'
   +'<div class="help" style="margin-bottom:8px">Numéros conformes au <b>SYSCOHADA révisé</b> (AUDCIF) — ils alimentent l\'export Sage 100 en 6 journaux. Modifiables librement selon votre plan de comptes.</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Catégorie</th><th>Compte Sage</th><th>Grande masse (exploitation)</th></tr></thead><tbody id="stAcc">'
