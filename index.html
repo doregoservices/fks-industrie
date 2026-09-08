@@ -1333,7 +1333,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.14';
+const APP_VER='35.15';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1939,15 +1939,16 @@ async function prodAdjTab(){
   const adj=(await DB.list('adjustments')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const prods=(await DB.list('products')).filter(p=>p.active);
   const ctypes=(await DB.list('coffee_types')).filter(t=>t.active!==false);
-  return '<div class="alert al-info">💡 <b>Stocks de départ</b> : c\'est ici — choisissez le niveau, une quantité <b>positive</b>, motif « Stock initial ». Sinon : casse, don, perte ou erreur d\'inventaire → quantité négative (positive pour un retour).</div>'
+  return '<div class="alert al-info">💡 <b>Stocks de départ</b> : c\'est ici — cochez la case <b>Stock de départ</b> avec une quantité <b>positive</b> : comptés dans le stock initial du mois (à la veille du 1er), pas dans sa variation. Sinon (casse, don, perte, erreur d\'inventaire) : quantité négative (positive pour un retour), sans la case.</div>'
   +'<div class="row">'+fld('Date','<input id="jD" type="date" value="'+todayISO()+'">')
   +fld('Niveau','<select id="jL" onchange="$(\'#jP\').style.display=this.value===\'product\'?\'block\':\'none\'"><option value="green">Café vert (kg)</option><option value="roasted">Café torréfié (kg)</option><option value="product">Produit fini</option></select>')+'</div>'
   +'<div class="field" id="jP" style="display:none"><span>Produit</span><select>'+prods.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')+'</select></div>'
   +(ctypes.length?'<div class="field" id="jT" style="display:none"><span>Type de café transformé</span><select>'+ctypes.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('')+'</select></div>':'')
   +'<div class="row">'+fld('Quantité (+ ou −)','<input id="jQ" type="number" inputmode="numeric" step="0.1" placeholder="ex : -5 ou 10">')+fld('Motif','<input id="jR" placeholder="casse, don, inventaire…">')+'</div>'
+  +fld('Stock de départ','<label style="display:flex;gap:8px;align-items:center;font-weight:400;cursor:pointer"><input id="jInit" type="checkbox" style="width:auto"> Existant avant la mise en service de l\'app — compté au stock initial du mois, pas dans sa variation</label>')
   +'<button class="btn blk" id="adjBtn" onclick="App.adjSave()">Enregistrer l\'ajustement</button> <a href="javascript:void(0)" id="adjCancel" onclick="App.adjCancel()" style="display:none;font-size:13px;margin-left:8px">↩︎ annuler la modification</a><div style="height:14px"></div>'
   +(adj.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Niveau</th><th class="r">Qté</th><th>Motif</th><th></th></tr></thead><tbody>'
-   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé (machines)',product:'Produit fini'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.adjEdit(\'adjustments\',\''+a.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
+   +adj.map(a=>'<tr><td>'+dFR(a.date)+'</td><td>'+({green:'Café vert',roasted:'Torréfié',type:'Café transformé (machines)',product:'Produit fini'}[a.level]||a.level)+(a.name?' ('+esc(a.name)+')':'')+(a.initial_stock?' <span class="badge b-ok">stock de départ</span>':'')+'</td><td class="r">'+num2(a.qty)+'</td><td>'+esc(a.reason||'')+'</td><td><button class="btn sm sec" onclick="App.adjEdit(\'adjustments\',\''+a.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'adjustments\',\''+a.id+'\')">✕</button></td></tr>').join('')
    +'</tbody></table></div>':'');
 }
 App.adjEdit=async function(){const args=[].slice.call(arguments);const id=args.length>1?args[1]:args[0];const a=(await DB.list('adjustments',{eq:{id:id}}))[0];if(!a)return;
@@ -1957,6 +1958,7 @@ App.adjEdit=async function(){const args=[].slice.call(arguments);const id=args.l
   if(jp){jp.style.display=a.level==='product'?'block':'none';if(a.level==='product'&&a.product_id){const sel=jp.querySelector('select');if(sel)sel.value=a.product_id;}}
   if(jt){jt.style.display=a.level==='type'?'block':'none';if(a.level==='type'&&a.type_id){const sel=jt.querySelector('select');if(sel)sel.value=a.type_id;}}
   $('#jQ').value=Number(a.qty)||'';$('#jR').value=a.reason||'';
+  const ji=$('#jInit');if(ji)ji.checked=!!a.initial_stock;
   const b=$('#adjBtn');if(b)b.textContent='💾 Enregistrer la modification';
   const c=$('#adjCancel');if(c)c.style.display='inline';
   try{window.scrollTo({top:0,behavior:'smooth'});}catch(e){}};
@@ -1968,11 +1970,22 @@ App.adjSave=async()=>{const q=Number($('#jQ').value)||0;if(!q)return toast('Quan
     if(cur+q<0)return toast('Refusé : le stock '+(lvl==='green'?'de café vert':'de café torréfié')+' deviendrait négatif ('+num2(cur+q)+' kg) — supprimez ou corrigez plutôt les saisies erronées','bad');}let pid=null,pname=null,tid=null;
   if(lvl==='product'){const sel=$('#jP select');pid=sel.value;pname=sel.options[sel.selectedIndex].text;}
   if(lvl==='type'&&$('#jT select')){const sel=$('#jT select');tid=sel.value;pname=sel.options[sel.selectedIndex].text;}
-  const rec={date:$('#jD').value||todayISO(),level:lvl,qty:q,reason:$('#jR').value};
+  const rec={date:$('#jD').value||todayISO(),level:lvl,qty:q,reason:$('#jR').value,initial_stock:!!($('#jInit')&&$('#jInit').checked)};
   if(pid)rec.product_id=pid;if(tid)rec.type_id=tid;if(pname)rec.name=pname;
   if(S.adjEdit){await DB.update('adjustments',S.adjEdit,rec);S.adjEdit=null;toast('Ajustement modifié ✅','ok');render();return;}
   await DB.insert('adjustments',rec);
   toast('Ajustement enregistré','ok');render();};
+App.fixInitStock=async period=>{
+  const dS=period+'-01',dE=monthAdd(period,1)+'-01';
+  const cand=(await DB.list('adjustments')).filter(x=>x.date>=dS&&x.date<dE&&!x.initial_stock&&Number(x.qty||0)>0);
+  if(!cand.length)return toast('Aucun ajustement à la hausse à marquer ce mois','bad');
+  const det=cand.slice(0,8).map(x=>dFR(x.date)+' : '+num2(Number(x.qty||0))+' '+(x.level==='green'?'kg de café vert':x.level==='roasted'?'kg de café torréfié':x.level==='type'?'transformés':(x.name||'produits'))).join('<br>');
+  confirmBox('Marquer comme stock de départ ?','<b>'+cand.length+' ajustement(s) à la hausse</b> de '+monthLabel(period)+' seront comptés dans le <b>stock initial</b> du mois (à la veille du 1er) au lieu de sa variation — le résultat redevient comparable aux ventes, les stocks affichés ne changent pas.<br><span style="font-size:12px">'+det+(cand.length>8?'<br>…':'')+'</span>','📦 Marquer',async()=>{
+    for(const x of cand)await DB.update('adjustments',x.id,{initial_stock:true});
+    toast('📦 '+cand.length+' ajustement(s) marqués stock de départ — exploitation recalculée','ok');
+    render();
+  });
+};
 
 /* ================= VENTES ================= */
 async function scVentes(){
@@ -3488,17 +3501,17 @@ async function computeIncome(period){
   const run=runs[0];
   const slips=run?await DB.list('pay_slips',{eq:{run_id:run.id}}):[];
   const cmpVertAt=D=>{let a=0,q=0;pur.filter(p=>p.date<=D).forEach(p=>{a+=Number(p.amount||0);q+=Number(p.qty_kg||0);});return q>0?a/q:0;};
-  const greenKgAt=D=>pur.filter(p=>p.date<=D).reduce((a,p)=>a+Number(p.qty_kg||0),0)-roast.filter(r=>r.date<=D).reduce((a,r)=>a+Number(r.green_in||0),0)+adj.filter(x=>x.level==='green'&&x.date<=D).reduce((a,x)=>a+Number(x.qty||0),0);
-  const roastedKgAt=D=>roast.filter(r=>r.date<=D).reduce((a,r)=>a+Number(r.roasted_out||0),0)-prod.filter(p=>p.date<=D).reduce((a,p)=>a+Number(p.roasted_used||0),0)-transf.filter(t=>t.date<=D).reduce((a,t)=>a+Number(t.roasted_used||0),0)+adj.filter(x=>x.level==='roasted'&&x.date<=D).reduce((a,x)=>a+Number(x.qty||0),0);
+  const greenKgAt=D=>pur.filter(p=>p.date<=D).reduce((a,p)=>a+Number(p.qty_kg||0),0)-roast.filter(r=>r.date<=D).reduce((a,r)=>a+Number(r.green_in||0),0)+adj.filter(x=>x.level==='green'&&(x.date<=D||x.initial_stock)).reduce((a,x)=>a+Number(x.qty||0),0);
+  const roastedKgAt=D=>roast.filter(r=>r.date<=D).reduce((a,r)=>a+Number(r.roasted_out||0),0)-prod.filter(p=>p.date<=D).reduce((a,p)=>a+Number(p.roasted_used||0),0)-transf.filter(t=>t.date<=D).reduce((a,t)=>a+Number(t.roasted_used||0),0)+adj.filter(x=>x.level==='roasted'&&(x.date<=D||x.initial_stock)).reduce((a,x)=>a+Number(x.qty||0),0);
   const typeQtyAt=(tid,name,D)=>{let u=0;
     transf.filter(t=>t.date<=D).forEach(t=>(t.lines||[]).forEach(l=>{if(l.type_id===tid||l.name===name)u+=Number(l.qty||0);}));
     prod.filter(p=>p.date<=D).forEach(p=>(p.type_lines||[]).forEach(l=>{if(l.type_id===tid||l.name===name)u-=Number(l.qty||0);}));
-    adj.filter(x=>x.level==='type'&&x.date<=D&&(x.type_id===tid||x.name===name)).forEach(x=>u+=Number(x.qty||0));
+    adj.filter(x=>x.level==='type'&&(x.date<=D||x.initial_stock)&&(x.type_id===tid||x.name===name)).forEach(x=>u+=Number(x.qty||0));
     return u;};
   const pfUnitsAt=(pid,name,D)=>{let u=0;
     prod.filter(p=>p.date<=D).forEach(p=>(p.lines||[]).forEach(l=>{if(l.product_id===pid||l.name===name)u+=Number(l.qty||0);}));
     sales.filter(s2=>s2.date<=D).forEach(s2=>(s2.lines||[]).forEach(l=>{if(l.product_id===pid||l.name===name)u-=Number(l.qty||0);}));
-    adj.filter(x=>x.level==='product'&&x.date<=D&&(x.product_id===pid||x.name===name)).forEach(x=>u+=Number(x.qty||0));
+    adj.filter(x=>x.level==='product'&&(x.date<=D||x.initial_stock)&&(x.product_id===pid||x.name===name)).forEach(x=>u+=Number(x.qty||0));
     return u;};
   const cmpPkAt=(id,D)=>{let v=0,q=0;pkEnt.filter(e=>e.item_id===id&&e.type==='in'&&e.date<=D).forEach(e=>{v+=Number(e.qty||0)*Number(e.unit_cost||0);q+=Number(e.qty||0);});return q>0?v/q:0;};
   const pkQtyAt=(id,D)=>pkEnt.filter(e=>e.item_id===id&&e.date<=D).reduce((a,e)=>a+(e.type==='in'?1:-1)*Number(e.qty||0),0);
@@ -3877,12 +3890,12 @@ async function scExploitation(){
     if(inc.ventes>0&&inc.resultat>inc.ventes){
       if(!causes.length){
         const dS=period+'-01',dE=monthAdd(period,1)+'-01';
-        const adjM=(await DB.list('adjustments')).filter(x=>x.date>=dS&&x.date<dE);
+        const adjM=(await DB.list('adjustments')).filter(x=>x.date>=dS&&x.date<dE&&!x.initial_stock);
         const pendQ=(await DB.list('pending_entries')).filter(pp=>pp.status==='pending');
         const dirCh=inc.servicesTot+((inc.personnel&&inc.personnel.total)||0)+inc.impotsTot+(inc.hors||0)+inc.dotations;
         const sg=v=>(v<0?'− ':'+ ')+money(Math.abs(v));
         if(pendQ.length)causes.push('📥 <b>'+pendQ.length+' saisie(s) encore à valider</b> — une vente non validée ne compte nulle part (ni dans les ventes, ni dans les stocks) : écran 📥 À valider → ✓ Valider.');
-        if(adjM.length){const det=adjM.slice(0,6).map(x=>dFR(x.date)+' : '+num2(Math.abs(Number(x.qty||0)))+' '+(x.level==='green'?'kg vert':x.level==='roasted'?'kg torréfié':x.level==='type'?'transformés':(x.name||'produits'))+(Number(x.qty||0)>=0?' en +':' en −')).join(' · ');causes.push('⚖️ <b>'+adjM.length+' ajustement(s) de stock ce mois</b> — '+det+' — un ajustement à la hausse augmente la variation (donc le résultat) sans charge associée.');}
+        if(adjM.length){const det=adjM.slice(0,6).map(x=>dFR(x.date)+' : '+num2(Math.abs(Number(x.qty||0)))+' '+(x.level==='green'?'kg vert':x.level==='roasted'?'kg torréfié':x.level==='type'?'transformés':(x.name||'produits'))+(Number(x.qty||0)>=0?' en +':' en −')).join(' · ');causes.push('⚖️ <b>'+adjM.length+' ajustement(s) de stock ce mois</b> — '+det+' — un ajustement à la hausse augmente la variation (donc le résultat) sans charge associée. Si ce sont vos stocks existant AVANT le suivi dans l\'app (mise en service), cliquez : ils compteront dans le stock initial du mois (à la veille du 1er) au lieu de sa variation : <button class="btn sm" style="margin:0 6px" onclick="App.fixInitStock(\''+period+'\')">📦 Marquer comme stock de départ</button>');}
         if(dirCh<=0)causes.push('💸 <b>Aucune charge directe ce mois</b> (ni caisse imputable, ni paie, ni impôts, ni amortissements) — un mois sans charges gonfle le résultat.');
         if(!inc.run)causes.push('👥 Paie du mois non clôturée — les charges de personnel n\'entrent dans l\'exploitation qu\'une fois la paie clôturée (Paie → Paie du mois → Clôturer).');
         causes.push('🔎 <b>Détail du calcul</b> — ventes '+money(inc.ventes)+' · variations de stock valorisées : produits finis '+sg(inc.dPF)+', torréfié '+sg(inc.dRoast)+(inc.dSemi?', transformés '+sg(inc.dSemi):'')+' · charges : café consommé '+money(inc.consVert)+', emballages consommés '+money(inc.consEmb)+', charges directes '+money(dirCh)+'.');
