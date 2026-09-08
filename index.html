@@ -1334,7 +1334,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.19';
+const APP_VER='35.20';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3128,8 +3128,8 @@ async function scParametres(){
   +'<button class="btn sm" onclick="App.savePayroll()">Enregistrer les taux</button>'
   +'<div class="hr"></div><h3>🏛️ Fiscalité — BIC / TEE &amp; TVA</h3>'
   +'<div class="row">'
-  +fld('Impôt sur les bénéfices — choix unique','<select id="fiMode" onchange="App.fiModeChange()"><option value="BIC"'+(F.mode==='TEE'?'':' selected')+'>BIC — pourcentage du résultat</option><option value="TEE"'+(F.mode==='TEE'?' selected':'')+'>TEE — pourcentage du chiffre d\'affaires</option></select>')
-  +fld('<span id="fiRateL">'+(F.mode==='TEE'?'Taux TEE (%) — % du chiffre d\'affaires':'Taux BIC (%) — % du résultat')+'</span>','<input id="fiRate" type="number" step="0.1" inputmode="numeric" value="'+(F.mode==='TEE'?(F.tee!=null?F.tee:5):(F.bic!=null?F.bic:25))+'">')+'</div>'
+  +fld('Impôt sur les bénéfices — choix unique','<select id="fiMode" onchange="App.fiModeChange()"><option value="" disabled'+(F.mode?'':' selected')+'>— À CHOISIR —</option><option value="BIC"'+(F.mode==='BIC'?' selected':'')+'>BIC — pourcentage du résultat</option><option value="TEE"'+(F.mode==='TEE'?' selected':'')+'>TEE — pourcentage du chiffre d\'affaires</option></select>')
+  +fld('<span id="fiRateL">'+(F.mode==='TEE'?'Taux TEE (%) — % du chiffre d\'affaires':(F.mode==='BIC'?'Taux BIC (%) — % du résultat':'Taux (%) — TEE ou BIC'))+'</span>','<input id="fiRate" type="number" step="0.1" inputmode="numeric" placeholder="ex : 5" value="'+(F.mode==='TEE'?(F.tee!=null?F.tee:5):(F.mode==='BIC'?(F.bic!=null?F.bic:25):''))+'">')+'</div>'
   +'<div class="row">'
   +fld('TVA applicable','<select id="fiTva"><option value="1"'+(F.tva?' selected':'')+'>Oui — répercussion et déclaration mensuelle</option><option value="0"'+(F.tva?'':' selected')+'>Non (par défaut)</option></select>')
   +fld('Taux TVA (%)','<input id="fiTvaR" type="number" step="0.1" inputmode="numeric" value="'+(F.tva_rate!=null?F.tva_rate:18)+'">')
@@ -3164,10 +3164,11 @@ async function scParametres(){
   +(CFG.mode==='supabase'?' <button class="btn danger sm" onclick="App.dbWipe()">🧹 Vider la base en ligne (après tests)</button>':'')
   +'</div>';
 }
-App.fiModeChange=()=>{const m=$('#fiMode').value||'BIC';const prev=SETS.fiscal||{};const lbl=$('#fiRateL');const inp=$('#fiRate');if(!lbl||!inp)return;
+App.fiModeChange=()=>{const m=$('#fiMode').value||'';const prev=SETS.fiscal||{};const lbl=$('#fiRateL');const inp=$('#fiRate');if(!lbl||!inp)return;
+  if(!m){lbl.textContent='Taux (%) — TEE ou BIC';return;}
   if(m==='TEE'){lbl.textContent='Taux TEE (%) — % du chiffre d\'affaires';inp.value=(prev.tee!=null?prev.tee:5);}
   else{lbl.textContent='Taux BIC (%) — % du résultat';inp.value=(prev.bic!=null?prev.bic:25);}};
-App.saveFiscal=async()=>{const m=$('#fiMode').value||'BIC';const rate=Number($('#fiRate').value)||0;const prev=SETS.fiscal||{};
+App.saveFiscal=async()=>{const m=$('#fiMode').value||'';if(!m)return toast('Choisissez le régime : TEE ou BIC','bad');const rate=Number($('#fiRate').value)||0;const prev=SETS.fiscal||{};
   if(rate<=0)return toast('Indiquez le taux ('+(m==='TEE'?'TEE':'BIC')+' en %)','bad');
   const rec={mode:m,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||''};
   if(m==='TEE'){rec.tee=rate;rec.bic=prev.bic!=null?prev.bic:25;}else{rec.bic=rate;rec.tee=prev.tee!=null?prev.tee:5;}
