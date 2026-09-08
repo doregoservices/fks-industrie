@@ -1334,7 +1334,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.20';
+const APP_VER='35.21';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2479,7 +2479,7 @@ async function paieRunTab(){
       html+='<div class="row"><button class="btn danger" onclick="App.runDel(\''+run.id+'\')">Supprimer le brouillon</button><button class="btn ok" onclick="App.runClose(\''+run.id+'\')">💰 Clôturer &amp; payer ('+money(totNet)+')</button></div>';
     }else{
       html+='<div class="alert al-ok">Paie payée le '+dFR(run.paid_date)+' — '+(run.account==='momo'?'Mobile Money':'espèces')+'. Une sortie de caisse « Salaires » a été créée automatiquement.</div>'
-      +'<button class="btn sm" style="margin-top:8px" onclick="App.ediITS(\''+run.period+'\')">📄 EDI Annexe ITS (DGI) — '+monthLabel(run.period)+'</button>';
+      +'<button class="btn sm" style="margin-top:8px" onclick="App.ediITS(\''+run.period+'\')">📄 Annexe ITS DGI (Excel) — '+monthLabel(run.period)+'</button>';
     }
   }
   if(runs.length){
@@ -2784,7 +2784,7 @@ async function scExports(){
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 EDI Annexe ITS (DGI)</button> <button class="btn sec" onclick="App.ediTVA()">📄 EDI Annexe TVA (DGI)</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button></div>'
   +'</div>';
 }
 App.expFilterRange=()=>{const f=S.expFilter||{};const to=f.to||todayISO();const from=f.from||'2000-01-01';return{from,to};};
@@ -2972,16 +2972,16 @@ function dlTxt(name,txt){download(name,new Blob(['\ufeff'+txt],{type:'text/plain
 App.ediTVA=async period=>{period=period||S.expPeriod||monthISO();
   const inc=await computeIncome(period);const F=SETS.fiscal||{};const C=SETS.company||{};const t=inc.tva||{};
   const d=new Date().toISOString().slice(0,10);
-  const txt=['ANNEXE-TVA;PERIODE='+period+';NIF='+(F.nif||'')+';RAISON='+(C.name||'')+';TAUX='+(t.rate||18)+';DECLARATION=MENSUELLE;EMIS_LE='+d,
-    'VENTES_TTC;'+Math.round(inc.ventes),
-    'BASE_HT;'+(t.ventesHT!=null?t.ventesHT:Math.round(inc.ventes)),
-    'TVA_COLLECTEE;'+(t.col||0),
-    'ACHATS_ET_CHARGES_TTC;'+(t.achatTTC||0),
-    'TVA_DEDUCTIBLE;'+(t.ded||0),
-    'TVA_A_PAYER;'+(t.due||0),
-    'RELEVE;GENERE_PAR=CafePro_Doregoservices;FIN'].join('\r\n');
-  dlTxt('EDI_Annexe_TVA_'+period+'.txt',txt);
-  toast('📄 EDI Annexe TVA '+monthLabel(period)+' généré — TVA à payer '+money(t.due||0)+' F','ok');};
+  const rows=[['ANNEXE TVA — DÉCLARATION MENSUELLE (CÔTE D\'IVOIRE)'],
+    ['Raison sociale',(C.name||'')],['NIF',(F.nif||'')],['Période',monthLabel(period)],['Émis le',d],[],
+    ['RUBRIQUE','MONTANT HT','TVA']];
+  rows.push(['Ventes — opérations taxables',(t.ventesHT!=null?Math.round(t.ventesHT):Math.round(inc.ventes)),Math.round(t.col||0)]);
+  rows.push(['Achats biens et services (TVA déductible)',Math.round((t.achatTTC||0)-(t.ded||0)),Math.round(t.ded||0)]);
+  rows.push([{v:'TVA À PAYER',__style:1},'',{v:Math.round(t.due||0),__style:1}]);
+  if(!t.on)rows.push([],'⚠ TVA désactivée dans Réglages → Fiscalité : chiffres calculés hors TVA. Activez la TVA pour la déclaration réelle.');
+  rows.push([],[ 'À téléverser sur e-impots.gouv.ci en annexe de la déclaration mensuelle — formats acceptés : PDF, XLS, XLSX (2 Mo max).']);
+  makeXlsx([{name:'Annexe TVA',rows:rows,widths:[46,18,16]}],'Annexe_TVA_DGI_'+period+'.xlsx');
+  toast('📄 Annexe TVA '+monthLabel(period)+' (Excel) — TVA à payer '+money(t.due||0)+' F — à téléverser sur e-impots.gouv.ci','ok');};
 App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
   const C=SETS.company||{};const F=SETS.fiscal||{};
   const runs=await DB.list('pay_runs',{eq:{period:period}});
@@ -2990,15 +2990,20 @@ App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
   const slips=await DB.list('pay_slips',{eq:{run_id:run.id}});
   if(!slips.length)return toast('Aucun bulletin pour cette période','bad');
   const d=new Date().toISOString().slice(0,10);
-  const rows=[['ANNEXE-ITS;PERIODE='+period+';NIF='+(F.nif||'')+';RAISON='+(C.name||'')+';EMIS_LE='+d],['MATRICULE;NOM;BRUT_IMPOSABLE;BASE_ITS;ITS_BRUT;RICF;ITS_NET']];
-  let tb=0,tn=0;
+  const rows=[['ANNEXE ITS — ÉTAT MENSUEL DES TRAITEMENTS ET SALAIRES (CÔTE D\'IVOIRE)'],
+    ['Raison sociale',(C.name||'')],['NIF',(F.nif||'')],['Période',monthLabel(period)],['Émis le',d],[],
+    ['N°','MATRICULE','NOM & PRÉNOMS','BRUT IMPOSABLE','BASE ITS','ITS BRUT','RICF','ITS NET À REVERSER']];
+  let tb=0,tn=0,n=0;
   slips.forEach(x=>{const b=Math.round(Number(x.brut_ap)||0);const bs=Math.round(Number(x.taxable!=null?x.taxable:x.brut_ap)||0);
     const ig=Math.round(Number(x.its_gross!=null?x.its_gross:(x.its!=null?x.its:x.irpp))||0);
     const rc=Math.round(Number(x.ricf)||0);const it=Math.round(Number(x.its!=null?x.its:x.irpp)||0);
-    tb+=b;tn+=it;rows.push([String(x.matricule||'').replace(/;/g,',')||String(x.employee_id||'').slice(0,8),String(x.employee_name||'').replace(/;/g,','),b,bs,ig,rc,it]);});
-  rows.push(['TOTAL','',''+tb,'','','',''+tn]);rows.push(['RELEVE;GENERE_PAR=CafePro_Doregoservices;FIN']);
-  dlTxt('EDI_Annexe_ITS_'+period+'.txt',rows.map(r=>r.join(';')).join('\r\n'));
-  toast('📄 EDI Annexe ITS '+monthLabel(period)+' généré — '+slips.length+' employés, ITS net total '+money(tn)+' F','ok');};
+    tb+=b;tn+=it;n++;
+    rows.push([n,String(x.matricule||'').replace(/;/g,',')||String(x.employee_id||'').slice(0,8),String(x.employee_name||'').replace(/;/g,','),b,bs,ig,rc,it]);});
+  rows.push([{v:'TOTAL',__style:1},'',{v:n+' employé(s)',__style:1},{v:tb,__style:1},'','',{v:'',__style:1},{v:tn,__style:1}]);
+  rows.push([],['ITS retenu à la source — reversement au plus tard le 10 du mois suivant. Barème 2024 : 0 / 16 / 21 / 24 / 28 / 32 % (tranches mensuelles sur le brut), RICF déduite.'],
+    ['À téléverser sur e-impots.gouv.ci en annexe de la déclaration mensuelle — formats acceptés : PDF, XLS, XLSX (2 Mo max).']);
+  makeXlsx([{name:'Annexe ITS',rows:rows,widths:[5,14,30,16,14,12,10,18]}],'Annexe_ITS_DGI_'+period+'.xlsx');
+  toast('📄 Annexe ITS '+monthLabel(period)+' (Excel) — '+slips.length+' employés, ITS net total '+money(tn)+' F — à téléverser sur e-impots.gouv.ci','ok');};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
