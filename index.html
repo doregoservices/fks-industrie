@@ -1314,6 +1314,8 @@ window.addEventListener('hashchange',render);
 let _installEvt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_installEvt=e;try{if(S.user)render();}catch(x){}});
 window.addEventListener('online',render);window.addEventListener('offline',render);
+window.addEventListener('online',()=>{try{outboxFlush().catch(()=>{});}catch(e){}});
+setInterval(()=>{try{outboxFlush().catch(()=>{});}catch(e){}},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{App.autoDailyCheck().catch(()=>{});}catch(e){}}});
 function onUnhandledRej(e){try{const r=e&&e.reason;const m=(r&&r.message)||String(r||'Erreur inattendue');
   if(/Session expirée/.test(m))return;toast('⚠️ '+m,'bad');console.error(r);}catch(x){}}
@@ -1334,7 +1336,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.22';
+const APP_VER='35.23';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3251,6 +3253,7 @@ async function formSend(source_type,source_name,payload){
   catch(e){outboxPush(rec);return{ok:true,offline:true};}
 }
 async function scForm(token){
+  try{await outboxFlush();}catch(e){}
   if(!token)return formErr('Lien incomplet.');
   let agent=null,kind=null,name='';
   try{
