@@ -1333,6 +1333,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
+const APP_VER='35.13';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1690,6 +1691,8 @@ App.achatSave=async id=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT
 /* ================= PRODUCTION ================= */
 async function scApropos(){
   $('#main').innerHTML='<div class="card" style="max-width:620px;margin:0 auto"><h2>🛟 Support &amp; À propos</h2>'
+  +'<div class="help" style="margin-bottom:10px">📦 <b>CaféPro version '+APP_VER+'</b> — pour toute demande, indiquez cette version.</div>'
+  +'<div class="help" style="margin-bottom:10px">📦 <b>CaféPro version '+APP_VER+'</b> — pour toute demande, indiquez cette version.</div>'
   +'<div style="display:flex;align-items:center;gap:16px;margin:16px 0"><img src="'+DORLOGO+'" alt="Doregoservices" style="height:72px;border-radius:14px"><div><div style="font-size:17px;font-weight:800">Doregoservices</div><div class="mut">Conception, déploiement et maintenance de l\'application</div></div></div>'
   +'<div class="row">'
   +'<div class="field" style="flex:1"><span>Téléphone / WhatsApp</span><a href="tel:+22507175795" style="font-size:18px;font-weight:700;color:var(--pri);text-decoration:none">📞 07 17 57 95 56</a></div>'
@@ -2763,6 +2766,7 @@ const LBL6={VE:'Ventes',AC:'Achats',CA:'Caisse',BQ:'Banque/MoMo',PA:'Paie',OD:'O
 App.expCaisse=async()=>{
   const{from,to}=App.expFilterRange();
   const inR=d=>(!from||d>=from)&&(!to||d<=to);
+  if(!(await DB.list('pay_runs')).some(r=>r.status==='closed'))toast('ℹ️ Le journal PA (paie) sera vide : aucune paie clôturée sur la période','bad');
   const J=(SETS.journals||{});
   const jl=k=>(J[k]||k);
   const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',its_er:'641300',virement_interne:'585000',banque:'521000'};
@@ -2849,6 +2853,7 @@ App.expCaisse=async()=>{
   const syn=[['EXPORT SAGE 100 — 6 JOURNAUX'],[esc((SETS.company&&SETS.company.name)||'')],['Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to)],[],
     ['JOURNAL','Code','Écritures','Total DÉBIT','Total CRÉDIT','ÉQUILIBRE']];
   KS.forEach(k=>syn.push([{v:(LBL6[k]||k),__style:1},jl(k),SH[k].n,Math.round(SH[k].tot),Math.round(SH[k].totC),Math.abs(SH[k].tot-SH[k].totC)<0.01?'✔':'✘ ÉCART']));
+  if(!SH.PA.n)syn.push(['ℹ️ Journal PA vide : aucune paie CLÔTURÉE sur la période — Paie → Paie du mois → générer puis clôturer pour alimenter ce journal (les écritures PA partent de la date de clôture).']);
   const gD=KS.reduce((a,k)=>a+SH[k].tot,0),gC=KS.reduce((a,k)=>a+SH[k].totC,0);
   syn.push([{v:'TOTAL GÉNÉRAL',__style:1},'',{v:'',__style:1},{v:Math.round(gD),__style:1},{v:Math.round(gC),__style:1},{v:Math.abs(gD-gC)<0.01?'✔':'✘',__style:1}]);
   const det=[['DATE','TYPE','CATÉGORIE','LIBELLÉ','MOYEN','ENTRÉE','SORTIE','JOURNAL SAGE']];
@@ -2993,7 +2998,7 @@ async function scParametres(){
   const m=$('#main');
   const accts=SETS.sage_accounts||[];
   const P=SETS.payroll;const F=SETS.fiscal||{};
-  m.innerHTML='<div class="card"><h2>⚙️ Réglages</h2>'
+  m.innerHTML='<div class="card"><h2>⚙️ Réglages <span class="mut" style="font-size:12px;font-weight:400">— version '+APP_VER+'</span></h2>'
   +'<h3>🏢 Société</h3><div class="row">'+fld('Nom de la société','<input id="stCo" value="'+esc((SETS.company||{}).name||'')+'">')+fld('Codes journaux Sage (6)', '<div class="row" style="gap:6px">'+[['VE','Ventes'],['AC','Achats'],['CA','Caisse'],['BQ','Banque/MoMo'],['PA','Paie'],['OD','OD']].map(x=>'<input id="jrn_'+x[0]+'" title="'+x[1]+'" value="'+esc(((SETS.journals||{})[x[0]])||x[0])+'" style="max-width:64px;text-align:center">').join('')+'</div><span class="help">Un code par journal Sage (modifiable)</span>')+'</div>'
   +'<div class="field"><span>Logo de la société (affiché dans l\'app et les emails au boss)</span><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
   +((SETS.company||{}).logo?'<img src="'+SETS.company.logo+'" style="height:44px;object-fit:contain;border:1px solid var(--line);border-radius:8px;padding:3px">':'<span class="help">Aucun logo — ☕ affiché pour l\'instant</span>')
@@ -3867,10 +3872,11 @@ async function scExploitation(){
     const btnFix='<button class="btn sm" style="margin-left:6px" onclick="App.fixZeroCond()">🔧 Corriger maintenant</button>';
     const causes=[];
     if(zero.length)causes.push('<b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> — gonflement du résultat estimé : <b>'+money(gonf)+' F</b>. '+btnFix);
-    if(over.length)causes.push('<b>'+over.length+' lot(s) au rendement impossible</b> (café conditionné &gt; torréfié consommé) — corrigez le kg torréfié ou les unités via ✎ (Production → 📋 Historique)');
+    if(over.length){const det=over.slice(0,8).map(p=>dFR(p.date)+' : '+num2(cafeOf(p))+' kg de café dans les sachets vs '+num2(Number(p.roasted_used||0))+' kg torréfié consommé').join('<br>');
+      causes.push('<b>'+over.length+' lot(s) au rendement impossible</b> (café conditionné &gt; torréfié consommé) — via ✎ (Production → 📋 Historique), indiquez le 1er chiffre comme kg torréfié si les unités sont justes :<br><span style="font-size:12px">'+det+(over.length>8?'<br>…':'')+'</span>');}
     if(inc.ventes>0&&inc.resultat>inc.ventes){
       if(!causes.length)causes.push('Aucun lot suspect : vérifiez qu\'aucune vente du mois n\'est manquante ou restée dans 📥 À valider, et que les charges du mois (caisse, paie clôturée) sont bien enregistrées.');
-      surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>Diagnostic — le résultat ('+money(inc.resultat)+' F) dépasse les ventes ('+money(inc.ventes)+' F)</b> : une variation de stock n\'est pas annulée par sa charge de café.<br>'+causes.join('<br>')+'</div>';
+      surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>Diagnostic — le résultat ('+money(inc.resultat)+' F) dépasse les ventes ('+money(inc.ventes)+' F)</b> : une variation de stock n\'est pas annulée par sa charge de café. <span style="font-size:11px;opacity:.7">(version '+APP_VER+')</span><br>'+causes.join('<br>')+'</div>';
     }else if(zero.length){
       surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> (ancien mode) — stocks et variations faussés : corrigez pour que chaque lot soit annulé par sa charge de café. '+btnFix+'</div>';
     }

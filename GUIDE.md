@@ -72,6 +72,7 @@ Elle reçoit le lien (WhatsApp). Elle l'ouvre puis **menu du navigateur → « A
 ### Exports Excel (écran **Exports**)
 | Export | Contenu |
 |---|---|
+| **💰 Sage 100 — 6 journaux (VE · AC · CA · BQ · PA · OD)** | Le journal **PA (paie)** n'est alimenté que par une paie **clôturée** sur la période (les écritures partent de la date de clôture) — sinon il est vide et l'export vous le rappelle. La **version de l'application** est affichée dans Réglages et 🛟 Support — indiquez-la à votre développeur pour toute demande. |
 | **Point complet des stocks** | Café vert, torréfié, produits finis, **emballages**, rendement torréfaction unique, mouvements détaillés |
 | **Export Sage 100 — 6 journaux** | **Synthèse** (équilibre Débit = Crédit par journal et total) + une feuille par journal **VE / AC / CA / BQ / PA / OD** (`Date/Journal/Compte/Libellé/Débit/Crédit`, codes paramétrables) + feuille Mouvements. Fourni en **.xlsx et .csv**, chaque ligne équilibrée |
 | **Ventes** | Détail, synthèse par commerciale, par produit |
