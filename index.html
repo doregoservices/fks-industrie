@@ -1338,7 +1338,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.24';
+const APP_VER='35.25';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1455,6 +1455,7 @@ async function dbProbe(){
   }
   return out;
 }
+function terrainPoliciesSql(){return Object.keys(POLICY_EXTRA).map(t=>'-- politiques des liens terrain : '+t+POLICY_EXTRA[t]).join('\n');}
 App.dbCheck=async()=>{
   if(CFG.mode!=='supabase'||!CFG.url||!CFG.anon){modal('Vérification de la base','<div class="alert al-info">Cette vérification concerne le <b>mode en ligne</b>. Connectez d\'abord Supabase avec le bouton voisin, puis relancez-la.</div>');return;}
   modal('Vérification de la base…','<div class="help">Test direct des '+DB_TABLES.length+' tables et de leurs colonnes…</div>');
@@ -1463,14 +1464,18 @@ App.dbCheck=async()=>{
   if(p.auth){modal('Session expirée','<div class="alert al-bad">Votre session a expiré — <b>déconnectez-vous puis reconnectez-vous</b>, et relancez la vérification.</div>');return;}
   if(p.err.length){modal('Accès refusé sur certaines tables','<div class="alert al-bad">'+esc(p.err.join(', '))+'</div><div class="help" style="margin-top:8px">Le message ci-dessus contient la cause exacte. Déconnectez/reconnectez-vous puis relancez la vérification ; si cela persiste, communiquez ce message précis.</div>');return;}
   const nMiss=p.miss.length,nPart=p.partial.reduce((a,x)=>a+x.cols.length,0);
-  if(!nMiss&&!nPart){modal('Vérification de la base ✅','<div class="alert al-ok"><b>Base complète :</b> les '+DB_TABLES.length+' tables et toutes leurs colonnes répondent correctement.</div>');return;}
+  if(!nMiss&&!nPart){modal('Vérification de la base ✅',
+    '<div class="alert al-ok"><b>Base complète :</b> les '+DB_TABLES.length+' tables et toutes leurs colonnes répondent correctement.</div>'
+    +'<div class="help" style="margin:8px 0">Si les <b>envois du terrain</b> (liens des commerciales/caisse/production) n\'arrivent pas dans 📥 À valider, appliquez aussi le SQL des politiques terrain ci-dessous (SQL Editor → Run) :</div>'
+    +'<textarea id="dbSql" readonly style="width:100%;height:110px;font-family:monospace;font-size:11px"'+esc(terrainPoliciesSql())+'</textarea>',
+    '<button class="btn sec" onclick="closeModal()">Fermer</button><button class="btn" onclick=\'copyTxt($("#dbSql").value);toast("SQL copié — collez-le dans Supabase → SQL Editor → Run","ok")\'>Copier le SQL</button>');return;}
   const parts=[];
   p.miss.forEach(t=>parts.push(TABLE_DDL[t]+'\nalter table '+t+' enable row level security;\ndrop policy if exists "gestionnaire_full" on '+t+';\ncreate policy "gestionnaire_full" on '+t+' for all to authenticated using (true) with check (true);'+(POLICY_EXTRA[t]||'')));
   p.partial.forEach(x=>{
     const defs=x.cols.map(c=>{const tc=(TABLE_COLS[x.t]||[]).filter(y=>y[0]===c)[0];return 'alter table '+x.t+' add column if not exists '+c+' '+(tc?tc[1]:'text')+';';});
     parts.push('-- '+x.t+' : colonnes manquantes ('+x.cols.join(', ')+')\n'+defs.join('\n'));
   });
-  const sql=parts.join('\n\n');
+  const sql=parts.join('\n\n')+'\n\n'+terrainPoliciesSql();
   const detail=(nMiss?'<b>'+nMiss+' table'+(nMiss>1?'s':'')+' manquante'+(nMiss>1?'s':'')+' :</b> '+p.miss.join(', ')+'.<br>':'')+(nPart?'<b>'+nPart+' colonne'+(nPart>1?'s':'')+' manquante'+(nPart>1?'s':'')+' :</b> '+p.partial.map(x=>x.t+' ('+x.cols.join(', ')+')').join(' · '):'');
   modal((nMiss+nPart)+' élément'+(nMiss+nPart>1?'s':'')+' manquant'+(nMiss+nPart>1?'s':'')+' dans la base',
     '<div class="alert al-bad">'+detail+'<br>C\'est ce qui fait échouer certains enregistrements (ex. ajustements).</div>'
@@ -3252,7 +3257,7 @@ async function formSend(source_type,source_name,payload){
   const rec={source_type:source_type,source_name:source_name,payload:payload};
   if(!navigator.onLine){outboxPush(rec);return{ok:true,offline:true};}
   try{await DB.insert('pending_entries',Object.assign({status:'pending',created_at:nowISO()},rec));return{ok:true};}
-  catch(e){outboxPush(rec);return{ok:true,offline:true};}
+  catch(e){outboxPush(rec);return{ok:true,offline:true,refused:/row-level security|42501|violates/i.test(String((e&&e.message)||e))};}
 }
 async function scForm(token){
   try{await outboxFlush();}catch(e){}
@@ -3300,7 +3305,7 @@ async function submitSalesPoint(aid,aname,date,lines,pay_mode,client){
     }catch(e){}
   }
   const res=await formSend('sales',aname,{date:date,agent_id:aid,agent_name:aname,lines:lines,total:total,pay_mode:pay_mode,client:client||'',note:note});
-  return{total:total,replaced:replaced,complement:!!note,offline:!!res.offline};
+  return{total:total,replaced:replaced,complement:!!note,offline:!!res.offline,refused:!!res.refused};
 }
 App.fSend=async(aid,aname)=>{
   const prods=await DB.list('products');
@@ -3310,7 +3315,7 @@ App.fSend=async(aid,aname)=>{
   formOK('Point du '+dFR($('#fD').value||todayISO())+' : '+money(r.total),
     (r.replaced?'Votre envoi précédent (non validé) a été remplacé. ':'')
     +(r.complement?'Nota : un point était déjà validé pour cette date, celui-ci sera traité comme complément. ':'')
-    +(r.offline?'Réseau indisponible : gardé sur le téléphone, envoi automatique dès le retour du réseau.':'Le gestionnaire va valider votre saisie.'));
+    +(r.refused?'⚠️ La base en ligne REFUSE les envois du terrain (réglage de sécurité manquant) — prévenez le gestionnaire : Réglages → 🔍 Vérifier la base. Votre saisie est gardée ici et partira dès la réparation.':(r.offline?'Réseau indisponible : gardé sur le téléphone, envoi automatique dès le retour du réseau.':'Le gestionnaire va valider votre saisie.')));
 };
 async function formProduction(){
   const tab=S.formTab||'roast';
