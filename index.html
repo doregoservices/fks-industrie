@@ -1333,7 +1333,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.13';
+const APP_VER='35.14';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3875,7 +3875,19 @@ async function scExploitation(){
     if(over.length){const det=over.slice(0,8).map(p=>dFR(p.date)+' : '+num2(cafeOf(p))+' kg de café dans les sachets vs '+num2(Number(p.roasted_used||0))+' kg torréfié consommé').join('<br>');
       causes.push('<b>'+over.length+' lot(s) au rendement impossible</b> (café conditionné &gt; torréfié consommé) — via ✎ (Production → 📋 Historique), indiquez le 1er chiffre comme kg torréfié si les unités sont justes :<br><span style="font-size:12px">'+det+(over.length>8?'<br>…':'')+'</span>');}
     if(inc.ventes>0&&inc.resultat>inc.ventes){
-      if(!causes.length)causes.push('Aucun lot suspect : vérifiez qu\'aucune vente du mois n\'est manquante ou restée dans 📥 À valider, et que les charges du mois (caisse, paie clôturée) sont bien enregistrées.');
+      if(!causes.length){
+        const dS=period+'-01',dE=monthAdd(period,1)+'-01';
+        const adjM=(await DB.list('adjustments')).filter(x=>x.date>=dS&&x.date<dE);
+        const pendQ=(await DB.list('pending_entries')).filter(pp=>pp.status==='pending');
+        const dirCh=inc.servicesTot+((inc.personnel&&inc.personnel.total)||0)+inc.impotsTot+(inc.hors||0)+inc.dotations;
+        const sg=v=>(v<0?'− ':'+ ')+money(Math.abs(v));
+        if(pendQ.length)causes.push('📥 <b>'+pendQ.length+' saisie(s) encore à valider</b> — une vente non validée ne compte nulle part (ni dans les ventes, ni dans les stocks) : écran 📥 À valider → ✓ Valider.');
+        if(adjM.length){const det=adjM.slice(0,6).map(x=>dFR(x.date)+' : '+num2(Math.abs(Number(x.qty||0)))+' '+(x.level==='green'?'kg vert':x.level==='roasted'?'kg torréfié':x.level==='type'?'transformés':(x.name||'produits'))+(Number(x.qty||0)>=0?' en +':' en −')).join(' · ');causes.push('⚖️ <b>'+adjM.length+' ajustement(s) de stock ce mois</b> — '+det+' — un ajustement à la hausse augmente la variation (donc le résultat) sans charge associée.');}
+        if(dirCh<=0)causes.push('💸 <b>Aucune charge directe ce mois</b> (ni caisse imputable, ni paie, ni impôts, ni amortissements) — un mois sans charges gonfle le résultat.');
+        if(!inc.run)causes.push('👥 Paie du mois non clôturée — les charges de personnel n\'entrent dans l\'exploitation qu\'une fois la paie clôturée (Paie → Paie du mois → Clôturer).');
+        causes.push('🔎 <b>Détail du calcul</b> — ventes '+money(inc.ventes)+' · variations de stock valorisées : produits finis '+sg(inc.dPF)+', torréfié '+sg(inc.dRoast)+(inc.dSemi?', transformés '+sg(inc.dSemi):'')+' · charges : café consommé '+money(inc.consVert)+', emballages consommés '+money(inc.consEmb)+', charges directes '+money(dirCh)+'.');
+        causes.push('Vérifiez aussi qu\'aucune vente du mois n\'est manquante ou datée d\'un autre mois (écran 🛒 Ventes).');
+      }
       surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>Diagnostic — le résultat ('+money(inc.resultat)+' F) dépasse les ventes ('+money(inc.ventes)+' F)</b> : une variation de stock n\'est pas annulée par sa charge de café. <span style="font-size:11px;opacity:.7">(version '+APP_VER+')</span><br>'+causes.join('<br>')+'</div>';
     }else if(zero.length){
       surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> (ancien mode) — stocks et variations faussés : corrigez pour que chaque lot soit annulé par sa charge de café. '+btnFix+'</div>';
