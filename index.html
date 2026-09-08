@@ -1123,7 +1123,7 @@ function defaultSettings(){
       {key:'virement_interne',label:'Virements de fonds — compte de passage (585)',account:'585000',group:'treso'}
     ],
     journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
-    fiscal:{mode:'BIC',bic:25,tee:5,tva:false,tva_rate:18,nif:''},
+    fiscal:{mode:'',bic:25,tee:5,tva:false,tva_rate:18,nif:''},
     payroll:{ // Taux Côte d'Ivoire en vigueur (réforme ITS 2024) — modifiables dans Réglages
       cnps_retraite_e:6.3,        // CNPS retraite : part salarié (%)
       cnps_retraite_er:7.7,       // CNPS retraite : part patronale (%)
@@ -1334,7 +1334,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.18';
+const APP_VER='35.19';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1514,9 +1514,24 @@ async function scGuide(){
    {t:'👥 Paie',go:'paie',h:'Paie du mois → Générer → Clôturer & payer. Sans clôture : pas de charges de personnel ni de journal PA.',done:runs.some(r=>r.status==='closed')},
    {t:'📈 Exploitation & rapport',go:'exploitation',h:'Vérifiez le mois (résultat ≤ ventes = données saines), corrigez si un bandeau rouge apparaît, envoyez le rapport au boss.',done:logs.some(l=>l.kind==='monthly'&&l.status==='sent')}];
   const next=steps.filter(s=>!s.done&&!s.opt)[0]||steps.filter(s=>!s.done)[0]||null;
+  const tD=todayISO();
+  const ventesJour=sales.filter(s3=>s3.date===tD).reduce((a,x)=>a+Number(x.total||0),0);
+  const caisseJour=cash.filter(e2=>e2.date===tD).length;
+  const pendN=(await DB.list('pending_entries',{eq:{status:'pending'}})).length;
+  const pointSent=logs.some(l2=>l2.kind==='daily'&&l2.ref===tD&&(l2.status==='sent'||l2.status==='update_pending'));
+  const dueM=await monthlyDue().catch(()=>null);
+  const todayCard='<div class="card" style="max-width:760px;margin:0 auto 14px"><h3>📅 Aujourd\'hui — '+dFR(tD)+'</h3>'
+   +'<div class="grid g4">'
+   +'<div class="kpi"><div class="t">Ventes du jour</div><div class="v">'+money(ventesJour)+'</div></div>'
+   +'<div class="kpi"><div class="t">Écritures caisse</div><div class="v">'+caisseJour+'</div></div>'
+   +'<div class="kpi"><div class="t">À valider</div><div class="v" style="color:'+(pendN?'var(--bad)':'var(--ok)')+'">'+pendN+'</div></div>'
+   +'<div class="kpi"><div class="t">Point 22h</div><div class="v" style="font-size:14px">'+(pointSent?'✅ envoyé':(new Date().getHours()>=22?'⏳ à envoyer':'⏳ prévu 22h00'))+'</div></div>'
+   +'</div>'
+   +(dueM?'<div class="alert al-warn" style="margin:10px 0 0">📤 Rapport de '+monthLabel(dueM)+' à envoyer au boss (le 3 du mois).</div>':'')
+   +'</div>';
   const m=$('#main');
   const item=s=>'<div class="listitem" style="'+(s===next?'border:2px solid var(--bad);border-radius:14px;padding:10px':'')+'"><div class="avatar">'+(s.done?'✅':(s===next?'👉':'⬜'))+'</div><div style="flex:1"><b>'+s.t+'</b>'+(s.opt?' <span class="mut">(optionnel)</span>':'')+'<div class="mut" style="font-size:12px">'+s.h+'</div></div>'+(s.done?'':'<button class="btn sm" onclick="go(\''+s.go+'\')">Ouvrir</button>')+'</div>';
-  m.innerHTML='<div class="card" style="max-width:760px;margin:0 auto"><h2>🧭 Assistant — par où commencer ?</h2>'
+  m.innerHTML=todayCard+'<div class="card" style="max-width:760px;margin:0 auto"><h2>🧭 Assistant — mise en service & suivi</h2>'
    +(next?'<div class="alert al-warn" style="margin:10px 0"><b>👉 Prochaine étape : '+next.t+'</b> — '+next.h+' <button class="btn sm" style="margin-left:6px" onclick="go(\''+next.go+'\')">Aller</button></div>':'<div class="alert al-ok" style="margin:10px 0">🎉 Tout est en place — l\'usine est entièrement suivie. Continuez votre routine quotidienne !</div>')
    +steps.map(item).join('')
    +'<div class="help" style="margin-top:10px"><b>Routine quotidienne</b> : ventes au fil de l\'eau + caisse le soir · 🔥 fournées et conditionnement au fil de la journée · 📥 À valider régulièrement · paie en fin de mois.</div></div>';}
@@ -1541,7 +1556,7 @@ async function scDashboard(){
    +'<div class="kpi"><div class="t">Ventes du jour</div><div class="v">'+money(st.salesToday)+'</div></div>'
    +'<div class="kpi"><div class="t">À valider</div><div class="v" style="color:'+(pend.length?'var(--bad)':'var(--ok)')+'">'+pend.length+'</div></div>'
    +'</div>'
-   +(gnext?'<div class="alert al-info" style="margin-top:12px">🧭 <b>Assistant</b> — prochaine étape : <b>'+gnext.t+'</b>. <a href="#/guide">Ouvrir le guide</a></div>':'')
+   +(gnext?'<div class="alert al-info" style="margin-top:12px">🧭 <b>Assistant</b> — prochaine étape : <b>'+gnext.t+'</b>. <a href="#/guide">Ouvrir le guide</a></div>':'<div class="alert al-info" style="margin-top:12px">🧭 <b>Assistant</b> — ✅ mise en service complète. <a href="#/guide">Tableau du jour &amp; routine</a></div>')
    +'<div class="row" style="margin-top:12px">'
    +(roleAllowed('ventes')?'<button class="btn" style="flex:1;min-width:126px" onclick="App.venteForm()">🛒 Vendre</button>':'')
    +(roleAllowed('achats')?'<button class="btn sec" style="flex:1;min-width:126px" onclick="App.achatForm()">🛁 Acheter du vert</button>':'')
@@ -3918,7 +3933,7 @@ async function monthlyHtml(inc){
     +'<table>'
     +'<tr><th>Ventes du mois</th><th style="text-align:right">'+cell(inc.ventes)+'</th></tr>'
     +'<tr><th>Résultat d\'exploitation</th><th style="text-align:right">'+cell(inc.resultat)+'</th></tr>'
-    +'<tr><td>− Impôt bénéfices ('+num2(inc.isRate)+' %)</td><td style="text-align:right">'+cell(inc.isBenef)+'</td></tr>'
+    +'<tr><td>− '+(inc.fMode==='TEE'?'Taxe TEE ('+num2(inc.isRate)+' % du chiffre d\'affaires)':'Impôt BIC ('+num2(inc.isRate)+' % du résultat)')+'</td><td style="text-align:right">'+cell(inc.isBenef)+'</td></tr>'
     +'<tr><th>Résultat net</th><th style="text-align:right">'+cell(inc.resultatNet)+'</th></tr>'
     +'<tr><th>CAF / cash-flow (net + amortissements)</th><th style="text-align:right">'+cell(inc.caf)+'</th></tr>'
     +'<tr><td>Flux de trésorerie réel du mois</td><td style="text-align:right">'+cell(inc.fluxTreso)+'</td></tr></table>'
@@ -4015,6 +4030,7 @@ async function scExploitation(){
   $('#main').innerHTML='<div class="card"><h2>📈 Exploitation — '+monthLabel(period)+'</h2>'
   +'<div class="row">'+fld('Mois','<input type="month" value="'+period+'" onchange="S.expPeriod=this.value;render()">')+'</div>'
   +surAlert
+  +(((SETS.fiscal||{}).mode)?'':'<div class="alert al-warn" style="margin:10px 0">🏛️ <b>Régime fiscal non choisi</b> — l\'impôt est calculé par défaut en <b>BIC (25 % du résultat)</b>. Si vous êtes à la <b>TEE</b> (taxe sur le chiffre d\'affaires) : Réglages → 🏛️ Fiscalité → choisissez TEE. Ce choix s\'applique à l\'écran, aux exports Excel et au rapport envoyé au boss.</div>')
   +'<div class="grid g4" style="margin:10px 0">'
   +'<div class="kpi"><div class="t">Ventes</div><div class="v">'+money(inc.ventes)+'</div></div>'
   +'<div class="kpi"><div class="t">Résultat net</div><div class="v" style="color:'+(inc.resultatNet>=0?'var(--ok)':'var(--bad)')+'">'+money(inc.resultatNet)+'</div><div class="s">après impôt '+money(inc.isBenef)+'</div></div>'
@@ -4048,7 +4064,7 @@ async function scExploitation(){
   +'<div class="hr"></div><h3>Synthèse</h3><table class="tbl"><tbody>'
   +L('RÉSULTAT D\'EXPLOITATION (marge '+Math.round(inc.marge*10)/10+' %)',inc.resultat,inc.resultat<0)
   +L('Excédent brut d\'exploitation (EBE)',inc.ebe)
-  +L('− Impôt sur les bénéfices ('+num2(inc.isRate)+' %, estim.)',inc.isBenef)
+  +L(inc.fMode==='TEE'?'− Taxe TEE ('+num2(inc.isRate)+' % du chiffre d\'affaires)':'− Impôt BIC ('+num2(inc.isRate)+' % du résultat, estim.)',inc.isBenef)
   +'<tr class="tot"><td>RÉSULTAT NET</td><td class="r"><b>'+money(inc.resultatNet)+'</b></td></tr>'
   +L('+ Dotations (non décaissées)',inc.dotations)
   +'<tr class="tot"><td>CAF / CASH-FLOW</td><td class="r"><b>'+money(inc.caf)+'</b></td></tr>'
