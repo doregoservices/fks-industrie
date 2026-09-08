@@ -3,12 +3,14 @@
 -- Point quotidien : tous les jours à 22h00 (heure de Côte d'Ivoire)
 -- Rapport mensuel : le 3 de chaque mois à 10h00 (mois précédent)
 --
--- ⚠️ UNE SEULE CHOSE À FAIRE AVANT DE COLLER :
---   Remplacez COLLEZ-VOTRE-CLE-ANON par la clé « anon (publique) » de
---   votre projet. Pour la trouver : ouvrez l'app → ⚙️ Réglages →
---   🔌 Connexion Supabase → champ « Clé anon (publique) » → copiez-la
---   (elle commence par eyJ...). C'est la même clé que celle de l'app :
---   elle est publique par conception, aucun risque à la coller ici.
+-- ⚠️ DEUX CHOSES À FAIRE AVANT DE COLLER (aucune clé vraie ne doit vivre
+--    dans ce dépôt public — prenez-les dans l'APP, pas dans un fichier) :
+--   1. COLLEZ-VOTRE-CLE-ANON → la clé « anon (publique) » du projet :
+--      app → ⚙️ Réglages → 🔌 Connexion Supabase → champ « Clé anon »
+--      (elle commence par eyJ... — publique par conception).
+--   2. COLLEZ-VOTRE-CLE-ENVOI → la clé d'envoi des rapports :
+--      app → ⚙️ Réglages → 📧 Envoi des rapports → champ « Clé d'envoi
+--      (REPORT_KEY) ».
 --
 -- PUIS : Supabase (supabase.com → votre projet pyfbczuxcqcyebwnghqi)
 --   → menu SQL Editor → New query → collez TOUT ce fichier → Run.
@@ -27,7 +29,7 @@ select cron.unschedule('fks-rapport-mensuel')  where exists (select 1 from cron.
 select cron.schedule('fks-point-quotidien', '0 22 * * *', $$
 select net.http_post(
   request := 'https://pyfbczuxcqcyebwnghqi.supabase.co/functions/v1/send-report',
-  headers := jsonb_build_object('Content-Type','application/json','apikey','COLLEZ-VOTRE-CLE-ANON','x-report-key','fks-skicsJwZNZc15Kcu'),
+  headers := jsonb_build_object('Content-Type','application/json','apikey','COLLEZ-VOTRE-CLE-ANON','x-report-key','COLLEZ-VOTRE-CLE-ENVOI'),
   body    := jsonb_build_object('mode','daily')
 );
 $$);
@@ -36,7 +38,7 @@ $$);
 select cron.schedule('fks-rapport-mensuel', '0 10 3 * *', $$
 select net.http_post(
   request := 'https://pyfbczuxcqcyebwnghqi.supabase.co/functions/v1/send-report',
-  headers := jsonb_build_object('Content-Type','application/json','apikey','COLLEZ-VOTRE-CLE-ANON','x-report-key','fks-skicsJwZNZc15Kcu'),
+  headers := jsonb_build_object('Content-Type','application/json','apikey','COLLEZ-VOTRE-CLE-ANON','x-report-key','COLLEZ-VOTRE-CLE-ENVOI'),
   body    := jsonb_build_object('mode','monthly')
 );
 $$);

@@ -1334,7 +1334,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.21';
+const APP_VER='35.22';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -4044,7 +4044,7 @@ async function scExploitation(){
   +'<div class="kpi"><div class="t">Flux trésorerie réel</div><div class="v">'+money(inc.fluxTreso)+'</div><div class="s">encaissé − décaissé'+(inc.odNet?(' (dont OD '+money(inc.odNet)+')'):'')+'</div></div></div>'+((inc.tva&&inc.tva.on)?'<div class="card"><h3>🧾 TVA — '+monthLabel(period)+'</h3><div class="tblwrap"><table class="tbl"><tbody>'
   +L('Ventes TTC',inc.ventes)+L('Base HT (taux '+num2(inc.tva.rate)+' %)',inc.tva.ventesHT)+L('TVA collectée',inc.tva.col)+L('TVA déductible (achats et charges)',inc.tva.ded)
   +'<tr class="tot"><td>TVA À PAYER</td><td class="r"><b>'+money(inc.tva.due)+'</b></td></tr></tbody></table></div>'
-  +'<button class="btn sm" style="margin-top:8px" onclick="App.ediTVA(\''+period+'\')">📄 Déclaration + fichier EDI Annexe TVA (DGI)</button></div>':'')
+  +'<button class="btn sm" style="margin-top:8px" onclick="App.ediTVA(\''+period+'\')">📄 Déclaration + Annexe TVA DGI (Excel)</button></div>':'')
   +'<div class="grid g2"><div><h3>Produits</h3><table class="tbl"><tbody>'
   +L('Ventes de produits finis'+(inc.tva.on?' (hors TVA — TVA à part dans la carte dédiée)':''),inc.tva.on?inc.tva.ventesHT:inc.ventes)+L('Variation de stock café torréfié',inc.dRoast||0)+L('Variation de stock produits finis',inc.dPF)+((inc.typeRows||[]).length?L('Variation de stock café transformé (machines)',inc.dSemi):'')
   +'<tr class="tot"><td>TOTAL PRODUITS</td><td class="r"><b>'+money(inc.produitsTot)+'</b></td></tr></tbody></table></div>'
