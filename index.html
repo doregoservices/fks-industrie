@@ -3856,7 +3856,7 @@ async function scExploitation(){
   const period=S.expPeriod||monthISO();
   const inc=await computeIncome(period);
   let surAlert='';
-  if(inc.ventes>0&&inc.resultat>inc.ventes){
+  {
     const allPr=await DB.list('productions');const prodsA=await DB.list('products');const purA=await DB.list('purchases');
     const kgc=purA.reduce((a,x)=>a+Number(x.qty_kg||0),0);const cmp=kgc>0?purA.reduce((a,x)=>a+Number(x.amount||0),0)/kgc:0;
     const kgU=p=>{const r=(p.recipes||[])[0]||{};return Number(r.qty||p.type_kg||(p.weight_g?p.weight_g/1000:0))||0;};
@@ -3864,11 +3864,16 @@ async function scExploitation(){
     const zero=allPr.filter(p=>!Number(p.roasted_used)&&(p.lines||[]).some(l=>Number(l.qty)>0));
     const over=allPr.filter(p=>{const ru=Number(p.roasted_used||0);return ru>0&&cafeOf(p)>ru*1.02;});
     const gonf=Math.round(zero.reduce((a,p)=>a+cafeOf(p),0)*cmp);
+    const btnFix='<button class="btn sm" style="margin-left:6px" onclick="App.fixZeroCond()">🔧 Corriger maintenant</button>';
     const causes=[];
-    if(zero.length)causes.push('<b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> — gonflement du résultat estimé : <b>'+money(gonf)+' F</b>. <button class="btn sm" style="margin-left:6px" onclick="App.fixZeroCond()">🔧 Corriger maintenant</button>');
+    if(zero.length)causes.push('<b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> — gonflement du résultat estimé : <b>'+money(gonf)+' F</b>. '+btnFix);
     if(over.length)causes.push('<b>'+over.length+' lot(s) au rendement impossible</b> (café conditionné &gt; torréfié consommé) — corrigez le kg torréfié ou les unités via ✎ (Production → 📋 Historique)');
-    if(!causes.length)causes.push('Aucun lot suspect : vérifiez qu\'aucune vente du mois n\'est manquante ou restée dans 📥 À valider, et que les charges du mois (caisse, paie clôturée) sont bien enregistrées.');
-    surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>Diagnostic — le résultat ('+money(inc.resultat)+' F) dépasse les ventes ('+money(inc.ventes)+' F)</b> : une variation de stock n\'est pas annulée par sa charge de café.<br>'+causes.join('<br>')+'</div>';
+    if(inc.ventes>0&&inc.resultat>inc.ventes){
+      if(!causes.length)causes.push('Aucun lot suspect : vérifiez qu\'aucune vente du mois n\'est manquante ou restée dans 📥 À valider, et que les charges du mois (caisse, paie clôturée) sont bien enregistrées.');
+      surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>Diagnostic — le résultat ('+money(inc.resultat)+' F) dépasse les ventes ('+money(inc.ventes)+' F)</b> : une variation de stock n\'est pas annulée par sa charge de café.<br>'+causes.join('<br>')+'</div>';
+    }else if(zero.length){
+      surAlert='<div class="alert al-bad" style="margin:10px 0">⚠️ <b>'+zero.length+' conditionnement(s) à 0 kg de torréfié consommé</b> (ancien mode) — stocks et variations faussés : corrigez pour que chaque lot soit annulé par sa charge de café. '+btnFix+'</div>';
+    }
   }
   const paT=inc.paTot||{q:0,ca:0,cost:0,m:0};
   const logs=(await DB.list('email_log')).sort((a,b)=>(b.sent_at||b.created_at||'').localeCompare(a.sent_at||a.created_at||'')).slice(0,12);
