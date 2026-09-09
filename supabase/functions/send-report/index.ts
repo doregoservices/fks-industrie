@@ -1,5 +1,5 @@
 // ============================================================
-// CaféPro — Fonction Supabase "send-report" (VERSION 2)
+// CaféPro — Fonction Supabase "send-report" (VERSION 2.1 — corrige l'envoi depuis le NAVIGATEUR)
 // Envoie au boss les points quotidiens et rapports mensuels
 // via Resend (https://resend.com — gratuit).
 //
@@ -9,6 +9,10 @@
 //                      (« néant » vaut mieux que le silence pour le boss)
 //   • mode "monthly" : bilan mensuel compact (ventes, encaissé, dépenses)
 //   • le mode relais (to/subject/html) est inchangé — c'est celui de l'app
+//   • CORS corrigé : l'ancienne version n'autorisait pas les en-têtes
+//     authorization/apikey → le navigateur bloquait TOUT envoi depuis l'app
+//     (« fonction injoignable ») alors que la fonction répondait — aucun
+//     email n'avait jamais pu partir depuis l'app
 //   • dédoublonnage : si le point du jour a déjà été envoyé (par l'app ou
 //     par le cron), rien ne repart (journal email_log)
 //
@@ -36,7 +40,11 @@ const json = (body: unknown, status = 200) =>
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type, x-report-key",
+      // ⚠️ CORS : le navigateur envoie authorization + apikey — ils DOIVENT
+      // être autorisés ici, sinon le navigateur bloque l'envoi avant même
+      // de l'essayer (l'app affiche alors « fonction injoignable » à tort)
+      "Access-Control-Allow-Headers":
+        "Content-Type, x-report-key, X-Report-Key, authorization, Authorization, apikey, Apikey, APIKEY",
     },
   });
 
