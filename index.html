@@ -1194,7 +1194,7 @@ function fld(label,inner){return '<label class="field"><span>'+label+'</span>'+i
 function outboxPush(item){const a=JSON.parse(LS.get(OUTBOX)||'[]');a.push(item);LS.set(OUTBOX,JSON.stringify(a));}
 async function outboxFlush(){const a=JSON.parse(LS.get(OUTBOX)||'[]');if(!a.length)return 0;const rest=[];let sent=0;
   for(const it of a){try{
-    if(DB&&DB._base===Supa){await Supa.req('pending_entries',null,'POST',[Object.assign({id:uid(),status:'pending',created_at:nowISO()},it)]);}
+    if(DB&&DB._base===Supa){await Supa.req('pending_entries',null,'POST',[Object.assign({id:uid(),status:'pending',created_at:nowISO()},it)]);try{if(DB&&DB.bump)DB.bump();}catch(e2){}}
     else{await DB.insert('pending_entries',Object.assign({id:uid(),status:'pending',created_at:nowISO()},it));}
     sent++;}catch(e){rest.push(it);}}
   LS.set(OUTBOX,JSON.stringify(rest));
@@ -1353,7 +1353,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.31';
+const APP_VER='35.32';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3562,16 +3562,19 @@ async function buildDailyReport(D){
   const pendTot=pendWait.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
   const vide=!sales.length&&!cash.length&&!pendWait.length;
   const agRow=[];
-  agents.forEach(a=>{
-    const vs=sales.filter(s2=>s2.agent_name===a.name);
-    const ps=pendWait.filter(p=>((p.payload||{}).agent_name||p.source_name)===a.name);
+  const agNames=[...new Set([].concat(agents.map(a=>a.name),sales.map(s2=>s2.agent_name||''),pendWait.map(p=>((p.payload||{}).agent_name||p.source_name||''))))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b)));
+  agNames.forEach(n=>{
+    const act=n==='Vente directe'||agents.some(a=>a.name===n);
+    const vs=sales.filter(s2=>(s2.agent_name||'')===n);
+    const ps=pendWait.filter(p=>(((p.payload||{}).agent_name||p.source_name)||'')===n);
     const vt=vs.reduce((s2,x)=>s2+Number(x.total||0),0);
     const pt=ps.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
-    const rej=rejCnt[a.name]||0;
-    agRow.push('<tr><td><b>'+esc(a.name)+'</b></td><td style="text-align:right">'+(vs.length?'<span class="ok">'+vs.length+' validée'+(vs.length>1?'s':'')+' · '+money(vt)+'</span>':'—')+'</td><td style="text-align:right">'+(ps.length?'<span class="bad">'+ps.length+' à valider · '+money(pt)+'</span>':'—')+'</td><td>'+(vs.length||ps.length?(rej?'<span class="bad">'+rej+' rejetée'+(rej>1?'s':'')+'</span>':''):'<span class="bad">🔴 Aucun envoi reçu</span>')+'</td></tr>');
+    const rej=rejCnt[n]||0;
+    const envoi=(!vs.length&&!ps.length)?(act?'<span class="bad">🔴 Aucun envoi reçu</span>':'—'):(rej?'<span class="bad">'+rej+' rejetée'+(rej>1?'s':'')+'</span>':'');
+    agRow.push('<tr><td><b>'+esc(n)+'</b>'+(act?'':' <span style="font-size:10px;color:#999">(hors équipe)</span>')+'</td><td style="text-align:right">'+(vs.length?'<span class="ok">'+vs.length+' validée'+(vs.length>1?'s':'')+' · '+money(vt)+'</span>':'—')+'</td><td style="text-align:right">'+(ps.length?'<span class="bad">'+ps.length+' à valider · '+money(pt)+'</span>':'—')+'</td><td>'+envoi+'</td></tr>');
     ps.forEach(p=>{const pd=p.payload||{};agRow.push('<tr><td style="font-size:11px;color:#999;padding-left:16px">↳ reçu '+esc(String((p.created_at||'').slice(11,16)||'—'))+'</td><td colspan="3" style="font-size:11px;color:#999">'+((pd.lines||[]).map(l=>esc(l.name)+' ×'+num(Number(l.qty)||0)).join(', ')||'sans détail')+' · <b>'+money(Number(pd.total)||0)+'</b></td></tr>');});
   });
-  const vd=sales.filter(s2=>!s2.agent_name);
+  const vd=sales.filter(s2=>!(s2.agent_name||''));
   if(vd.length)agRow.push('<tr><td><b>Vente directe</b></td><td style="text-align:right">'+vd.length+' validée'+(vd.length>1?'s':'')+' · '+money(vd.reduce((s2,x)=>s2+Number(x.total||0),0))+'</td><td style="text-align:right">—</td><td></td></tr>');
   agRow.push('<tr class="tot"><td>TOTAL ('+sales.length+' vente'+(sales.length>1?'s':'')+' validée'+(sales.length>1?'s':'')+')</td><td style="text-align:right">'+money(tot)+'</td><td style="text-align:right">'+(pendWait.length?'<span class="bad">'+money(pendTot)+' à valider</span>':'—')+'</td><td></td></tr>');
   const enLigne=sales.filter(x=>x.pay_mode!=='credit').reduce((a,x)=>a+Number(x.total||0),0);
@@ -3593,10 +3596,10 @@ async function buildDailyReport(D){
   sales.forEach(s2=>(s2.lines||[]).forEach(l=>shV.push([s2.agent_name,s2.pay_mode==='credit'?'Crédit':(s2.pay_mode==='momo'?'MoMo':'Espèces'),l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s2.client||''])));
   shV.push([{v:'TOTAL',__style:1},'','','','',{v:tot,__style:1},'']);
   const shA=[['COMMERCIALES DU JOUR'],[],['Commerciale','Validées','Montant validé','À valider','Montant à valider','Détail à valider']];
-  agents.forEach(a=>{
-    const vsA=sales.filter(s2=>s2.agent_name===a.name);
-    const psA=pendWait.filter(p=>((p.payload||{}).agent_name||p.source_name)===a.name);
-    shA.push([a.name,vsA.length,vsA.reduce((s2,x)=>s2+Number(x.total||0),0),psA.length,psA.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0),psA.map(p=>(((p.payload||{}).lines||[]).map(l=>l.name+' ×'+num(Number(l.qty)||0)).join(', '))).join(' + ')]);
+  agNames.forEach(n=>{
+    const vsA=sales.filter(s2=>(s2.agent_name||'')===n);
+    const psA=pendWait.filter(p=>(((p.payload||{}).agent_name||p.source_name)||'')===n);
+    shA.push([n,vsA.length,vsA.reduce((s2,x)=>s2+Number(x.total||0),0),psA.length,psA.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0),psA.map(p=>(((p.payload||{}).lines||[]).map(l=>l.name+' ×'+num(Number(l.qty)||0)).join(', '))).join(' + ')]);
   });
   if(vd.length)shA.push(['Vente directe',vd.length,vd.reduce((s2,x)=>s2+Number(x.total||0),0),0,0,'']);
   shA.push([{v:'TOTAL',__style:1},sales.length,{v:tot,__style:1},pendWait.length,{v:pendTot,__style:1},'']);
