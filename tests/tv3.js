@@ -41,7 +41,8 @@ console.log('✓ Grandes masses : loyer en services externes, patente en impôts
 
 /* ===== 3. RÉSULTAT POSITIF → IMPÔT 25 % ===== */
 const p1=(await DB.list('products')).filter(p=>p.name==='Café grain 1 kg')[0];
-for(let i=0;i<15;i++)await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'cash',client:'',total:60000,lines:[{product_id:p1.id,name:p1.name,qty:6,price:10000}],source:'admin'});
+await DB.insert('adjustments',{date:todayISO(),level:'product',product_id:p1.id,name:p1.name,qty:200,reason:'stock initial test'});
+for(let i=0;i<30;i++)await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'cash',client:'',total:60000,lines:[{product_id:p1.id,name:p1.name,qty:6,price:10000}],source:'admin'});
 inc=await computeIncome(per);
 if(inc.resultat<=0)throw new Error('devrait être positif: '+inc.resultat);
 if(inc.isBenef!==Math.round(inc.resultat*0.25))throw new Error('IS: '+inc.isBenef);

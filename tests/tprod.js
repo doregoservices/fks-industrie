@@ -10,8 +10,8 @@ console.log('✓ Menu : « Produits » visible dans la barre de navigation');
 S.route='produits';location.hash='#/produits';
 await render();
 if(!$('#main').innerHTML.includes('Produits finis'))throw new Error('écran Produits non rendu');
-if(!$('#main').innerHTML.includes('Types de café'))throw new Error('section Types absente');
-console.log('✓ Écran rendu : produits finis + types de café');
+if($('#main').innerHTML.includes('Types de café transformés'))throw new Error('section Types encore présente (supprimée)');
+console.log('✓ Écran rendu : produits finis (étape types supprimée)');
 /* 3. ajout d’un produit */
 App.prodForm();
 $('#pName').value='Café cannelle 250 g';$('#pW').value='250';$('#pP').value='3000';$('#pA').value='15';
@@ -34,6 +34,7 @@ await App.prodToggle(np.id);
 if((await DB.list('products',{eq:{id:np.id}}))[0].active!==true)throw new Error('réactivation échouée');
 console.log('✓ Désactivation / réactivation');
 /* 6. le nouveau produit est vendable */
+await DB.insert('adjustments',{date:todayISO(),level:'product',product_id:np.id,name:np.name,qty:5,reason:'stock initial test'});
 await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'cash',total:3500,lines:[{product_id:np.id,name:np.name,qty:1,price:3500}],source:'admin'});
 const sl=(await DB.list('sales')).filter(s=>(s.lines||[]).some(l=>l.product_id===np.id));
 if(!sl.length)throw new Error('vente du nouveau produit impossible');
