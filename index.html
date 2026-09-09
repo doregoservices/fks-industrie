@@ -1332,6 +1332,8 @@ window.addEventListener('online',render);window.addEventListener('offline',rende
 window.addEventListener('online',()=>{try{outboxFlush().catch(()=>{});}catch(e){}});
 setInterval(()=>{try{outboxFlush().catch(()=>{});}catch(e){}},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{App.autoDailyCheck().catch(()=>{});}catch(e){}}});
+const _cpIv=setInterval(()=>{try{if(S&&S.user&&typeof isManager==='function'&&isManager())App.autoDailyCheck().catch(()=>{});}catch(e){}},30000);
+if(_cpIv&&_cpIv.unref)_cpIv.unref();
 function onUnhandledRej(e){try{const r=e&&e.reason;const m=(r&&r.message)||String(r||'Erreur inattendue');
   if(/Session expirée/.test(m))return;toast('⚠️ '+m,'bad');console.error(r);}catch(x){}}
 window.addEventListener('unhandledrejection',onUnhandledRej);
@@ -1351,7 +1353,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.29';
+const APP_VER='35.30';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1547,7 +1549,7 @@ async function scGuide(){
    +'<div class="kpi"><div class="t">Ventes du jour</div><div class="v">'+money(ventesJour)+'</div></div>'
    +'<div class="kpi"><div class="t">Écritures caisse</div><div class="v">'+caisseJour+'</div></div>'
    +'<div class="kpi"><div class="t">À valider</div><div class="v" style="color:'+(pendN?'var(--bad)':'var(--ok)')+'">'+pendN+'</div></div>'
-   +'<div class="kpi"><div class="t">Point '+emailHour()+'h</div><div class="v" style="font-size:14px">'+(pointSent?'✅ envoyé':(new Date().getHours()>=emailHour()?'⏳ à envoyer':'⏳ prévu '+emailHour()+'h00'))+'</div></div>'
+   +'<div class="kpi"><div class="t">Point '+emailTimeStr()+'</div><div class="v" style="font-size:14px">'+(pointSent?'✅ envoyé':(emailTimeDue()?'⏳ à envoyer':'⏳ prévu '+emailTimeStr()))+'</div></div>'
    +'</div>'
    +(dueM?'<div class="alert al-warn" style="margin:10px 0 0">📤 Rapport de '+monthLabel(dueM)+' à envoyer au boss (le 3 du mois).</div>':'')
    +'</div>';
@@ -1596,7 +1598,7 @@ async function scDashboard(){
    +'</div>'
    +'<div class="card" style="margin-top:14px"><h2>📤 Points quotidiens</h2><div class="listitem"><div class="avatar">📆</div><div style="flex:1"><b>Aujourd\'hui</b> '+dayBadge(dToday)+'</div>'+(dToday&&(dToday.complete||dToday.empty)?'<button class="btn sm" onclick="App.sendDailyBtn(\''+todayISO()+'\')">✉️ Point du jour</button>':'')+'</div>'
    +'<div class="listitem"><div class="avatar">📎</div><div style="flex:1"><b>Hier</b> '+dayBadge(dYest)+'</div>'+(dYest&&(dYest.complete||dYest.empty)?'<button class="btn sm sec" onclick="App.sendDailyBtn(\''+yst+'\')">✉️ Renvoyer / envoyer</button>':'')+'</div>'
-   +'<div class="help">Le point part automatiquement <b>à '+emailHour()+'h00</b> chaque jour — même si des commerciales n\'ont pas envoyé (elles sont listées dans l\'email) et même sans aucune activité (le boss reçoit un point « néant » plutôt que le silence). <b>Filet de sécurité</b> : si le programme 22h n\'est pas installé ou a échoué, l\'app l\'envoie d\'elle-même dès qu\'elle est ouverte après 22h. Vous pouvez aussi l\'envoyer plus tôt avec le bouton ✉️ ci-dessus. Une commerciale en retard peut saisir jusqu\'à 7 jours en arrière — renvoyez alors le point mis à jour.</div></div>'
+   +'<div class="help">Le point part automatiquement <b>à '+emailTimeStr()+'</b> chaque jour — même si des commerciales n\'ont pas envoyé (elles sont listées dans l\'email) et même sans aucune activité (le boss reçoit un point « néant » plutôt que le silence). <b>Filet de sécurité</b> : si le programme 22h n\'est pas installé ou a échoué, l\'app l\'envoie d\'elle-même dès qu\'elle est ouverte après 22h. Vous pouvez aussi l\'envoyer plus tôt avec le bouton ✉️ ci-dessus. Une commerciale en retard peut saisir jusqu\'à 7 jours en arrière — renvoyez alors le point mis à jour.</div></div>'
    +(due?'<div class="alert al-warn" style="margin-top:14px">📤 <b>Rapport de '+monthLabel(due)+' non encore envoyé au boss</b> — <a href="#/exploitation">l\'écran Exploitation</a> permet de le générer (stocks + compte d\'exploitation) et de l\'envoyer.</div>':'')
    +(pend.length?'<div class="alert al-warn" style="margin-top:14px;cursor:pointer" onclick="go(\'validation\')">📥 <b>'+pend.length+' saisie(s)</b> en attente de validation — toucher pour examiner</div>':'')
    +((lowStock.length||lowPack.length)?'<div class="alert al-bad" style="margin-top:14px">⚠️ Stock bas : '+lowStock.map(p=>esc(p.name)+' ('+num(p.stock)+')').concat(lowPack.map(p=>esc(p.name)+' ('+num(p.stock)+')')).join(' · ')+' — <a href="#/emballages">emballages</a></div>':'')
@@ -3185,7 +3187,7 @@ async function scParametres(){
   +(CFG.mode==='supabase'
     ?'<div class="help" style="margin-bottom:8px">Nécessite la fonction « send-report » déployée sur votre projet Supabase (voir GUIDE.md) et une clé Resend gratuite. Alternative sans configuration : les boutons « ✉️ Préparer l\'email » ouvrent votre messagerie avec le rapport prêt.</div>'
     +'<div class="row">'+fld('Email du boss','<input id="emB" value="'+esc((SETS.email||{}).boss||'')+'" placeholder="boss@societe.com">')+fld('Clé d\'envoi (REPORT_KEY)','<input id="emK" value="'+esc((SETS.email||{}).key||'')+'" placeholder="choisie lors du déploiement">')+'</div>'
-    +'<div class="row">'+fld('Heure d\'envoi du point (0–23)','<input id="emH" type="number" min="0" max="23" value="'+emailHour()+'" placeholder="22">')+fld('À savoir','<div class="help" style="margin:6px 0 0">Le point part tous les jours à cette heure — même les jours sans aucune activité (le boss reçoit « néant »). 22 par défaut : changez pour tester, puis remettez 22.</div>')+'</div>'
+    +'<div class="row">'+fld('Heure d\'envoi du point','<input id="emT" value="'+emailTimeStr()+'" placeholder="22h00, 13h30, 9h15…">')+fld('Formats acceptés','<div class="help" style="margin:6px 0 0">13h30 · 9h15 · 22h00 · 13h · 9:15 · 22. Le point part tous les jours à cette heure, même sans aucune activité (le boss reçoit « néant »). L\'envoi est vérifié toutes les 30 secondes et dès l\'enregistrement du réglage. ⚠️ L\'app n\'envoie que si elle est OUVERTE ; pour l\'envoi automatique app fermée, réglez aussi le cron Supabase (cron-pret-a-coller.sql — minutes possibles).</div>')+'</div>'
     +'<div class="alert al-info">🕐 <b>Point quotidien automatique : 22h00</b> · rapport mensuel : le 3 du mois à 10h00 — nécessite le programme Supabase (<b>cron-emails.sql</b> : SQL Editor → Run, une seule fois). <b>Filet de sécurité</b> : sans ce programme, l\'app envoie elle-même le point dès qu\'elle est ouverte après 22h. Envoi manuel possible à tout moment (✉️).</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="App.saveEmail()">Enregistrer</button><button class="btn sm sec" onclick="App.emailTest()">Envoyer un email de test</button></div>'
     :'<div class="alert al-info">L\'envoi automatique nécessite le mode en ligne (Supabase). Sans cela, utilisez les boutons « ✉️ Préparer l\'email » qui ouvrent votre messagerie avec le rapport prêt. Connectez Supabase puis revenez ici.</div>')
@@ -3486,7 +3488,11 @@ App.pkOutSave=async()=>{const q=Number($('#pkQ').value)||0;if(!q)return toast('Q
   closeModal();toast('Sortie enregistrée','ok');render();};
 
 /* ================= SUIVI QUOTIDIEN & EMAILS ================= */
-function emailHour(){const h=Number((SETS.email||{}).hour);return(h>=0&&h<=23)?h:22;}
+function parseEmailTime(s){const m=/^\s*(\d{1,2})\s*(?:h|H|:)?\s*(\d{0,2})\s*$/.exec(String(s==null?'':s));if(!m)return null;const hh=Number(m[1]),mi=m[2]===''?0:Number(m[2]);if(hh>23||mi>59)return null;return hh*60+mi;}
+function emailTimeMin(){const E=SETS.email||{};if(typeof E.time==='number'&&E.time>=0&&E.time<1440)return E.time;if(typeof E.hour==='number'&&E.hour>=0&&E.hour<=23)return E.hour*60;return 1320;}
+function emailTimeStr(){const t=emailTimeMin();return Math.floor(t/60)+'h'+String(t%60).padStart(2,'0');}
+function emailTimeDue(){const n=new Date();return n.getHours()*60+n.getMinutes()>=emailTimeMin();}
+function emailHour(){return Math.floor(emailTimeMin()/60);}
 async function dayStatus(D){
   const pend=(await DB.list('pending_entries',{eq:{status:'pending'}})).filter(p=>p.source_type==='sales'&&(p.payload||{}).date===D);
   const sales=(await DB.list('sales')).filter(s=>s.date===D);
@@ -3538,7 +3544,7 @@ async function emailSend(subject,html,attachment){
   }
   throw new Error(msg||('Erreur '+r.status));
 }
-App.saveEmail=async()=>{const hx=(function(){const x=Math.round(Number(($('#emH')||{}).value));return(x>=0&&x<=23)?x:22;})();await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),hour:hx,auto_daily:false});toast('Réglages email enregistrés','ok');};
+App.saveEmail=async()=>{const t=parseEmailTime(($('#emT')||{}).value);if(t===null)return toast('Heure invalide — écrivez par exemple 13h30, 9h15 ou 22h00','bad');await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),time:t,auto_daily:false});toast('Réglages enregistrés — point programmé à '+emailTimeStr(),'ok');try{const logs=await DB.list('email_log');if(logs.some(l=>l.kind==='daily'&&l.ref===todayISO()&&(l.status==='sent'||l.status==='update_pending')))toast('ℹ️ Le point d\'aujourd\'hui a déjà été envoyé — le prochain partira demain à '+emailTimeStr());}catch(e){}App.autoDailyCheck().catch(()=>{});};
 App.emailTest=async()=>{try{toast('Envoi en cours…');await emailSend(((SETS.company||{}).name||'FKS Industrie')+' — email de test','<p>✅ Si vous lisez cet email, l\'envoi automatique fonctionne.</p>');toast('Email de test envoyé ✅','ok');}catch(e){toast(e.message,'bad');}};
 const EMAILCSS='body{font-family:Arial,sans-serif;color:#2b211a}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #ddd;padding:6px 8px;font-size:13px;text-align:left}th{background:#6f4e37;color:#fff}.tot{font-weight:bold;background:#f4ece2}.ok{color:#1d7a4f;font-weight:bold}.bad{color:#c0392b;font-weight:bold}h2{color:#6f4e37}';
 function emailShell(title,body){const lg=(SETS.company||{}).logo;
@@ -3603,18 +3609,18 @@ async function sendDaily(D){
   await emailSend('Point du '+dFR(D)+' — '+((SETS.company||{}).name||'CaféPro'),rep.html,{filename:'Point_'+D+'.xlsx',base64:await blobToB64(rep.blob)});
   await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'sent',detail:''});
 }
-App.autoDailyCheck=async(hh)=>{
+App.autoDailyCheck=async(hh,mm)=>{
   if(CFG.mode!=='supabase')return false;
   if(!S.user||!isManager())return false;
   const E=SETS.email||{};if(!E.boss||!E.key)return false;
-  const h=(hh!=null?hh:new Date().getHours());
-  if(h<emailHour())return false;
+  const nwx=new Date();const cur=(hh!=null?(hh*60+(mm||0)):(nwx.getHours()*60+nwx.getMinutes()));
+  if(cur<emailTimeMin())return false;
   const D=todayISO();
   if(App._autoDaily===D)return false;
   const logs=await DB.list('email_log');
   if(logs.some(l=>l.kind==='daily'&&l.ref===D&&(l.status==='sent'||l.status==='update_pending')))return false;
   App._autoDaily=D;
-  try{await sendDaily(D);toast('✉️ Point du '+dFR(D)+' envoyé automatiquement au boss (prévu à '+emailHour()+'h00)','ok');return true;}
+  try{await sendDaily(D);toast('✉️ Point du '+dFR(D)+' envoyé automatiquement au boss (prévu à '+emailTimeStr()+')','ok');return true;}
   catch(e){await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'failed',detail:'filet 22h : '+e.message}).catch(()=>{});return false;}
 };
 App.sendDailyBtn=async D=>{try{toast('Envoi du point du '+dFR(D)+'…');await sendDaily(D);toast('Point envoyé au boss ✉️','ok');render();}

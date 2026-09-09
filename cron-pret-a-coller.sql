@@ -19,9 +19,11 @@
 --    mode=daily / mode=monthly. Si vous l'avez déployée AVANT le 10/09/2026,
 --    recollez d'abord la nouvelle version (dépôt → supabase/functions/send-report/)
 --    : l'ancienne version rejetait les appels du cron (aucun envoi possible).
--- POUR TESTER UNE AUTRE HEURE : remplacez '0 22 * * *' par exemple par
---    '40 15 * * *' (= 15h40), recollez tout ce fichier, attendez l'heure…
---    puis recollez-le TEL QUEL pour revenir à 22h00.
+-- POUR CHANGER L'HEURE (minutes possibles) : remplacez '0 22 * * *' par
+--    exemple par '30 13 * * *' (= 13h30) ou '45 15 * * *' (= 15h45),
+--    recollez tout ce fichier, attendez l'heure… puis recollez-le TEL QUEL
+--    pour revenir à 22h00. L'heure de l'APP (Réglages → 📧) est indépendante
+--    et n'agit que si l'app est ouverte ; ce cron envoie seul, app fermée.
 --   Réponse attendue : 2 lignes « fks-point-quotidien » et
 --   « fks-rapport-mensuel » avec active = true.
 --   Rejouable sans risque (les versions précédentes sont remplacées).
