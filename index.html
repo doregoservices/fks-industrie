@@ -1210,7 +1210,17 @@ async function createCashEntry(e){
   if(e.type==='out'){const b=await accBalance(e.account);
     if(Number(e.amount||0)>b+0.005)throw new Error('Solde '+(e.account==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(b)+' F) — la dépense de '+money(e.amount)+' F est refusée. Enregistrez d abord la rentrée d argent (ventes, appro…). Pas de solde négatif.');}
   return DB.insert('cash_entries',Object.assign({status:'validated',source:e.source||'admin',created_at:nowISO()},e));}
+async function saleStockCheck(lines,credit){
+  const need={};(lines||[]).forEach(l=>{const k=l.product_id||l.name;if(k)need[k]=(need[k]||0)+Number(l.qty||0);});
+  (credit||[]).forEach(l=>{const k=l.product_id||l.name;if(k)need[k]=(need[k]||0)-Number(l.qty||0);});
+  const ks=Object.keys(need).filter(k=>need[k]>0.005);if(!ks.length)return;
+  const st=await computeStats();const byId={},byNm={};
+  (st.products||[]).forEach(p=>{byId[p.id]=p;byNm[p.name]=p;});
+  for(const k of ks){const p=byId[k]||byNm[k];if(!p)continue;
+    if(need[k]>p.stock+0.005)throw new Error("Stock « "+p.name+" » insuffisant : "+num(Math.max(p.stock,0))+" disponible(s), "+num(need[k])+" demandé(s) — enregistrez d'abord la production (🏭) ou un ajustement de stock. Vente refusée : aucun stock négatif.");}
+}
 async function createSale(rec){
+  await saleStockCheck(rec.lines,[]);
   const sale=await DB.insert('sales',Object.assign({status:'validated',credit_status:rec.pay_mode==='credit'?'due':'paid',created_at:nowISO()},rec));
   if(rec.pay_mode!=='credit'){
     await createCashEntry({date:rec.date,type:'in',account:rec.pay_mode==='momo'?'momo':'cash',category:'ventes',
@@ -1341,7 +1351,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.27';
+const APP_VER='35.28';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2129,13 +2139,15 @@ App.venteSave=async()=>{
   const date=$('#vD').value||todayISO();const acc=App._pay==='momo'?'momo':'cash';
   if(App._editSale){
     const old=(await DB.list('sales',{eq:{id:App._editSale}}))[0]||{};
+    try{await saleStockCheck(lines,(old.lines||[]));}catch(e){return toast(e.message,'bad');}
     await DB.update('sales',App._editSale,{date:date,agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total:total,lines:lines,credit_status:App._pay==='credit'?(old.credit_status||'due'):'paid'});
     const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='sale:'+App._editSale)[0];
     if(App._pay==='credit'){if(ce)await DB.remove('cash_entries',ce.id);}
     else if(ce)await DB.update('cash_entries',ce.id,{date:date,account:acc,amount:total,label:'Ventes '+aname});
     else await createCashEntry({date:date,type:'in',account:acc,category:'ventes',label:'Ventes '+aname,amount:total,imputable:true,ref:'sale:'+App._editSale});
     App._editSale=null;closeModal();toast('Vente modifiée ✅','ok');render();return;}
-  await createSale({date:date,agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total,lines,source:'admin'});
+  try{await createSale({date:date,agent_id:aid,agent_name:aname,pay_mode:App._pay,client:$('#vClient')?$('#vClient').value:'',total,lines,source:'admin'});}
+  catch(e){return toast(e.message,'bad');}
   closeModal();toast('Vente enregistrée ✅','ok');render();};
 
 /* ================= COMMERCIAUX & LIENS ================= */
@@ -3530,17 +3542,34 @@ async function buildDailyReport(D){
   const sales=(await DB.list('sales')).filter(s=>s.date===D);
   const cash=(await DB.list('cash_entries')).filter(e=>e.date===D);
   const st=await computeStats();
-  const byAg={};sales.forEach(s2=>{byAg[s2.agent_name||'Vente directe']=(byAg[s2.agent_name||'Vente directe']||0)+Number(s2.total||0);});
   const tot=sales.reduce((a,x)=>a+Number(x.total||0),0);
+  const agents=(await DB.list('sales_agents')).filter(a=>a.active!==false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  const pendAll=await DB.list('pending_entries');
+  const pendWait=pendAll.filter(p=>p.status==='pending'&&p.source_type==='sales'&&(p.payload||{}).date===D);
+  const rejCnt={};pendAll.filter(p=>p.status==='rejected'&&p.source_type==='sales'&&(p.payload||{}).date===D).forEach(p=>{const n=(p.payload||{}).agent_name||p.source_name||'?';rejCnt[n]=(rejCnt[n]||0)+1;});
+  const pendTot=pendWait.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
+  const agRow=[];
+  agents.forEach(a=>{
+    const vs=sales.filter(s2=>s2.agent_name===a.name);
+    const ps=pendWait.filter(p=>((p.payload||{}).agent_name||p.source_name)===a.name);
+    const vt=vs.reduce((s2,x)=>s2+Number(x.total||0),0);
+    const pt=ps.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
+    const rej=rejCnt[a.name]||0;
+    agRow.push('<tr><td><b>'+esc(a.name)+'</b></td><td style="text-align:right">'+(vs.length?'<span class="ok">'+vs.length+' validée'+(vs.length>1?'s':'')+' · '+money(vt)+'</span>':'—')+'</td><td style="text-align:right">'+(ps.length?'<span class="bad">'+ps.length+' à valider · '+money(pt)+'</span>':'—')+'</td><td>'+(vs.length||ps.length?(rej?'<span class="bad">'+rej+' rejetée'+(rej>1?'s':'')+'</span>':''):'<span class="bad">🔴 Aucun envoi reçu</span>')+'</td></tr>');
+    ps.forEach(p=>{const pd=p.payload||{};agRow.push('<tr><td style="font-size:11px;color:#999;padding-left:16px">↳ reçu '+esc(String((p.created_at||'').slice(11,16)||'—'))+'</td><td colspan="3" style="font-size:11px;color:#999">'+((pd.lines||[]).map(l=>esc(l.name)+' ×'+num(Number(l.qty)||0)).join(', ')||'sans détail')+' · <b>'+money(Number(pd.total)||0)+'</b></td></tr>');});
+  });
+  const vd=sales.filter(s2=>!s2.agent_name);
+  if(vd.length)agRow.push('<tr><td><b>Vente directe</b></td><td style="text-align:right">'+vd.length+' validée'+(vd.length>1?'s':'')+' · '+money(vd.reduce((s2,x)=>s2+Number(x.total||0),0))+'</td><td style="text-align:right">—</td><td></td></tr>');
+  agRow.push('<tr class="tot"><td>TOTAL ('+sales.length+' vente'+(sales.length>1?'s':'')+' validée'+(sales.length>1?'s':'')+')</td><td style="text-align:right">'+money(tot)+'</td><td style="text-align:right">'+(pendWait.length?'<span class="bad">'+money(pendTot)+' à valider</span>':'—')+'</td><td></td></tr>');
   const enLigne=sales.filter(x=>x.pay_mode!=='credit').reduce((a,x)=>a+Number(x.total||0),0);
   const credit=sales.filter(x=>x.pay_mode==='credit'&&x.credit_status==='due').reduce((a,x)=>a+Number(x.total||0),0);
   const cashIn=cash.filter(e=>e.type==='in').reduce((a,e)=>a+Number(e.amount||0),0);
   const cashOut=cash.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
   const html=emailShell('Point quotidien du '+dFR(D),
     '<h3>Point du '+dFR(D)+'</h3>'
-    +'<table><tr><th>Commerciale</th><th style="text-align:right">Ventes</th></tr>'
-    +Object.keys(byAg).map(n=>'<tr><td>'+esc(n)+'</td><td style="text-align:right">'+money(byAg[n])+'</td></tr>').join('')
-    +'<tr class="tot"><td>TOTAL VENTES ('+sales.length+' point'+(sales.length>1?'s':'')+')</td><td style="text-align:right">'+money(tot)+'</td></tr></table>'
+    +'<table><tr><th>Commerciale</th><th style="text-align:right">✅ Validées</th><th style="text-align:right">⏳ À valider</th><th>Envoi du jour</th></tr>'
+    +agRow.join('')
+    +'</table>'
     +'<p>Encaissé comptant : <b class="ok">'+money(enLigne)+'</b>'+(credit?' · À crédit : <b class="bad">'+money(credit)+'</b>':'')+'</p>'
     +'<h3>Caisse du jour</h3><table><tr><th></th><th style="text-align:right">Montant</th></tr>'
     +'<tr><td>Entrées</td><td style="text-align:right" class="ok">'+money(cashIn)+'</td></tr>'
@@ -3549,10 +3578,18 @@ async function buildDailyReport(D){
   const shV=[['POINT DU '+dFR(D)],[],['COMMERCIALE','RÈGLEMENT','PRODUIT','QTÉ','P.U.','MONTANT','CLIENT']];
   sales.forEach(s2=>(s2.lines||[]).forEach(l=>shV.push([s2.agent_name,s2.pay_mode==='credit'?'Crédit':(s2.pay_mode==='momo'?'MoMo':'Espèces'),l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s2.client||''])));
   shV.push([{v:'TOTAL',__style:1},'','','','',{v:tot,__style:1},'']);
+  const shA=[['COMMERCIALES DU JOUR'],[],['Commerciale','Validées','Montant validé','À valider','Montant à valider','Détail à valider']];
+  agents.forEach(a=>{
+    const vsA=sales.filter(s2=>s2.agent_name===a.name);
+    const psA=pendWait.filter(p=>((p.payload||{}).agent_name||p.source_name)===a.name);
+    shA.push([a.name,vsA.length,vsA.reduce((s2,x)=>s2+Number(x.total||0),0),psA.length,psA.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0),psA.map(p=>(((p.payload||{}).lines||[]).map(l=>l.name+' ×'+num(Number(l.qty)||0)).join(', '))).join(' + ')]);
+  });
+  if(vd.length)shA.push(['Vente directe',vd.length,vd.reduce((s2,x)=>s2+Number(x.total||0),0),0,0,'']);
+  shA.push([{v:'TOTAL',__style:1},sales.length,{v:tot,__style:1},pendWait.length,{v:pendTot,__style:1},'']);
   const shC=[['CAISSE DU '+dFR(D)],[],['HEURE','TYPE','MOYEN','CATÉGORIE','LIBELLÉ','ENTRÉE','SORTIE']];
   cash.forEach(e=>shC.push([String((e.created_at||'').slice(11,16)),e.type==='in'?'Entrée':'Sortie',e.account==='momo'?'MoMo':'Espèces',catLabel(e.category),e.label,e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'']));
   shC.push([{v:'TOTAUX',__style:1},'','','','',{v:cashIn,__style:1},{v:cashOut,__style:1}]);
-  return{html:html,blob:buildXlsx([{name:'Ventes du jour',rows:shV,widths:[20,12,26,8,12,14,18]},{name:'Caisse du jour',rows:shC,widths:[8,10,10,20,30,14,14]}])};
+  return{html:html,blob:buildXlsx([{name:'Ventes du jour',rows:shV,widths:[20,12,26,8,12,14,18]},{name:'Commerciales',rows:shA,widths:[22,10,16,12,18,44]},{name:'Caisse du jour',rows:shC,widths:[8,10,10,20,30,14,14]}])};
 }
 async function sendDaily(D){
   const rep=await buildDailyReport(D);
