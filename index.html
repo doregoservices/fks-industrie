@@ -1207,7 +1207,7 @@ async function accBalance(acc,excludeId){const es=await DB.list('cash_entries');
     b+=(x.type==='in'?1:-1)*Number(x.amount||0);});
   return Math.round(b);}
 async function createCashEntry(e){
-  if(e.type==='out'){const b=await accBalance(e.account);
+  if(e.type==='out'&&e.account!=='bank'){const b=await accBalance(e.account);
     if(Number(e.amount||0)>b+0.005)throw new Error('Solde '+(e.account==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(b)+' F) — la dépense de '+money(e.amount)+' F est refusée. Enregistrez d abord la rentrée d argent (ventes, appro…). Pas de solde négatif.');}
   return DB.insert('cash_entries',Object.assign({status:'validated',source:e.source||'admin',created_at:nowISO()},e));}
 async function saleStockCheck(lines,credit){
@@ -1219,6 +1219,13 @@ async function saleStockCheck(lines,credit){
   for(const k of ks){const p=byId[k]||byNm[k];if(!p)continue;
     if(need[k]>p.stock+0.005)throw new Error("Stock « "+p.name+" » insuffisant : "+num(Math.max(p.stock,0))+" disponible(s), "+num(need[k])+" demandé(s) — enregistrez d'abord la production (🏭) ou un ajustement de stock. Vente refusée : aucun stock négatif.");}
 }
+async function creditRemaining(s){const es=await DB.list('cash_entries');let paid=0;
+  es.forEach(c=>{if(c.type==='in'&&(c.ref==='salepay:'+s.id||c.ref==='sale:'+s.id))paid+=Number(c.amount||0);});
+  return Math.max(Number(s.total||0)-paid,0);}
+async function purchaseRemaining(p){const es=await DB.list('cash_entries');let paid=0;
+  es.forEach(c=>{if(c.type==='out'&&(c.ref==='purchasepay:'+p.id||c.ref==='purchase:'+p.id))paid+=Number(c.amount||0);});
+  return Math.max(Number(p.amount||0)-paid,0);}
+function linesKg(lines,pm){let kg=0;(lines||[]).forEach(l=>{const p=pm[l.product_id]||pm[l.name];kg+=Number(l.qty||0)*(p?Number(p.weight_g||0)/1000:0);});return kg;}
 async function createSale(rec){
   await saleStockCheck(rec.lines,[]);
   const sale=await DB.insert('sales',Object.assign({status:'validated',credit_status:rec.pay_mode==='credit'?'due':'paid',created_at:nowISO()},rec));
@@ -1251,9 +1258,10 @@ async function computeStats(){
   st.types=ctypes.map(t=>({id:t.id,name:t.name,active:t.active!==false,made:made[t.id]||0,used:used[t.id]||0,stock:(made[t.id]||0)-(used[t.id]||0)+(adjT[t.id]||0)}));
   st.salesTotal=sales.reduce((s,x)=>s+Number(x.total||0),0);
   st.salesToday=sales.filter(x=>x.date===todayISO()).reduce((s,x)=>s+Number(x.total||0),0);
-  st.creditDue=sales.filter(x=>x.pay_mode==='credit'&&x.credit_status==='due').reduce((s,x)=>s+Number(x.total||0),0);
+  const _payMap={};cash.forEach(c=>{if(c.type==='in'&&(String(c.ref||'').indexOf('salepay:')===0||String(c.ref||'').indexOf('sale:')===0))_payMap[c.ref]=(_payMap[c.ref]||0)+Number(c.amount||0);});
+  st.creditDue=sales.filter(x=>x.pay_mode==='credit'&&x.credit_status==='due').reduce((s,x)=>s+Math.max(Number(x.total||0)-(_payMap['salepay:'+x.id]||0)-(_payMap['sale:'+x.id]||0),0),0);
   st.bal={cash:0,momo:0};
-  cash.forEach(c=>{const v=Number(c.amount||0);st.bal[c.account==='momo'?'momo':'cash']+=(c.type==='in'?v:-v);});
+  cash.filter(c=>c.account!=='bank').forEach(c=>{const v=Number(c.amount||0);st.bal[c.account==='momo'?'momo':'cash']+=(c.type==='in'?v:-v);});
   const prods=await DB.list('products');
   st.products=prods.map(p=>{
     let made=0,sold=0,ret=0;
@@ -1345,7 +1353,7 @@ async function render(){
   if(S.user&&!roleAllowed(S.route))S.route=roleHome();
   if(S.route==='f')return scForm(decodeURIComponent(String(parts[1]||'').split('?')[0]));
   if(S.route==='login'||!S.user)return scLogin();
-  const routes={dashboard:scDashboard,guide:scGuide,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets,bulletin:scBulletin};
+  const routes={dashboard:scDashboard,guide:scGuide,validation:scValidation,achats:scAchats,production:scProduction,stocks:scStocks,apropos:scApropos,produits:scProduits,ventes:scVentes,commerciaux:scCommerciaux,impayes:scImpayes,caisse:scCaisse,banque:scBanque,paie:scPaie,exports:scExports,parametres:scParametres,emballages:scEmballages,exploitation:scExploitation,immobilisations:scAssets,bulletin:scBulletin};
   const app=$('#app');
   app.innerHTML=topHtml()+'<main id="main"><div class="empty">Chargement…</div></main>'+bottomHtml();
   try{await(routes[S.route]||scDashboard)();}catch(e){console.error(e);$('#main').innerHTML='<div class="card"><div class="alert al-bad">Erreur : '+esc(e.message)+'</div><button class="btn sec" onclick="render()">Réessayer</button></div>';}
@@ -1353,8 +1361,8 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.32';
-const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
+const APP_VER='35.33';
+const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
 function bottomHtml(){
@@ -1721,22 +1729,36 @@ async function scAchats(){
   const list=(await DB.list('purchases')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const cash=await DB.list('cash_entries');
   const totKg=list.reduce((s,p)=>s+Number(p.qty_kg||0),0),totAmt=list.reduce((s,p)=>s+Number(p.amount||0),0);
-  const unpaid=list.filter(p=>!cash.some(c=>c.ref==='purchase:'+p.id));
-  const dettes=unpaid.reduce((a,p)=>a+Number(p.amount||0),0);
+  const remA={};for(const p of list){remA[p.id]=await purchaseRemaining(p);}
+  const unpaid=list.filter(p=>remA[p.id]>0.005);
+  const dettes=unpaid.reduce((a,p)=>a+remA[p.id],0);
   $('#main').innerHTML='<div class="card"><h2>🛁 Achats de café vert<span class="spacer"></span><button class="btn sm" onclick="App.achatForm()">+ Nouvel achat</button></h2>'
   +'<div class="grid g4" style="margin-bottom:12px"><div class="kpi"><div class="t">Total acheté</div><div class="v">'+num2(totKg)+' kg</div></div><div class="kpi"><div class="t">Montant total</div><div class="v">'+money(totAmt)+'</div></div><div class="kpi"><div class="t">Prix moyen</div><div class="v">'+money(totKg?totAmt/totKg:0)+'/kg</div></div><div class="kpi"><div class="t">Dettes fournisseurs</div><div class="v" style="color:'+(dettes>0?'var(--bad)':'var(--ok)')+'">'+money(dettes)+'</div><div class="s">'+unpaid.length+' achat(s) non réglé(s)</div></div></div>'
   +(unpaid.length?'<div class="alert al-wait" style="margin-bottom:12px">🛁 <b>Dettes fournisseurs — '+money(dettes)+' F à payer</b> : '
-    +unpaid.slice(0,6).map(p=>esc(p.supplier)+' ('+dFR(p.date)+') <b>'+money(p.amount)+'</b> <button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">💸 Payer</button>').join(' · ')
+    +unpaid.slice(0,6).map(p=>esc(p.supplier)+' ('+dFR(p.date)+') <b>'+money(remA[p.id])+'</b>'+(remA[p.id]<Number(p.amount||0)-0.005?' sur '+money(p.amount):'')+' <button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">💸 Payer</button>').join(' · ')
     +(unpaid.length>6?' … et '+(unpaid.length-6)+' autre(s)':'')+' — écriture Sage : CA 4011 Fournisseurs / 571-5521</div>':'')
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Fournisseur</th><th class="r">Qté (kg)</th><th class="r">Prix/kg</th><th class="r">Montant</th><th>Règlement</th><th></th></tr></thead><tbody>'
-  +list.map(p=>{const paid=cash.some(c=>c.ref==='purchase:'+p.id);
-    return '<tr><td>'+dFR(p.date)+'</td><td>'+esc(p.supplier)+'</td><td class="r">'+num2(p.qty_kg)+'</td><td class="r">'+money(p.price_per_kg)+'</td><td class="r"><b>'+money(p.amount)+'</b></td><td>'+(paid?'<span class="badge b-ok">Payé</span>':'<span class="badge b-wait">Non payé</span>')+'</td>'
-    +'<td class="r" style="white-space:nowrap">'+(paid?'':'<button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">Marquer payé</button> ')+'<button class="btn sm sec" onclick="App.achatEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.achatDel(\''+p.id+'\')">✕</button></td></tr>';}).join('')
+  +list.map(p=>{const rem=remA[p.id];const paid=rem<=0.005;const part=paid&&Number(p.amount||0)>0.005;
+    return '<tr><td>'+dFR(p.date)+'</td><td>'+esc(p.supplier)+'</td><td class="r">'+num2(p.qty_kg)+'</td><td class="r">'+money(p.price_per_kg)+'</td><td class="r"><b>'+money(p.amount)+'</b>'+(part?'<br><small class="mut">payé en plusieurs fois</small>':'')+'</td><td>'+(paid?'<span class="badge b-ok">Payé</span>':(rem<Number(p.amount||0)-0.005?'<span class="badge b-wait">Reste '+money(rem)+'</span>':'<span class="badge b-wait">Non payé</span>'))+'</td>'
+    +'<td class="r" style="white-space:nowrap">'+(paid?'':'<button class="btn sm ok" onclick="App.achatPay(\''+p.id+'\')">💸 Payer</button> ')+'<button class="btn sm sec" onclick="App.achatEdit(\''+p.id+'\')">✎</button> <button class="btn sm sec" onclick="App.achatDel(\''+p.id+'\')">✕</button></td></tr>';}).join('')
   +'</tbody><tfoot><tr><td colspan="2">TOTAL</td><td class="r">'+num2(totKg)+' kg</td><td></td><td class="r">'+money(totAmt)+'</td><td></td><td></td></tr></tfoot></table></div></div>';
 }
-App.achatPay=async id=>{const p=(await DB.list('purchases',{eq:{id:id}}))[0];
-  await createCashEntry({date:p.date,type:'out',account:p.pay_method==='momo'?'momo':'cash',category:'achat_vert',label:'Achat café vert — '+p.supplier,amount:p.amount,imputable:true,ref:'purchase:'+p.id});
-  toast('Règlement enregistré dans la caisse','ok');render();};
+App.achatPay=async id=>{const p=(await DB.list('purchases',{eq:{id:id}}))[0];if(!p)return;
+  const rem=await purchaseRemaining(p);
+  modal('Payer ce fournisseur','<div class="help" style="margin-bottom:10px">Achat : <b>'+esc(p.supplier)+'</b> — total <b>'+money(p.amount)+'</b>'+(rem<Number(p.amount||0)-0.005?' · déjà payé <b>'+money(Number(p.amount)-rem)+'</b>':'')+' · <b>reste à payer : '+money(rem)+'</b>. Paiement <b>en plusieurs fois possible</b>.</div>'
+  +'<div class="row">'+fld('Date','<input id="pD2" type="date" value="'+todayISO()+'">')+fld('Montant payé (FCFA)','<input id="pM2" type="number" inputmode="numeric" value="'+rem+'">')+'</div>'
+  +fld('Payé par','<select id="pA2"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option><option value="bank">🏦 Banque (suivi à part — sans incidence sur la caisse)</option></select>'),
+  '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.achatPaySave(\''+id+'\')">Payer</button>');};
+App.achatPaySave=async id=>{const p=(await DB.list('purchases',{eq:{id:id}}))[0];if(!p)return;
+  const rem=await purchaseRemaining(p);const amt=Math.round(Number($('#pM2').value)||0);
+  if(amt<=0)return toast('Montant invalide','bad');
+  if(amt>rem+0.005)return toast('Refusé : le montant dépasse le reste à payer ('+money(rem)+' F)','bad');
+  const accv=$('#pA2').value;const isB=accv==='bank';
+  try{await createCashEntry({date:$('#pD2').value||todayISO(),type:'out',account:isB?'bank':accv,category:isB?'banque':'achat_vert',label:'Règlement fournisseur — '+p.supplier,amount:amt,imputable:!isB,ref:'purchasepay:'+id});}
+  catch(e){return toast(e.message,'bad');}
+  if(amt>=rem-0.005){closeModal();toast('Dette fournisseur entièrement réglée ✅ ('+(isB?'banque':(accv==='momo'?'Mobile Money':'espèces'))+')','ok');}
+  else{closeModal();toast('Paiement partiel '+money(amt)+' enregistré — reste '+money(rem-amt),'ok');}
+  render();};
 App.achatDel=id=>confirmBox('Supprimer cet achat ?','Le stock de café vert sera diminué d\'autant. Cette action est définitive.','Supprimer',async()=>{await DB.remove('purchases',id);render();});
 App.achatForm=async id=>{let p=null;
   if(id)p=(await DB.list('purchases',{eq:{id:id}}))[0]||null;
@@ -1925,10 +1947,25 @@ App.condEdit=async id=>{const p=(await DB.list('productions',{eq:{id:id}}))[0];i
 function prodCondTab(){return prodTransTab();}
 App.step=(id,d)=>{const el=$('#'+id);el.value=Math.max(0,(Number(el.value)||0)+d);el.dispatchEvent(new Event('input'));};
 async function createProduction(rec){
+  await assertPackagingStock(await packagingNeedsFor(rec),null);
   const pr=await DB.insert('productions',Object.assign({created_at:nowISO()},rec));
   try{await consumePackagingForProduction(pr);}catch(e){console.warn('emballages',e);}
   return pr;
 }
+async function packagingNeedsFor(pr){const prods=await DB.list('products');const needs={};
+  for(const l of (pr.lines||[])){const p=prods.filter(x=>x.id===l.product_id||x.name===l.name)[0];
+    if(!p||!p.packaging||!p.packaging.length)continue;
+    for(const need of p.packaging){const q=Number(need.qty||0)*Number(l.qty||0);if(q>0)needs[need.pack_id]=(needs[need.pack_id]||0)+q;}}
+  return needs;}
+async function assertPackagingStock(needs,excludeRef){const ents=await DB.list('packaging_entries');
+  const stk={};ents.forEach(e=>{if(excludeRef&&e.ref===excludeRef)return;stk[e.item_id]=(stk[e.item_id]||0)+(e.type==='in'?Number(e.qty||0):-Number(e.qty||0));});
+  const packs=await DB.list('packaging_items');
+  for(const pid of Object.keys(needs)){const it=packs.filter(x=>x.id===pid)[0];const s=stk[pid]||0;
+    if(needs[pid]>s+0.005)throw new Error("Emballage « "+(it?it.name:pid)+" » insuffisant : "+num2(Math.max(s,0))+" disponible(s), "+num2(needs[pid])+" nécessaire(s) — enregistrez d'abord l'entrée (🏷️ Emballages → + Achat / entrée ou 📥 stock initial). Aucun stock négatif.");}}
+async function assertPackagingQty(itemId,qty,excludeEntryId){const ents=await DB.list('packaging_entries');
+  let s=0;ents.forEach(e=>{if(excludeEntryId&&e.id===excludeEntryId)return;if(e.item_id!==itemId)return;s+=(e.type==='in'?Number(e.qty||0):-Number(e.qty||0));});
+  const it=(await DB.list('packaging_items')).filter(x=>x.id===itemId)[0];
+  if(qty>s+0.005)throw new Error("Emballage « "+(it?it.name:'?')+" » insuffisant : "+num2(Math.max(s,0))+" disponible(s), "+num2(qty)+" demandé(s) — aucun stock négatif.");}
 async function consumePackagingForProduction(pr){
   const prods=await DB.list('products');const packs=await DB.list('packaging_items');
   for(const l of (pr.lines||[])){
@@ -1962,13 +1999,14 @@ App.condSave=async()=>{
   const rec={date:$('#cD').value||todayISO(),roasted_used:x,lines:lines,operator:$('#cOp').value,note:$('#cN').value,source:'admin'};
   const msg='✅ '+num(lines.reduce((a,l)=>a+l.qty,0))+' unités · '+num2(cafe)+' kg conditionnés'+(weighed?' · perte '+num2(x-cafe)+' kg · rendement '+num2(100*cafe/x)+' %':' — consommé = stock torréfié ('+num2(x)+' kg) · perte '+num2(x-cafe)+' kg');
   if(S.condEdit){
+    try{await assertPackagingStock(await packagingNeedsFor(rec),'production:'+S.condEdit);}catch(e){return toast(e.message,'bad');}
     await DB.update('productions',S.condEdit,rec);
     const pr=(await DB.list('productions',{eq:{id:S.condEdit}}))[0];
     const ents=await DB.list('packaging_entries');
     for(const en of ents.filter(y=>y.ref==='production:'+S.condEdit))await DB.remove('packaging_entries',en.id);
     try{await consumePackagingForProduction(pr);}catch(e){console.warn('emballages',e);}
     S.condEdit=null;toast('Modification enregistrée '+msg,'ok');render();return;}
-  await createProduction(rec);
+  try{await createProduction(rec);}catch(e){return toast(e.message,'bad');}
   toast('Enregistré '+msg+' · emballages consommés automatiquement','ok');render();};
 async function prodHistTab(){
   const roast=(await DB.list('roastings')).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
@@ -2166,12 +2204,42 @@ async function scCommerciaux(){
     +(a.active?'<span class="badge b-ok">actif</span>':'<span class="badge b-no">inactif</span>')
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button class="btn sm" onclick="App.linkModal(\''+a.id+'\')">🔗 Lien</button><button class="btn sm sec" onclick="App.agentForm(\''+a.id+'\')">✎</button></div></div>';}).join('')
   +(agents.length?'':'<div class="empty"><span class="ic">👤</span>Aucune commerciale enregistrée</div>')+'</div>'
+  +(await palmaresCard())
   +'<div class="card"><h2>🔗 Autres liens de saisie</h2><div class="help" style="margin-bottom:12px">Liens pour la production (atelier) et la caisse — pour saisir <b>sans accès</b> à l\'application.</div>'
   +['production','caisse'].map(t=>{const tk=tokens.filter(x=>x.type===t&&x.active)[0];
     return '<div class="listitem"><div class="avatar">'+(t==='production'?'🏭':'💰')+'</div><div style="flex:1"><b>Lien '+(t==='production'?'production':'caisse')+'</b><div class="mut" style="font-size:12px">'+(tk?'Actif':'Non créé')+'</div></div>'
     +'<button class="btn sm" onclick="App.tokenModal(\''+t+'\')">'+(tk?'🔗 Voir':'Créer')+'</button></div>';}).join('')
   +'</div>';
 }
+async function agentMonthStats(P){const sales=(await DB.list('sales')).filter(s=>String(s.date||'').slice(0,7)===P);
+  const agents=(await DB.list('sales_agents')).filter(a=>a.active!==false);
+  const prods=await DB.list('products');const pm={};prods.forEach(p=>{pm[p.id]=p;pm[p.name]=p;});
+  const names=[...new Set([].concat(agents.map(a=>a.name),sales.map(s=>s.agent_name||'')))].filter(Boolean).sort((a,b)=>String(a).localeCompare(String(b)));
+  const rows=names.map(n=>{const vs=sales.filter(s=>(s.agent_name||'')===n);
+    return{n:n,ventes:vs.length,F:vs.reduce((a,x)=>a+Number(x.total||0),0),kg:vs.reduce((a,x)=>a+linesKg(x.lines,pm),0),actif:agents.some(a=>a.name===n)};});
+  const best=rows.filter(r=>r.F>0).sort((a,b)=>b.F-a.F)[0]||null;
+  return{rows:rows,best:best,totF:rows.reduce((a,r)=>a+r.F,0),totKg:rows.reduce((a,r)=>a+r.kg,0)};}
+async function palmaresCard(){const P=S.agMois||todayISO().slice(0,7);const M=await agentMonthStats(P);
+  const best=M.best;
+  return '<div class="card"><h2>🏆 Palmarès du mois — temps réel</h2>'
+  +'<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px">'
+  +fld('Mois','<input id="agM" type="month" value="'+P+'">')
+  +'<button class="btn sm" onclick="App.agMoisGo()">Voir</button>'
+  +'<button class="btn sm sec" onclick="App.expAgMois()">📥 Excel mensuel</button></div>'
+  +(best?'<div class="alert al-ok" style="margin-bottom:10px">👑 <b>Meilleure commerciale de '+monthLabel(P)+' : '+esc(best.n)+'</b> — '+money(best.F)+' F'+(best.kg>0.005?' · '+num2(best.kg)+' kg':'')+'</div>':'<div class="help" style="margin-bottom:10px">Aucune vente enregistrée sur '+monthLabel(P)+'.</div>')
+  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Commerciale</th><th class="r">Ventes</th><th class="r">Total</th><th class="r">Total kg</th><th class="r">Part</th></tr></thead><tbody>'
+  +M.rows.map(r=>'<tr'+(best&&r.n===best.n?' style="background:#e8f5e9"':'')+'><td><b>'+(best&&r.n===best.n?'👑 ':'')+esc(r.n)+'</b>'+(r.actif?'':' <small class="mut">(hors équipe)</small>')+'</td><td class="r">'+r.ventes+'</td><td class="r"><b>'+money(r.F)+'</b></td><td class="r">'+(r.kg>0.005?num2(r.kg)+' kg':'—')+'</td><td class="r">'+(M.totF>0?num2(100*r.F/M.totF)+' %':'—')+'</td></tr>').join('')
+  +'<tr class="tot"><td>TOTAL</td><td class="r">'+M.rows.reduce((a,r)=>a+r.ventes,0)+'</td><td class="r">'+money(M.totF)+'</td><td class="r">'+(M.totKg>0.005?num2(M.totKg)+' kg':'—')+'</td><td class="r"></td></tr>'
+  +'</tbody></table></div>'
+  +'<div class="help" style="margin-top:6px">Le <b>total en kg</b> par commerciale sert de base au calcul des <b>primes</b> (à saisir dans la paie du mois). Mise à jour en temps réel à chaque vente validée.</div></div>';}
+App.agMoisGo=async()=>{S.agMois=($('#agM')||{}).value||todayISO().slice(0,7);await render();};
+App.expAgMois=async()=>{const P=S.agMois||todayISO().slice(0,7);const M=await agentMonthStats(P);
+  const rows=[['PALMARÈS '+monthLabel(P).toUpperCase()+' — '+((SETS.company||{}).name||'CaféPro')],['Classement des commerciales du mois (ventes validées)'],[],['Commerciale','Ventes','Total (FCFA)','Total kg','Part %']];
+  M.rows.forEach(r=>rows.push([(M.best&&r.n===M.best.n?'👑 ':'')+r.n,r.ventes,Math.round(r.F),Math.round(r.kg*100)/100,M.totF>0?Math.round(1000*r.F/M.totF)/10:'']));
+  rows.push([{v:'TOTAL',__style:1},M.rows.reduce((a,r)=>a+r.ventes,0),{v:Math.round(M.totF),__style:1},{v:Math.round(M.totKg*100)/100,__style:1},'']);
+  if(M.best)rows.push([],['Meilleure commerciale du mois : '+M.best.n+' — '+money(M.best.F)+(M.best.kg>0.005?' · '+num2(M.best.kg)+' kg':'')]);
+  download('Palmares_'+P+'.xlsx',buildXlsx([{name:'Palmarès '+P,rows:rows,widths:[26,10,18,12,10]}]));
+  toast('Palmarès mensuel téléchargé 📥','ok');};
 App.agentForm=async id=>{let a={name:'',phone:''};
   if(id)a=(await DB.list('sales_agents',{eq:{id:id}}))[0]||a;
   modal(id?'Modifier':'Nouvelle commerciale',
@@ -2220,34 +2288,72 @@ App.tokenReset=async t=>{const tks=await DB.list('form_tokens');for(const x of t
 async function scImpayes(){
   const sales=(await DB.list('sales')).filter(s=>s.pay_mode==='credit').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const due=sales.filter(s=>s.credit_status==='due');
-  const tot=due.reduce((s,x)=>s+Number(x.total||0),0);
+  let tot=0;const rems={};for(const s of due){rems[s.id]=await creditRemaining(s);tot+=rems[s.id];}
   $('#main').innerHTML='<div class="card"><h2>🧾 Ventes à crédit</h2>'
   +'<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Reste à encaisser</div><div class="v" style="color:var(--warn)">'+money(tot)+'</div></div><div class="kpi"><div class="t">Factures ouvertes</div><div class="v">'+due.length+'</div></div></div>'
+  +'<div class="help" style="margin-bottom:10px">Encaissement <b>en plusieurs fois possible</b> (montant libre) — par espèces, Mobile Money ou <b>banque</b> (suivi dans 🏦 Banque, sans incidence sur la caisse).</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Client</th><th>Commerciale</th><th class="r">Montant</th><th>Statut</th><th></th></tr></thead><tbody>'
-  +sales.map(s=>'<tr><td>'+dFR(s.date)+'</td><td>'+esc(s.client||'—')+'</td><td>'+esc(s.agent_name)+'</td><td class="r"><b>'+money(s.total)+'</b></td>'
-   +'<td>'+(s.credit_status==='due'?'<span class="badge b-wait">À encaisser</span>':'<span class="badge b-ok">Encaissé'+(s.paid_date?' le '+dFR(s.paid_date):'')+'</span>')+'</td>'
-   +'<td>'+(s.credit_status==='due'?'<button class="btn sm ok" onclick="App.encaisser(\''+s.id+'\')">💵 Encaisser</button>':'')+'</td></tr>').join('')
+  +sales.map(s=>{const rem=s.credit_status==='due'?(rems[s.id]!=null?rems[s.id]:0):0;const paye=Number(s.total||0)-rem;
+    return '<tr><td>'+dFR(s.date)+'</td><td>'+esc(s.client||'—')+'</td><td>'+esc(s.agent_name)+'</td><td class="r"><b>'+money(s.total)+'</b>'+(paye>0.005&&rem>0.005?'<br><small class="mut">payé '+money(paye)+' · reste '+money(rem)+'</small>':'')+'</td>'
+   +'<td>'+(s.credit_status==='due'?'<span class="badge b-wait">'+(paye>0.005?'Reste '+money(rem):'À encaisser')+'</span>':'<span class="badge b-ok">Encaissé'+(s.paid_date?' le '+dFR(s.paid_date):'')+'</span>')+'</td>'
+   +'<td>'+(s.credit_status==='due'?'<button class="btn sm ok" onclick="App.encaisser(\''+s.id+'\')">💵 Encaisser</button>':'')+'</td></tr>';}).join('')
   +'</tbody></table></div></div>';
 }
-App.encaisser=id=>modal('Encaisser ce crédit','<div class="row">'+fld('Date de l\'encaissement','<input id="eD" type="date" value="'+todayISO()+'">')
-  +fld('Reçu sur','<select id="eA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option></select>')+'</div>',
-  '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.encaisserSave(\''+id+'\')">Encaisser</button>');
-App.encaisserSave=async id=>{const s=(await DB.list('sales',{eq:{id:id}}))[0];
-  await createCashEntry({date:$('#eD').value||todayISO(),type:'in',account:$('#eA').value,category:'ventes',label:'Encaissement crédit — '+(s.client||s.agent_name),amount:s.total,imputable:true,ref:'sale:'+id});
-  await DB.update('sales',id,{credit_status:'paid',paid_date:$('#eD').value||todayISO()});
-  closeModal();toast('Crédit encaissé ✅','ok');render();};
+App.encaisser=async id=>{const s=(await DB.list('sales',{eq:{id:id}}))[0];if(!s)return;
+  const rem=await creditRemaining(s);const deja=Number(s.total||0)-rem;
+  modal('Encaisser ce crédit','<div class="help" style="margin-bottom:10px">Total : <b>'+money(s.total)+'</b>'+(deja>0.005?' · déjà payé <b>'+money(deja)+'</b>':'')+' · <b>reste à encaisser : '+money(rem)+'</b>. Vous pouvez encaisser <b>en plusieurs fois</b> (montant libre).</div>'
+  +'<div class="row">'+fld('Date','<input id="eD" type="date" value="'+todayISO()+'">')+fld('Montant encaissé (FCFA)','<input id="eM" type="number" inputmode="numeric" value="'+rem+'">')+'</div>'
+  +fld('Reçu sur','<select id="eA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option><option value="bank">🏦 Banque (suivi à part — sans incidence sur la caisse)</option></select>'),
+  '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.encaisserSave(\''+id+'\')">Encaisser</button>');};
+App.encaisserSave=async id=>{const s=(await DB.list('sales',{eq:{id:id}}))[0];if(!s)return;
+  const rem=await creditRemaining(s);const amt=Math.round(Number($('#eM').value)||0);
+  if(amt<=0)return toast('Montant invalide','bad');
+  if(amt>rem+0.005)return toast('Refusé : le montant dépasse le reste à encaisser ('+money(rem)+' F)','bad');
+  const accv=$('#eA').value;const isB=accv==='bank';
+  await createCashEntry({date:$('#eD').value||todayISO(),type:'in',account:isB?'bank':accv,category:isB?'banque':'ventes',label:'Encaissement crédit — '+(s.client||s.agent_name),amount:amt,imputable:!isB,ref:'salepay:'+id});
+  if(amt>=rem-0.005){await DB.update('sales',id,{credit_status:'paid',paid_date:$('#eD').value||todayISO()});closeModal();toast('Crédit entièrement encaissé ✅ ('+(isB?'banque':(accv==='momo'?'Mobile Money':'espèces'))+')','ok');}
+  else{closeModal();toast('Encaissement partiel '+money(amt)+' enregistré — reste '+money(rem-amt),'ok');}
+  render();};
+
+/* ================= BANQUE ================= */
+async function scBanque(){
+  const ents=(await DB.list('cash_entries')).filter(e=>e.account==='bank').sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.created_at||'').localeCompare(a.created_at||''));
+  const solde=ents.reduce((a,e)=>a+(e.type==='in'?1:-1)*Number(e.amount||0),0);
+  const inC=ents.filter(e=>String(e.ref||'').indexOf('salepay:')===0).reduce((a,e)=>a+Number(e.amount||0),0);
+  const outF=ents.filter(e=>String(e.ref||'').indexOf('purchasepay:')===0).reduce((a,e)=>a+Number(e.amount||0),0);
+  const totIn=ents.filter(e=>e.type==='in').reduce((a,e)=>a+Number(e.amount||0),0);
+  const totOut=ents.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
+  const orig=e=>{const r=String(e.ref||'');if(r.indexOf('salepay:')===0)return'Crédit client';if(r.indexOf('purchasepay:')===0)return'Fournisseur';return e.category||'';};
+  $('#main').innerHTML='<div class="card"><h2>🏦 Banque<span class="spacer"></span><button class="btn sm sec" onclick="App.expBanque()">📥 Fichier banque (Excel)</button></h2>'
+  +'<div class="help" style="margin-bottom:10px">Journal <b>réel</b> des règlements passés par banque : éponger une créance client ou une dette fournisseur sans toucher la caisse ni l\'exploitation. Chaque opération est listée ici, rien ailleurs.</div>'
+  +'<div class="grid g4" style="margin-bottom:12px"><div class="kpi"><div class="t">Solde banque</div><div class="v">'+money(solde)+'</div></div><div class="kpi"><div class="t">Crédits clients réglés</div><div class="v" style="color:var(--ok)">'+money(inC)+'</div></div><div class="kpi"><div class="t">Fournisseurs réglés</div><div class="v" style="color:var(--bad)">'+money(outF)+'</div></div><div class="kpi"><div class="t">Opérations</div><div class="v">'+ents.length+'</div></div></div>'
+  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Heure</th><th>Libellé</th><th>Origine</th><th class="r">Entrée</th><th class="r">Sortie</th></tr></thead><tbody>'
+  +(ents.length?ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(String((e.created_at||'').slice(11,16)||'—'))+'</td><td>'+esc(e.label||'')+'</td><td>'+esc(orig(e))+'</td><td class="r" style="color:var(--ok)">'+(e.type==='in'?money(e.amount):'—')+'</td><td class="r" style="color:var(--bad)">'+(e.type==='out'?money(e.amount):'—')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">Aucune opération bancaire pour l\'instant.<br><small>Encaissez un crédit ou payez un fournisseur « par banque » depuis 🧾 Impayés ou 🛁 Achats.</small></td></tr>')
+  +'</tbody><tfoot><tr><td colspan="4">TOTAUX</td><td class="r">'+money(totIn)+'</td><td class="r">'+money(totOut)+'</td></tr><tr><td colspan="4"><b>SOLDE BANQUE</b></td><td colspan="2" class="r"><b>'+money(solde)+'</b></td></tr></tfoot></table></div></div>';
+}
+App.expBanque=async()=>{
+  const ents=(await DB.list('cash_entries')).filter(e=>e.account==='bank').sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const orig=e=>{const r=String(e.ref||'');if(r.indexOf('salepay:')===0)return'Crédit client';if(r.indexOf('purchasepay:')===0)return'Fournisseur';return e.category||'';};
+  const rows=[['JOURNAL BANQUE — '+((SETS.company||{}).name||'CaféPro')],['Règlements par banque : créances clients et dettes fournisseurs (sans incidence caisse/exploitation)'],[],['DATE','HEURE','LIBELLÉ','ORIGINE','ENTRÉE','SORTIE']];
+  ents.forEach(e=>rows.push([e.date,String((e.created_at||'').slice(11,16)),e.label||'',orig(e),e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'']));
+  const ti=ents.filter(e=>e.type==='in').reduce((a,e)=>a+Number(e.amount||0),0),to=ents.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
+  rows.push([{v:'TOTAUX',__style:1},'','','',{v:ti,__style:1},{v:to,__style:1}]);
+  rows.push([{v:'SOLDE BANQUE',__style:1},'','','','',{v:ti-to,__style:1}]);
+  download('Journal_Banque_'+todayISO()+'.xlsx',buildXlsx([{name:'Journal banque',rows:rows,widths:[12,8,40,16,14,14]}]));
+  toast('Fichier banque téléchargé 📥','ok');};
 
 /* ================= CAISSE ================= */
 const OD_LABELS={od_transfer:'Envoi à la direction (MoMo)',od_funding:'Approvisionnement direction'};
 async function scCaisse(){
   S.caisseFilter=S.caisseFilter||{from:'',to:''};
-  const entries=(await DB.list('cash_entries')).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.created_at||'').localeCompare(a.created_at||''));
+  const entries=(await DB.list('cash_entries')).filter(e=>e.account!=='bank').sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.created_at||'').localeCompare(a.created_at||''));
   const st=await computeStats();
   const filter=S.caisseFilter;
   const totIn=entries.reduce((a,e)=>a+(e.type==='in'?Number(e.amount)||0:0),0),totOut=entries.reduce((a,e)=>a+(e.type==='out'?Number(e.amount)||0:0),0);
   const list=entries.filter(e=>(!filter.from||e.date>=filter.from)&&(!filter.to||e.date<=filter.to));
   const od=list.filter(e=>e.imputable===false);
   $('#main').innerHTML='<div class="card"><h2>💰 Caisse</h2>'
+  +'<div class="help" style="margin-bottom:8px">🏦 Les règlements par <b>banque</b> (crédits clients, dettes fournisseurs) ne passent PAS ici — ils sont suivis dans l\'écran <a href="#/banque">🏦 Banque</a>.</div>'
   +'<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Solde espèces</div><div class="v">'+(st.bal.cash<-0.005?'<span style="color:var(--bad)">'+money(st.bal.cash)+' ⚠️</span>':money(st.bal.cash))+'</div></div><div class="kpi"><div class="t">Solde Mobile Money</div><div class="v">'+(st.bal.momo<-0.005?'<span style="color:var(--bad)">'+money(st.bal.momo)+' ⚠️</span>':money(st.bal.momo))+'</div></div></div>'
   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" onclick="App.cashForm()">+ Écrire une opération</button>'
   +'<button class="btn sec" onclick="App.odForm(\'od_transfer\')">📤 Envoi ventes direction</button><button class="btn sec" onclick="App.odForm(\'od_funding\')">📥 Appro direction reçue</button><button class="btn sec" onclick="App.swapForm()">🔄 Retrait MoMo → espèces</button></div>'
@@ -2652,7 +2758,8 @@ async function scBulletin(){
   const logo=C.logo?'<img src="'+C.logo+'" style="height:52px;object-fit:contain">':'';
   const sec=t=>'<tr><td colspan="2" style="background:#f8f2e9;color:#5a4030;font-weight:800;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;border-top:1px solid #e5dbc9">'+t+'</td></tr>';
   const line=(l,v,cls)=>'<tr><td style="padding:5px 10px'+(cls?';'+cls:'')+'">'+l+'</td><td class="r" style="padding:5px 10px;white-space:nowrap'+(cls?';'+cls:'')+'">'+v+'</td></tr>';
-  $('#main').innerHTML='<div class="card" style="max-width:760px;margin:0 auto" id="bullettin">'
+  $('#main').innerHTML='<style>@media print{@page{size:A4;margin:8mm}body{background:#fff!important;margin:0}#app>div:not(#main),.bottomtabs,.toasts,#btnbar{display:none!important}#main{padding:0!important}#bullettin{max-width:100%!important;margin:0!important;border:none!important;box-shadow:none!important}#bullettin .tbl td{padding:2px 8px!important;font-size:10.5px!important}#bullettin .tbl th{padding:3px 8px!important;font-size:9.5px!important}#bullettin tr{page-break-inside:avoid}}</style>'
+  +'<div class="card" style="max-width:760px;margin:0 auto" id="bullettin">'
   /* — en-tête — */
   +'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding-bottom:12px;border-bottom:3px double #5a4030">'
   +'<div>'+logo+'</div>'
@@ -2663,6 +2770,7 @@ async function scBulletin(){
   +'<div style="flex:2;min-width:170px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Salarié</div><b style="font-size:13.5px">'+esc(s.employee_name)+'</b><div style="font-size:11.5px;color:#888">'+esc(s.position||'')+'</div></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Matricule</div><b style="font-size:13.5px">'+esc(s.matricule||emp.matricule||String(s.employee_id||'').slice(0,8))+'</b></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Zone</div><b style="font-size:13.5px">'+zlb+'</b></div>'
+  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Parts fiscales</div><b style="font-size:13.5px">'+(Number(emp.tax_shares)||2)+'</b></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Période</div><b style="font-size:13.5px">'+monthLabel(s.run_period)+'</b></div></div>'
   /* — corps : un seul tableau, trois sections dans l'ordre demandé — */
   +'<table class="tbl" style="border:1px solid #e5dbc9">'
@@ -2871,7 +2979,8 @@ App.expCaisse=async()=>{
   const jl=k=>(J[k]||k);
   const DEF={clients:'411100',fournisseurs:'401100',personnel_net:'422000',personnel_avances:'421100',retenues_divers:'428000',cnps:'431000',etat:'447200',fdfp:'641400',its_er:'641300',virement_interne:'585000',banque:'521000'};
   const acc=k=>sagAcc(k)||DEF[k]||'';
-  const [cash,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
+  const [cashL,sales,pur,runs,slips]=await Promise.all([DB.list('cash_entries'),DB.list('sales'),DB.list('purchases'),DB.list('pay_runs'),DB.list('pay_slips')]);
+  const cash=cashL.filter(e=>e.account!=='bank');
   /* --- tiers : client/fournisseur divers par défaut, compte dédié si nommé --- */
   const needT=[];
   sales.forEach(s3=>{if(s3.client)needT.push({name:s3.client,type:'client'});});
@@ -3419,13 +3528,24 @@ async function scEmballages(){
   +'<div class="grid g2" style="margin-bottom:12px"><div class="kpi"><div class="t">Valeur du stock</div><div class="v">'+money(st.packagingValue||0)+'</div></div><div class="kpi"><div class="t">Articles suivis</div><div class="v">'+(st.packaging||[]).length+'</div></div></div>'
   +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><button class="btn" onclick="App.pkItemForm()">+ Article</button><button class="btn ok" onclick="App.pkInForm()">+ Achat / entrée</button><button class="btn danger" onclick="App.pkOutForm()">− Sortie / perte</button></div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Entrées</th><th class="r">Sorties</th><th class="r">Stock</th><th class="r">Coût moyen</th><th class="r">Valeur</th><th></th></tr></thead><tbody>'
-  +(st.packaging||[]).map(p=>'<tr><td><b>'+esc(p.name)+'</b></td><td class="r">'+num2(p.in)+'</td><td class="r">'+num2(p.out)+'</td><td class="r"><b>'+num2(p.stock)+'</b> '+esc(p.unit)+'</td><td class="r">'+money(p.cmp)+'</td><td class="r">'+money(p.value)+'</td><td><button class="btn sm sec" onclick="App.pkItemForm(\''+p.id+'\')">✎</button></td></tr>').join('')
+  +(st.packaging||[]).map(p=>'<tr><td><b>'+esc(p.name)+'</b></td><td class="r">'+num2(p.in)+'</td><td class="r">'+num2(p.out)+'</td><td class="r"><b>'+num2(p.stock)+'</b> '+esc(p.unit)+'</td><td class="r">'+money(p.cmp)+'</td><td class="r">'+money(p.value)+'</td><td style="white-space:nowrap"><button class="btn sm ok" onclick="App.pkInitForm(\''+p.id+'\')">📥 Initial</button> <button class="btn sm sec" onclick="App.pkItemForm(\''+p.id+'\')">✎</button></td></tr>').join('')
   +'</tbody></table></div></div>'
   +'<div class="card"><h3>Journal des mouvements</h3><div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Article</th><th>Type</th><th class="r">Qté</th><th class="r">Montant</th><th>Motif</th><th></th></tr></thead><tbody>'
   +ents.map(e=>'<tr><td>'+dFR(e.date)+'</td><td>'+esc(e.item_name||'')+'</td><td>'+(e.type==='in'?'<span class="badge b-ok">Entrée</span>':'<span class="badge b-no">Sortie</span>')+'</td><td class="r">'+num2(e.qty)+'</td><td class="r">'+(e.amount?money(e.amount):'—')+'</td><td>'+esc(e.reason||'')+'</td><td><button class="btn sm sec" onclick="App.pkEntryEdit(\''+e.id+'\')">✎</button> <button class="btn sm sec" onclick="App.delRow(\'packaging_entries\',\''+e.id+'\')">✕</button></td></tr>').join('')
   +(ents.length?'':'<tr><td colspan="7" class="empty">Aucun mouvement</td></tr>')
   +'</tbody></table></div></div>';
 }
+App.pkInitForm=async id=>{const items=await DB.list('packaging_items');const it=items.filter(x=>x.id===id)[0];if(!it)return;
+  modal('Stock initial — '+esc(it.name),
+    '<div class="help" style="margin-bottom:10px">Enregistre le stock <b>réellement présent</b> en début de suivi (comptage physique). Compté comme une entrée, motif « Stock initial ».</div>'
+    +'<div class="row">'+fld('Date','<input id="piD" type="date" value="'+todayISO()+'">')+fld('Quantité ('+esc(it.unit||'unité')+')','<input id="piQ" type="number" step="0.01" inputmode="decimal" placeholder="ex : 500">')+'</div>'
+    +fld('Coût unitaire (FCFA — facultatif, pour la valeur du stock)','<input id="piC" type="number" inputmode="numeric" placeholder="ex : 75">'),
+    '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.pkInitSave(\''+id+'\')">Enregistrer</button>');};
+App.pkInitSave=async id=>{const q=Number($('#piQ').value)||0;
+  if(q<=0)return toast('Quantité invalide','bad');
+  const items=await DB.list('packaging_items');const it=items.filter(x=>x.id===id)[0];const c=Number($('#piC').value)||0;
+  await DB.insert('packaging_entries',{date:$('#piD').value||todayISO(),type:'in',qty:q,unit_cost:c,amount:Math.round(q*c),reason:'Stock initial',ref:'initial',item_id:id,item_name:it?it.name:'',source:'admin',status:'validated'});
+  closeModal();toast('Stock initial enregistré : '+num2(q)+' '+esc(it?it.unit||'':'')+' — '+esc(it?it.name:''),'ok');render();};
 App.pkEntryEdit=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(!e)return;
   const items=(await DB.list('packaging_items')).filter(x=>x.active!==false);
   modal('Modifier le mouvement d\'emballage',
@@ -3439,6 +3559,7 @@ App.pkEntryEdit=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id
 App.pkEntrySave=async id=>{const e=(await DB.list('packaging_entries',{eq:{id:id}}))[0];if(!e)return;
   const q=Number($('#peQ').value)||0;if(!q)return toast('Quantité obligatoire','bad');
   const items=await DB.list('packaging_items');const it=items.filter(x=>x.id===$('#peI').value)[0];
+  if($('#peT').value!=='in'){try{await assertPackagingQty($('#peI').value,q,id);}catch(err){return toast(err.message,'bad');}}
   const rec={date:$('#peD').value||todayISO(),type:$('#peT').value,qty:q,unit_cost:Number($('#peC').value)||0,amount:Math.round(q*(Number($('#peC').value)||0)),reason:$('#peR').value||e.reason||'',item_id:$('#peI').value,item_name:it?it.name:(e.item_name||'')};
   await DB.update('packaging_entries',id,rec);
   let cash=(await DB.list('cash_entries')).filter(x=>x.ref==='pkentry:'+id)[0]||null;
@@ -3485,6 +3606,7 @@ App.pkOutForm=async()=>{
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn danger" onclick="App.pkOutSave()">Enregistrer</button>');};
 App.pkOutSave=async()=>{const q=Number($('#pkQ').value)||0;if(!q)return toast('Quantité obligatoire','bad');
   const[iid,iname]=$('#pkI').value.split('|');
+  try{await assertPackagingQty(iid,q,null);}catch(e){return toast(e.message,'bad');}
   await DB.insert('packaging_entries',{date:$('#pkD').value||todayISO(),type:'out',qty:q,unit_cost:0,amount:0,reason:$('#pkR').value||'Sortie',ref:'manual',item_id:iid,item_name:iname,source:'admin',status:'validated'});
   closeModal();toast('Sortie enregistrée','ok');render();};
 
@@ -3555,6 +3677,7 @@ async function buildDailyReport(D){
   const cash=(await DB.list('cash_entries')).filter(e=>e.date===D);
   const st=await computeStats();
   const tot=sales.reduce((a,x)=>a+Number(x.total||0),0);
+  const prodsD=await DB.list('products');const pmD={};prodsD.forEach(p=>{pmD[p.id]=p;pmD[p.name]=p;});
   const agents=(await DB.list('sales_agents')).filter(a=>a.active!==false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
   const pendAll=await DB.list('pending_entries');
   const pendWait=pendAll.filter(p=>p.status==='pending'&&p.source_type==='sales'&&(p.payload||{}).date===D);
@@ -3568,10 +3691,11 @@ async function buildDailyReport(D){
     const vs=sales.filter(s2=>(s2.agent_name||'')===n);
     const ps=pendWait.filter(p=>(((p.payload||{}).agent_name||p.source_name)||'')===n);
     const vt=vs.reduce((s2,x)=>s2+Number(x.total||0),0);
+    const kg=vs.reduce((s2,x)=>s2+linesKg(x.lines,pmD),0);
     const pt=ps.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
     const rej=rejCnt[n]||0;
     const envoi=(!vs.length&&!ps.length)?(act?'<span class="bad">🔴 Aucun envoi reçu</span>':'—'):(rej?'<span class="bad">'+rej+' rejetée'+(rej>1?'s':'')+'</span>':'');
-    agRow.push('<tr><td><b>'+esc(n)+'</b>'+(act?'':' <span style="font-size:10px;color:#999">(hors équipe)</span>')+'</td><td style="text-align:right">'+(vs.length?'<span class="ok">'+vs.length+' validée'+(vs.length>1?'s':'')+' · '+money(vt)+'</span>':'—')+'</td><td style="text-align:right">'+(ps.length?'<span class="bad">'+ps.length+' à valider · '+money(pt)+'</span>':'—')+'</td><td>'+envoi+'</td></tr>');
+    agRow.push('<tr><td><b>'+esc(n)+'</b>'+(act?'':' <span style="font-size:10px;color:#999">(hors équipe)</span>')+'</td><td style="text-align:right">'+(vs.length?'<span class="ok">'+vs.length+' validée'+(vs.length>1?'s':'')+' · '+money(vt)+(kg>0.005?' · '+num2(kg)+' kg':'')+'</span>':'—')+'</td><td style="text-align:right">'+(ps.length?'<span class="bad">'+ps.length+' à valider · '+money(pt)+'</span>':'—')+'</td><td>'+envoi+'</td></tr>');
     ps.forEach(p=>{const pd=p.payload||{};agRow.push('<tr><td style="font-size:11px;color:#999;padding-left:16px">↳ reçu '+esc(String((p.created_at||'').slice(11,16)||'—'))+'</td><td colspan="3" style="font-size:11px;color:#999">'+((pd.lines||[]).map(l=>esc(l.name)+' ×'+num(Number(l.qty)||0)).join(', ')||'sans détail')+' · <b>'+money(Number(pd.total)||0)+'</b></td></tr>');});
   });
   const vd=sales.filter(s2=>!(s2.agent_name||''));
@@ -3595,18 +3719,18 @@ async function buildDailyReport(D){
   const shV=[['POINT DU '+dFR(D)],[],['COMMERCIALE','RÈGLEMENT','PRODUIT','QTÉ','P.U.','MONTANT','CLIENT']];
   sales.forEach(s2=>(s2.lines||[]).forEach(l=>shV.push([s2.agent_name,s2.pay_mode==='credit'?'Crédit':(s2.pay_mode==='momo'?'MoMo':'Espèces'),l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s2.client||''])));
   shV.push([{v:'TOTAL',__style:1},'','','','',{v:tot,__style:1},'']);
-  const shA=[['COMMERCIALES DU JOUR'],[],['Commerciale','Validées','Montant validé','À valider','Montant à valider','Détail à valider']];
+  const shA=[['COMMERCIALES DU JOUR'],[],['Commerciale','Validées','Montant validé','kg vendus','À valider','Montant à valider','Détail à valider']];
   agNames.forEach(n=>{
     const vsA=sales.filter(s2=>(s2.agent_name||'')===n);
     const psA=pendWait.filter(p=>(((p.payload||{}).agent_name||p.source_name)||'')===n);
-    shA.push([n,vsA.length,vsA.reduce((s2,x)=>s2+Number(x.total||0),0),psA.length,psA.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0),psA.map(p=>(((p.payload||{}).lines||[]).map(l=>l.name+' ×'+num(Number(l.qty)||0)).join(', '))).join(' + ')]);
+    shA.push([n,vsA.length,vsA.reduce((s2,x)=>s2+Number(x.total||0),0),Math.round(vsA.reduce((s2,x)=>s2+linesKg(x.lines,pmD),0)*100)/100,psA.length,psA.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0),psA.map(p=>(((p.payload||{}).lines||[]).map(l=>l.name+' ×'+num(Number(l.qty)||0)).join(', '))).join(' + ')]);
   });
-  if(vd.length)shA.push(['Vente directe',vd.length,vd.reduce((s2,x)=>s2+Number(x.total||0),0),0,0,'']);
-  shA.push([{v:'TOTAL',__style:1},sales.length,{v:tot,__style:1},pendWait.length,{v:pendTot,__style:1},'']);
+  if(vd.length)shA.push(['Vente directe',vd.length,vd.reduce((s2,x)=>s2+Number(x.total||0),0),Math.round(vd.reduce((s2,x)=>s2+linesKg(x.lines,pmD),0)*100)/100,0,0,'']);
+  shA.push([{v:'TOTAL',__style:1},sales.length,{v:tot,__style:1},{v:Math.round(sales.reduce((s2,x)=>s2+linesKg(x.lines,pmD),0)*100)/100,__style:1},pendWait.length,{v:pendTot,__style:1},'']);
   const shC=[['CAISSE DU '+dFR(D)],[],['HEURE','TYPE','MOYEN','CATÉGORIE','LIBELLÉ','ENTRÉE','SORTIE']];
   cash.forEach(e=>shC.push([String((e.created_at||'').slice(11,16)),e.type==='in'?'Entrée':'Sortie',e.account==='momo'?'MoMo':'Espèces',catLabel(e.category),e.label,e.type==='in'?Number(e.amount):'',e.type==='out'?Number(e.amount):'']));
   shC.push([{v:'TOTAUX',__style:1},'','','','',{v:cashIn,__style:1},{v:cashOut,__style:1}]);
-  return{html:html,blob:buildXlsx([{name:'Ventes du jour',rows:shV,widths:[20,12,26,8,12,14,18]},{name:'Commerciales',rows:shA,widths:[22,10,16,12,18,44]},{name:'Caisse du jour',rows:shC,widths:[8,10,10,20,30,14,14]}])};
+  return{html:html,blob:buildXlsx([{name:'Ventes du jour',rows:shV,widths:[20,12,26,8,12,14,18]},{name:'Commerciales',rows:shA,widths:[22,10,16,10,12,18,44]},{name:'Caisse du jour',rows:shC,widths:[8,10,10,20,30,14,14]}])};
 }
 async function sendDaily(D){
   const rep=await buildDailyReport(D);
@@ -3817,7 +3941,8 @@ async function computeIncome(period){
   const decaiss=(tr.cash?tr.cash.out:0)+(tr.momo?tr.momo.out:0);
   const fluxTreso=encaiss-decaiss+((tr.cash?tr.cash.od:0)+(tr.momo?tr.momo.od:0));
   const odNet=(tr.cash?tr.cash.od:0)+(tr.momo?tr.momo.od:0);
-  const creances=sales.filter(s2=>inM(s2.date)&&s2.pay_mode==='credit'&&s2.credit_status==='due').reduce((a,x)=>a+Number(x.total||0),0);
+  const _ces=await DB.list('cash_entries');const _cpm={};_ces.forEach(c=>{if(c.type==='in'&&(String(c.ref||'').indexOf('salepay:')===0||String(c.ref||'').indexOf('sale:')===0))_cpm[c.ref]=(_cpm[c.ref]||0)+Number(c.amount||0);});
+  const creances=sales.filter(s2=>inM(s2.date)&&s2.pay_mode==='credit'&&s2.credit_status==='due').reduce((a,x)=>a+Math.max(Number(x.total||0)-(_cpm['salepay:'+x.id]||0)-(_cpm['sale:'+x.id]||0),0),0);
   const roastIn=roast.filter(r=>inM(r.date)).reduce((a,r)=>a+Number(r.green_in||0),0);
   const roastOut=roast.filter(r=>inM(r.date)).reduce((a,r)=>a+Number(r.roasted_out||0),0);
   /* --- ANALYTIQUE PAR PRODUIT --- */

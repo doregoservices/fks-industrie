@@ -1,0 +1,115 @@
+;/* TBANQUE : paiements partiels (crédits + fournisseurs), journal banque isolé, emballages jamais négatifs + stock initial, palmarès mensuel kg, bulletin 1 page */
+;(async()=>{
+await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
+const D=todayISO();
+const settle=async()=>{await new Promise(r=>setTimeout(r,20));};
+/* ============ 1. Crédit client : encaissement PARTIEL + BANQUE ============ */
+await DB.insert('sales_agents',{name:'AWA',token:'tawa',active:true});
+const st0=await computeStats();const due0=st0.creditDue;const cash0=st0.bal.cash;
+await createSale({date:D,agent_name:'AWA',pay_mode:'credit',client:'Hôtel Test',total:10000,lines:[{name:'LIBRE',qty:1,price:10000}],source:'admin'});
+const sc=(await DB.list('sales')).filter(s=>s.pay_mode==='credit'&&s.client==='Hôtel Test')[0];
+$('#eD').value=D;$('#eM').value='4000';$('#eA').value='cash';
+await App.encaisserSave(sc.id);
+let sc2=(await DB.list('sales',{eq:{id:sc.id}}))[0];
+if(sc2.credit_status!=='due')throw new Error('après un paiement partiel le crédit doit rester dû');
+if(Math.abs(await creditRemaining(sc2)-6000)>0.01)throw new Error('reste attendu 6000 : '+await creditRemaining(sc2));
+let stB=await computeStats();
+if(Math.abs(stB.creditDue-due0-6000)>0.01)throw new Error('creditDue attendu +6000 : '+(stB.creditDue-due0));
+if(Math.abs(stB.bal.cash-cash0-4000)>0.01)throw new Error('caisse attendue +4000 : '+(stB.bal.cash-cash0));
+$('#eD').value=D;$('#eM').value='6000';$('#eA').value='bank';
+await App.encaisserSave(sc.id);
+sc2=(await DB.list('sales',{eq:{id:sc.id}}))[0];
+if(sc2.credit_status!=='paid')throw new Error('crédit devrait être soldé après le 2e paiement');
+stB=await computeStats();
+if(Math.abs(stB.creditDue-due0)>0.01)throw new Error('creditDue devrait revenir au niveau de départ');
+if(Math.abs(stB.bal.cash-cash0-4000)>0.01)throw new Error('le règlement BANQUE ne doit pas toucher la caisse : '+(stB.bal.cash-cash0));
+const bk=(await DB.list('cash_entries')).filter(e=>e.account==='bank');
+if(bk.length!==1||Math.abs(Number(bk[0].amount)-6000)>0.01||bk[0].ref!=='salepay:'+sc.id)throw new Error('entrée banque attendue (6000, salepay) : '+JSON.stringify(bk));
+if(bk[0].imputable!==false)throw new Error('l entrée banque doit être non imputable (exploitation intacte)');
+console.log('✓ Crédit client : partiel 4 000 (caisse) + 6 000 (banque) → soldé ; caisse +4 000 seulement, exploitation intacte, créances à jour');
+/* ============ 2. Fournisseur : paiement PARTIEL + BANQUE ============ */
+const pu=await DB.insert('purchases',{date:D,supplier:'Coop Test',qty_kg:100,price_per_kg:1000,amount:100000,pay_method:'later',note:''});
+if(Math.abs(await purchaseRemaining(pu)-100000)>0.01)throw new Error('dette initiale 100000 attendue');
+$('#pD2').value=D;$('#pM2').value='40000';$('#pA2').value='bank';
+await App.achatPaySave(pu.id);
+if(Math.abs(await purchaseRemaining(pu)-60000)>0.01)throw new Error('reste fournisseur attendu 60000 : '+await purchaseRemaining(pu));
+await createCashEntry({date:D,type:'in',account:'cash',category:'divers',label:'fonds test',amount:200000,imputable:false});
+$('#pD2').value=D;$('#pM2').value='70000';$('#pA2').value='cash';
+await App.achatPaySave(pu.id);
+if(Math.abs(await purchaseRemaining(pu)-60000)>0.01)throw new Error('le montant dépassant le reste doit être refusé (reste attendu 60000) : '+await purchaseRemaining(pu));
+$('#pD2').value=D;$('#pM2').value='60000';$('#pA2').value='cash';
+await App.achatPaySave(pu.id);
+if(await purchaseRemaining(pu)>0.005)throw new Error('dette devrait être soldée');
+console.log('✓ Fournisseur : partiel 40 000 (banque) puis 60 000 (caisse) → soldé ; refus si montant > reste');
+/* ============ 3. Journal 🏦 Banque : isolé du reste du système ============ */
+await settle();S.route='banque';location.hash='#/banque';await render();await settle();await render();
+const hb=$('#main').innerHTML;
+if(!hb.includes('Solde banque'))throw new Error('écran Banque non rendu');
+if(!hb.includes('Crédit client'))throw new Error('origine crédit client absente');
+if(!hb.includes('Fournisseur'))throw new Error('origine fournisseur absente');
+if(!hb.includes('Règlement fournisseur'))throw new Error('libellé fournisseur absent');
+await settle();S.route='caisse';location.hash='#/caisse';await render();
+if($('#main').innerHTML.includes('banque')===false&&!$('#main').innerHTML.includes('Banque'))throw new Error('la note renvoyant vers Banque devrait apparaître');
+const ceBk=(await DB.list('cash_entries')).filter(e=>e.account==='bank');
+if(!ceBk.length)throw new Error('entrées banque disparues');
+let capB=null;const _dl=download;download=(n,b)=>{capB={n:n};};
+await App.expBanque();download=_dl;
+if(!capB||capB.n.indexOf('Journal_Banque')!==0)throw new Error('export banque attendu : '+JSON.stringify(capB));
+console.log('✓ Écran 🏦 Banque : solde + origines + export Excel dédié ; la caisse ne montre PAS les règlements bancaires');
+/* ============ 4. Emballages : jamais négatif + stock initial ============ */
+const it=await DB.insert('packaging_items',{name:'sachet-test',unit:'unité',alert_min:0,active:true});
+const pp=await DB.insert('products',{name:'PROD EMB',weight_g:500,price:1000,alert_min:0,active:true,packaging:[{pack_id:it.id,qty:2}]});
+let errP='';
+try{await createProduction({date:D,roasted_used:0,lines:[{product_id:pp.id,name:'PROD EMB',qty:10,price:1000}],operator:'t',note:'',source:'admin'});}catch(e){errP=e.message;}
+if(!/sachet-test.*insuffisant/.test(errP))throw new Error('production 10 (20 emb, stock 0) devrait être refusée : '+errP);
+$('#piD').value=D;$('#piQ').value='5';$('#piC').value='10';
+await App.pkInitSave(it.id);
+let stk=(await DB.list('packaging_entries')).filter(e=>e.item_id===it.id).reduce((a,e)=>a+(e.type==='in'?Number(e.qty):-Number(e.qty)),0);
+if(Math.abs(stk-5)>0.001)throw new Error('stock initial attendu 5 : '+stk);
+await DB.insert('packaging_entries',{date:D,type:'in',qty:15,unit_cost:0,amount:0,reason:'Achat',ref:'',item_id:it.id,item_name:'sachet-test',source:'admin',status:'validated'});
+await createProduction({date:D,roasted_used:0,lines:[{product_id:pp.id,name:'PROD EMB',qty:10,price:1000}],operator:'t',note:'',source:'admin'});
+stk=(await DB.list('packaging_entries')).filter(e=>e.item_id===it.id).reduce((a,e)=>a+(e.type==='in'?Number(e.qty):-Number(e.qty)),0);
+if(Math.abs(stk)>0.001)throw new Error('stock emballage attendu 0 après production : '+stk);
+let errP2='';
+try{await createProduction({date:D,roasted_used:0,lines:[{product_id:pp.id,name:'PROD EMB',qty:1,price:1000}],operator:'t',note:'',source:'admin'});}catch(e){errP2=e.message;}
+if(!/insuffisant/.test(errP2))throw new Error('production au-delà du stock emb devrait être refusée : '+errP2);
+let msgs=[];const _t=toast;toast=(x,k)=>{msgs.push(String(x));return _t(x,k);};
+$('#pkI').value=it.id+'|sachet-test';$('#pkD').value=D;$('#pkQ').value='5';$('#pkR').value='casse';
+await App.pkOutSave();
+toast=_t;
+if(!msgs.some(x=>/insuffisant/.test(x)))throw new Error('sortie manuelle 5/0 devrait être refusée : '+msgs.join(' / '));
+console.log('✓ Emballages : production et sorties refusées au-delà du stock (jamais négatif) ; bouton 📥 stock initial opérationnel');
+/* ============ 5. Palmarès mensuel : temps réel, kg, meilleur ============ */
+await DB.insert('sales_agents',{name:'BINTOU',token:'tbi',active:true});
+await DB.insert('adjustments',{date:D,level:'product',product_id:pp.id,name:'PROD EMB',qty:100,reason:'stock test'});
+const MD='2031-05-15';
+await createSale({date:MD,agent_name:'AWA',pay_mode:'cash',total:60000,lines:[{product_id:pp.id,name:'PROD EMB',qty:60,price:1000}],source:'admin'});
+await createSale({date:MD,agent_name:'BINTOU',pay_mode:'cash',total:40000,lines:[{product_id:pp.id,name:'PROD EMB',qty:40,price:1000}],source:'admin'});
+const PM=await agentMonthStats('2031-05');
+S.agMois='2031-05';
+if(!PM.best||PM.best.n!=='AWA')throw new Error('meilleure attendue AWA : '+JSON.stringify(PM.best));
+const rowA=PM.rows.filter(r=>r.n==='AWA')[0];
+if(Math.abs(rowA.kg-30)>0.001)throw new Error('kg AWA attendu 30 (60×500g) : '+rowA.kg);
+await settle();S.route='commerciaux';location.hash='#/commerciaux';await render();await settle();await render();
+const hc=$('#main').innerHTML;
+if(!hc.includes('Palmarès'))throw new Error('carte Palmarès absente');
+if(!hc.includes('👑'))throw new Error('meilleure non désignée');
+if(!hc.includes('Total kg'))throw new Error('colonne kg absente');
+const repD=await buildDailyReport(D);
+if(!repD.html.includes('kg'))throw new Error('kg absent du point du boss');
+let capP=null;download=(n,b)=>{capP={n:n};};
+await App.expAgMois();download=_dl;
+if(!capP||capP.n.indexOf('Palmares')!==0)throw new Error('export palmarès attendu : '+JSON.stringify(capP));
+console.log('✓ Palmarès mensuel : temps réel (👑 AWA 60 000 F · 30 kg), colonne kg, export Excel ; kg par commerciale dans le point du boss');
+/* ============ 6. Bulletin : une seule page ============ */
+const emp=await DB.insert('employees',{name:'Test Employé',position:'Ouvrier',salary_type:'monthly',base_salary:150000,transport:10000,housing:0,tax_shares:2,active:true});
+const slip=await DB.insert('pay_slips',{run_id:'r1',run_period:D.slice(0,7),employee_id:emp.id,employee_name:'Test Employé',position:'Ouvrier',base:150000,transport:10000,housing:0,bonus:0,ot_hours:0,absence_days:0,abs_ded:0,brut_ap:160000,cnps_base:160000,cnps:9600,taxable:150000,irpp:0,other:0,advances:0,primes:[],transport_exo:10000,net:150400,cnps_employer:12800,its_gross:0,its:0,ricf:0,cmu:1000,cmu_er:1000,cnps_er:12800,pf:3200,mat:1600,at:1600,fdfp:1600,cout_employeur:181800,matricule:'T001',transport_full:10000,its_er:1920});
+await settle();S._slipId=slip.id;S.route='bulletin';location.hash='#/bulletin';await render();await settle();await render();
+const hu=$('#main').innerHTML;
+if(!hu.includes('@page{size:A4'))throw new Error('règle @page A4 absente du bulletin');
+if(!hu.includes('page-break-inside:avoid'))throw new Error('règle anti-coupure absente');
+if(!hu.includes('BULLETIN DE PAIE'))throw new Error('bulletin non rendu');
+if(!hu.includes('Parts fiscales'))throw new Error('nombre de parts fiscales absent du bulletin');
+console.log('✓ Bulletin de paie : format A4, marges réduites, lignes compactées et anti-coupure — tient sur une page à l impression');
+console.log('TBANQUE: 6/6 OK');
+})().catch(e=>{console.error('ÉCHEC TBANQUE:',e.message);process.exit(1);});
