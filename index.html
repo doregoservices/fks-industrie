@@ -1331,8 +1331,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();_installEvt
 window.addEventListener('online',render);window.addEventListener('offline',render);
 window.addEventListener('online',()=>{try{outboxFlush().catch(()=>{});}catch(e){}});
 setInterval(()=>{try{outboxFlush().catch(()=>{});}catch(e){}},30000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{App.autoDailyCheck().catch(()=>{});}catch(e){}}});
-const _cpIv=setInterval(()=>{try{if(S&&S.user&&typeof isManager==='function'&&isManager())App.autoDailyCheck().catch(()=>{});}catch(e){}},30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){try{App.dailyTick().catch(()=>{});}catch(e){}}});
+const _cpIv=setInterval(()=>{try{App.dailyTick().catch(()=>{});}catch(e){}},30000);
 if(_cpIv&&_cpIv.unref)_cpIv.unref();
 function onUnhandledRej(e){try{const r=e&&e.reason;const m=(r&&r.message)||String(r||'Erreur inattendue');
   if(/Session expirée/.test(m))return;toast('⚠️ '+m,'bad');console.error(r);}catch(x){}}
@@ -1353,7 +1353,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.30';
+const APP_VER='35.31';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1571,7 +1571,7 @@ async function scDashboard(){
   const dYest=await dayStatus(yst).catch(()=>null);
   const due=await monthlyDue().catch(()=>null);
   const gnext=await nextGuideStep();
-  App.autoDailyCheck().catch(()=>{});
+  App.dailyTick().catch(()=>{});
   const m=$('#main');
   m.innerHTML=
    '<div class="grid g4">'
@@ -3188,6 +3188,7 @@ async function scParametres(){
     ?'<div class="help" style="margin-bottom:8px">Nécessite la fonction « send-report » déployée sur votre projet Supabase (voir GUIDE.md) et une clé Resend gratuite. Alternative sans configuration : les boutons « ✉️ Préparer l\'email » ouvrent votre messagerie avec le rapport prêt.</div>'
     +'<div class="row">'+fld('Email du boss','<input id="emB" value="'+esc((SETS.email||{}).boss||'')+'" placeholder="boss@societe.com">')+fld('Clé d\'envoi (REPORT_KEY)','<input id="emK" value="'+esc((SETS.email||{}).key||'')+'" placeholder="choisie lors du déploiement">')+'</div>'
     +'<div class="row">'+fld('Heure d\'envoi du point','<input id="emT" value="'+emailTimeStr()+'" placeholder="22h00, 13h30, 9h15…">')+fld('Formats acceptés','<div class="help" style="margin:6px 0 0">13h30 · 9h15 · 22h00 · 13h · 9:15 · 22. Le point part tous les jours à cette heure, même sans aucune activité (le boss reçoit « néant »). L\'envoi est vérifié toutes les 30 secondes et dès l\'enregistrement du réglage. ⚠️ L\'app n\'envoie que si elle est OUVERTE ; pour l\'envoi automatique app fermée, réglez aussi le cron Supabase (cron-pret-a-coller.sql — minutes possibles).</div>')+'</div>'
+    +'<div class="row">'+fld('État de l\'envoi (CaféPro '+APP_VER+')','<div class="help" style="margin:6px 0 0">'+(CFG.mode==='supabase'?'✅ mode en ligne':'❌ mode local')+' · '+((SETS.email||{}).boss?'✅ email du boss':'❌ email du boss manquant')+' · '+((SETS.email||{}).key?'✅ clé d\'envoi':'❌ clé d\'envoi manquante')+' · point programmé à '+emailTimeStr()+'</div>')+fld('Dépannage','<button class="btn" onclick="App.sendDailyBtn(todayISO())">▶️ Envoyer le point du jour maintenant</button><div class="help" style="margin:6px 0 0">Envoie ou renvoie immédiatement le point du jour — si l\'envoi échoue, l\'erreur EXACTE s\'affiche (fonction non déployée, clé différente, Resend…).</div>')+'</div>'
     +'<div class="alert al-info">🕐 <b>Point quotidien automatique : 22h00</b> · rapport mensuel : le 3 du mois à 10h00 — nécessite le programme Supabase (<b>cron-emails.sql</b> : SQL Editor → Run, une seule fois). <b>Filet de sécurité</b> : sans ce programme, l\'app envoie elle-même le point dès qu\'elle est ouverte après 22h. Envoi manuel possible à tout moment (✉️).</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="App.saveEmail()">Enregistrer</button><button class="btn sm sec" onclick="App.emailTest()">Envoyer un email de test</button></div>'
     :'<div class="alert al-info">L\'envoi automatique nécessite le mode en ligne (Supabase). Sans cela, utilisez les boutons « ✉️ Préparer l\'email » qui ouvrent votre messagerie avec le rapport prêt. Connectez Supabase puis revenez ici.</div>')
@@ -3544,7 +3545,7 @@ async function emailSend(subject,html,attachment){
   }
   throw new Error(msg||('Erreur '+r.status));
 }
-App.saveEmail=async()=>{const t=parseEmailTime(($('#emT')||{}).value);if(t===null)return toast('Heure invalide — écrivez par exemple 13h30, 9h15 ou 22h00','bad');await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),time:t,auto_daily:false});toast('Réglages enregistrés — point programmé à '+emailTimeStr(),'ok');try{const logs=await DB.list('email_log');if(logs.some(l=>l.kind==='daily'&&l.ref===todayISO()&&(l.status==='sent'||l.status==='update_pending')))toast('ℹ️ Le point d\'aujourd\'hui a déjà été envoyé — le prochain partira demain à '+emailTimeStr());}catch(e){}App.autoDailyCheck().catch(()=>{});};
+App.saveEmail=async()=>{const t=parseEmailTime(($('#emT')||{}).value);if(t===null)return toast('Heure invalide — écrivez par exemple 13h30, 9h15 ou 22h00','bad');await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),time:t,auto_daily:false});toast('Réglages enregistrés — point programmé à '+emailTimeStr(),'ok');try{const logs=await DB.list('email_log');if(logs.some(l=>l.kind==='daily'&&l.ref===todayISO()&&(l.status==='sent'||l.status==='update_pending')))toast('ℹ️ Le point d\'aujourd\'hui a déjà été envoyé — le prochain partira demain à '+emailTimeStr());}catch(e){}App.dailyTick().catch(()=>{});};
 App.emailTest=async()=>{try{toast('Envoi en cours…');await emailSend(((SETS.company||{}).name||'FKS Industrie')+' — email de test','<p>✅ Si vous lisez cet email, l\'envoi automatique fonctionne.</p>');toast('Email de test envoyé ✅','ok');}catch(e){toast(e.message,'bad');}};
 const EMAILCSS='body{font-family:Arial,sans-serif;color:#2b211a}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #ddd;padding:6px 8px;font-size:13px;text-align:left}th{background:#6f4e37;color:#fff}.tot{font-weight:bold;background:#f4ece2}.ok{color:#1d7a4f;font-weight:bold}.bad{color:#c0392b;font-weight:bold}h2{color:#6f4e37}';
 function emailShell(title,body){const lg=(SETS.company||{}).logo;
@@ -3609,6 +3610,26 @@ async function sendDaily(D){
   await emailSend('Point du '+dFR(D)+' — '+((SETS.company||{}).name||'CaféPro'),rep.html,{filename:'Point_'+D+'.xlsx',base64:await blobToB64(rep.blob)});
   await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'sent',detail:''});
 }
+function dailyBlockReason(){
+  if(CFG.mode!=='supabase')return'app en mode local — pas de connexion en ligne';
+  if(!S.user||!isManager())return'compte gestionnaire non ouvert';
+  const E=SETS.email||{};
+  if(!E.boss)return'email du boss manquant — Réglages → 📧';
+  if(!E.key)return'clé d\'envoi REPORT_KEY manquante — Réglages → 📧';
+  return null;
+}
+App.dailyTick=async()=>{
+  try{
+    if(!emailTimeDue())return;
+    if(CFG.mode!=='supabase'||!S.user||!isManager())return;
+    const D=todayISO();
+    const logs=await DB.list('email_log').catch(()=>[]);
+    if(logs.some(l=>l.kind==='daily'&&l.ref===D&&(l.status==='sent'||l.status==='update_pending')))return;
+    const why=dailyBlockReason();
+    if(why){const k=D+'|'+why;if(App._dailyWarn!==k){App._dailyWarn=k;toast('⚠️ Point de '+emailTimeStr()+' NON envoyé : '+why,'bad');}return;}
+    await App.autoDailyCheck();
+  }catch(e){}
+};
 App.autoDailyCheck=async(hh,mm)=>{
   if(CFG.mode!=='supabase')return false;
   if(!S.user||!isManager())return false;
@@ -3621,7 +3642,7 @@ App.autoDailyCheck=async(hh,mm)=>{
   if(logs.some(l=>l.kind==='daily'&&l.ref===D&&(l.status==='sent'||l.status==='update_pending')))return false;
   App._autoDaily=D;
   try{await sendDaily(D);toast('✉️ Point du '+dFR(D)+' envoyé automatiquement au boss (prévu à '+emailTimeStr()+')','ok');return true;}
-  catch(e){await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'failed',detail:'filet 22h : '+e.message}).catch(()=>{});return false;}
+  catch(e){await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'failed',detail:'filet : '+e.message}).catch(()=>{});toast('⚠️ Point de '+emailTimeStr()+' non envoyé : '+e.message,'bad');return false;}
 };
 App.sendDailyBtn=async D=>{try{toast('Envoi du point du '+dFR(D)+'…');await sendDaily(D);toast('Point envoyé au boss ✉️','ok');render();}
   catch(e){await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'failed',detail:e.message}).catch(()=>{});toast('Envoi impossible : '+e.message+' — utilisez « ✉️ Préparer l\'email »','bad');}};
