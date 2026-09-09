@@ -1351,7 +1351,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.28';
+const APP_VER='35.29';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1547,7 +1547,7 @@ async function scGuide(){
    +'<div class="kpi"><div class="t">Ventes du jour</div><div class="v">'+money(ventesJour)+'</div></div>'
    +'<div class="kpi"><div class="t">Écritures caisse</div><div class="v">'+caisseJour+'</div></div>'
    +'<div class="kpi"><div class="t">À valider</div><div class="v" style="color:'+(pendN?'var(--bad)':'var(--ok)')+'">'+pendN+'</div></div>'
-   +'<div class="kpi"><div class="t">Point 22h</div><div class="v" style="font-size:14px">'+(pointSent?'✅ envoyé':(new Date().getHours()>=22?'⏳ à envoyer':'⏳ prévu 22h00'))+'</div></div>'
+   +'<div class="kpi"><div class="t">Point '+emailHour()+'h</div><div class="v" style="font-size:14px">'+(pointSent?'✅ envoyé':(new Date().getHours()>=emailHour()?'⏳ à envoyer':'⏳ prévu '+emailHour()+'h00'))+'</div></div>'
    +'</div>'
    +(dueM?'<div class="alert al-warn" style="margin:10px 0 0">📤 Rapport de '+monthLabel(dueM)+' à envoyer au boss (le 3 du mois).</div>':'')
    +'</div>';
@@ -1594,9 +1594,9 @@ async function scDashboard(){
    +'<div class="kpi"><div class="t">Stock produits finis (valeur)</div><div class="v">'+money(st.products.reduce((a,p)=>a+p.stock*p.price,0))+'</div><div class="s">'+st.products.length+' produits suivis</div></div>'
    +'<div class="kpi"><div class="t">Emballages (valeur)</div><div class="v">'+money(st.packagingValue||0)+'</div><div class="s">'+(st.packaging||[]).length+' articles suivis</div></div>'
    +'</div>'
-   +'<div class="card" style="margin-top:14px"><h2>📤 Points quotidiens</h2><div class="listitem"><div class="avatar">📆</div><div style="flex:1"><b>Aujourd\'hui</b> '+dayBadge(dToday)+'</div>'+(dToday&&dToday.complete?'<button class="btn sm" onclick="App.sendDailyBtn(\''+todayISO()+'\')">✉️ Point du jour</button>':'')+'</div>'
-   +'<div class="listitem"><div class="avatar">📎</div><div style="flex:1"><b>Hier</b> '+dayBadge(dYest)+'</div>'+(dYest&&dYest.complete?'<button class="btn sm sec" onclick="App.sendDailyBtn(\''+yst+'\')">✉️ Renvoyer / envoyer</button>':'')+'</div>'
-   +'<div class="help">Le point part automatiquement <b>à 22h00</b> chaque jour (même si des commerciales n\'ont pas envoyé — elles sont listées dans l\'email). <b>Filet de sécurité</b> : si le programme 22h n\'est pas installé ou a échoué, l\'app l\'envoie d\'elle-même dès qu\'elle est ouverte après 22h. Vous pouvez aussi l\'envoyer plus tôt avec le bouton ✉️ ci-dessus. Une commerciale en retard peut saisir jusqu\'à 7 jours en arrière — renvoyez alors le point mis à jour.</div></div>'
+   +'<div class="card" style="margin-top:14px"><h2>📤 Points quotidiens</h2><div class="listitem"><div class="avatar">📆</div><div style="flex:1"><b>Aujourd\'hui</b> '+dayBadge(dToday)+'</div>'+(dToday&&(dToday.complete||dToday.empty)?'<button class="btn sm" onclick="App.sendDailyBtn(\''+todayISO()+'\')">✉️ Point du jour</button>':'')+'</div>'
+   +'<div class="listitem"><div class="avatar">📎</div><div style="flex:1"><b>Hier</b> '+dayBadge(dYest)+'</div>'+(dYest&&(dYest.complete||dYest.empty)?'<button class="btn sm sec" onclick="App.sendDailyBtn(\''+yst+'\')">✉️ Renvoyer / envoyer</button>':'')+'</div>'
+   +'<div class="help">Le point part automatiquement <b>à '+emailHour()+'h00</b> chaque jour — même si des commerciales n\'ont pas envoyé (elles sont listées dans l\'email) et même sans aucune activité (le boss reçoit un point « néant » plutôt que le silence). <b>Filet de sécurité</b> : si le programme 22h n\'est pas installé ou a échoué, l\'app l\'envoie d\'elle-même dès qu\'elle est ouverte après 22h. Vous pouvez aussi l\'envoyer plus tôt avec le bouton ✉️ ci-dessus. Une commerciale en retard peut saisir jusqu\'à 7 jours en arrière — renvoyez alors le point mis à jour.</div></div>'
    +(due?'<div class="alert al-warn" style="margin-top:14px">📤 <b>Rapport de '+monthLabel(due)+' non encore envoyé au boss</b> — <a href="#/exploitation">l\'écran Exploitation</a> permet de le générer (stocks + compte d\'exploitation) et de l\'envoyer.</div>':'')
    +(pend.length?'<div class="alert al-warn" style="margin-top:14px;cursor:pointer" onclick="go(\'validation\')">📥 <b>'+pend.length+' saisie(s)</b> en attente de validation — toucher pour examiner</div>':'')
    +((lowStock.length||lowPack.length)?'<div class="alert al-bad" style="margin-top:14px">⚠️ Stock bas : '+lowStock.map(p=>esc(p.name)+' ('+num(p.stock)+')').concat(lowPack.map(p=>esc(p.name)+' ('+num(p.stock)+')')).join(' · ')+' — <a href="#/emballages">emballages</a></div>':'')
@@ -3185,6 +3185,7 @@ async function scParametres(){
   +(CFG.mode==='supabase'
     ?'<div class="help" style="margin-bottom:8px">Nécessite la fonction « send-report » déployée sur votre projet Supabase (voir GUIDE.md) et une clé Resend gratuite. Alternative sans configuration : les boutons « ✉️ Préparer l\'email » ouvrent votre messagerie avec le rapport prêt.</div>'
     +'<div class="row">'+fld('Email du boss','<input id="emB" value="'+esc((SETS.email||{}).boss||'')+'" placeholder="boss@societe.com">')+fld('Clé d\'envoi (REPORT_KEY)','<input id="emK" value="'+esc((SETS.email||{}).key||'')+'" placeholder="choisie lors du déploiement">')+'</div>'
+    +'<div class="row">'+fld('Heure d\'envoi du point (0–23)','<input id="emH" type="number" min="0" max="23" value="'+emailHour()+'" placeholder="22">')+fld('À savoir','<div class="help" style="margin:6px 0 0">Le point part tous les jours à cette heure — même les jours sans aucune activité (le boss reçoit « néant »). 22 par défaut : changez pour tester, puis remettez 22.</div>')+'</div>'
     +'<div class="alert al-info">🕐 <b>Point quotidien automatique : 22h00</b> · rapport mensuel : le 3 du mois à 10h00 — nécessite le programme Supabase (<b>cron-emails.sql</b> : SQL Editor → Run, une seule fois). <b>Filet de sécurité</b> : sans ce programme, l\'app envoie elle-même le point dès qu\'elle est ouverte après 22h. Envoi manuel possible à tout moment (✉️).</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="App.saveEmail()">Enregistrer</button><button class="btn sm sec" onclick="App.emailTest()">Envoyer un email de test</button></div>'
     :'<div class="alert al-info">L\'envoi automatique nécessite le mode en ligne (Supabase). Sans cela, utilisez les boutons « ✉️ Préparer l\'email » qui ouvrent votre messagerie avec le rapport prêt. Connectez Supabase puis revenez ici.</div>')
@@ -3485,13 +3486,16 @@ App.pkOutSave=async()=>{const q=Number($('#pkQ').value)||0;if(!q)return toast('Q
   closeModal();toast('Sortie enregistrée','ok');render();};
 
 /* ================= SUIVI QUOTIDIEN & EMAILS ================= */
+function emailHour(){const h=Number((SETS.email||{}).hour);return(h>=0&&h<=23)?h:22;}
 async function dayStatus(D){
   const pend=(await DB.list('pending_entries',{eq:{status:'pending'}})).filter(p=>p.source_type==='sales'&&(p.payload||{}).date===D);
   const sales=(await DB.list('sales')).filter(s=>s.date===D);
   const logs=(await DB.list('email_log')).filter(l=>l.kind==='daily'&&l.ref===D);
   const sent=logsWith(logs,'sent').length>0;
   const update=logsWith(logs,'update_pending').length>0;
-  return{pending:pend.length,sales:sales,sent:sent,update:update,complete:pend.length===0&&sales.length>0};
+  const cashN=(await DB.list('cash_entries')).filter(e=>e.date===D).length;
+  const hasData=sales.length>0||cashN>0;
+  return{pending:pend.length,sales:sales,sent:sent,update:update,complete:pend.length===0&&hasData,empty:pend.length===0&&!hasData};
 }
 function logsWith(logs,st){return logs.filter(l=>l.status===st);}
 function dayBadge(d){
@@ -3500,6 +3504,7 @@ function dayBadge(d){
   if(d.complete&&d.sent)return'<span class="badge b-ok">complet · ✉️ envoyé au boss</span>';
   if(d.complete)return'<span class="badge b-wait">complet · point à envoyer</span>';
   if(d.pending)return'<span class="badge b-no">'+d.pending+' vente(s) en attente de validation</span>';
+  if(d.empty)return d.sent?'<span class="badge b-ok">néant · ✅ envoyé au boss</span>':'<span class="badge b-wait">🌑 néant · point à envoyer</span>';
   return'<span class="mut">aucune vente saisie</span>';
 }
 async function afterSalesValidation(D){
@@ -3533,7 +3538,7 @@ async function emailSend(subject,html,attachment){
   }
   throw new Error(msg||('Erreur '+r.status));
 }
-App.saveEmail=async()=>{await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),auto_daily:false});toast('Réglages email enregistrés','ok');};
+App.saveEmail=async()=>{const hx=(function(){const x=Math.round(Number(($('#emH')||{}).value));return(x>=0&&x<=23)?x:22;})();await setSetting('email',{boss:$('#emB').value.trim(),key:$('#emK').value.trim(),hour:hx,auto_daily:false});toast('Réglages email enregistrés','ok');};
 App.emailTest=async()=>{try{toast('Envoi en cours…');await emailSend(((SETS.company||{}).name||'FKS Industrie')+' — email de test','<p>✅ Si vous lisez cet email, l\'envoi automatique fonctionne.</p>');toast('Email de test envoyé ✅','ok');}catch(e){toast(e.message,'bad');}};
 const EMAILCSS='body{font-family:Arial,sans-serif;color:#2b211a}table{border-collapse:collapse;width:100%;margin:8px 0}th,td{border:1px solid #ddd;padding:6px 8px;font-size:13px;text-align:left}th{background:#6f4e37;color:#fff}.tot{font-weight:bold;background:#f4ece2}.ok{color:#1d7a4f;font-weight:bold}.bad{color:#c0392b;font-weight:bold}h2{color:#6f4e37}';
 function emailShell(title,body){const lg=(SETS.company||{}).logo;
@@ -3548,6 +3553,7 @@ async function buildDailyReport(D){
   const pendWait=pendAll.filter(p=>p.status==='pending'&&p.source_type==='sales'&&(p.payload||{}).date===D);
   const rejCnt={};pendAll.filter(p=>p.status==='rejected'&&p.source_type==='sales'&&(p.payload||{}).date===D).forEach(p=>{const n=(p.payload||{}).agent_name||p.source_name||'?';rejCnt[n]=(rejCnt[n]||0)+1;});
   const pendTot=pendWait.reduce((s2,x)=>s2+Number((x.payload||{}).total||0),0);
+  const vide=!sales.length&&!cash.length&&!pendWait.length;
   const agRow=[];
   agents.forEach(a=>{
     const vs=sales.filter(s2=>s2.agent_name===a.name);
@@ -3567,6 +3573,7 @@ async function buildDailyReport(D){
   const cashOut=cash.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
   const html=emailShell('Point quotidien du '+dFR(D),
     '<h3>Point du '+dFR(D)+'</h3>'
+    +(vide?'<p style="background:#f4ece2;border-left:4px solid #6f4e37;padding:10px 12px"><b>🌑 Journée sans activité.</b> Aucune vente, aucun mouvement de caisse, aucun envoi reçu — rien à signaler ce jour.</p>':'')
     +'<table><tr><th>Commerciale</th><th style="text-align:right">✅ Validées</th><th style="text-align:right">⏳ À valider</th><th>Envoi du jour</th></tr>'
     +agRow.join('')
     +'</table>'
@@ -3601,13 +3608,13 @@ App.autoDailyCheck=async(hh)=>{
   if(!S.user||!isManager())return false;
   const E=SETS.email||{};if(!E.boss||!E.key)return false;
   const h=(hh!=null?hh:new Date().getHours());
-  if(h<22)return false;
+  if(h<emailHour())return false;
   const D=todayISO();
   if(App._autoDaily===D)return false;
   const logs=await DB.list('email_log');
   if(logs.some(l=>l.kind==='daily'&&l.ref===D&&(l.status==='sent'||l.status==='update_pending')))return false;
   App._autoDaily=D;
-  try{await sendDaily(D);toast('✉️ Point du '+dFR(D)+' envoyé automatiquement au boss (prévu à 22h00)','ok');return true;}
+  try{await sendDaily(D);toast('✉️ Point du '+dFR(D)+' envoyé automatiquement au boss (prévu à '+emailHour()+'h00)','ok');return true;}
   catch(e){await DB.insert('email_log',{kind:'daily',ref:D,sent_at:nowISO(),status:'failed',detail:'filet 22h : '+e.message}).catch(()=>{});return false;}
 };
 App.sendDailyBtn=async D=>{try{toast('Envoi du point du '+dFR(D)+'…');await sendDaily(D);toast('Point envoyé au boss ✉️','ok');render();}

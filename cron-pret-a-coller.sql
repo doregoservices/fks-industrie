@@ -14,6 +14,14 @@
 --
 -- PUIS : Supabase (supabase.com → votre projet pyfbczuxcqcyebwnghqi)
 --   → menu SQL Editor → New query → collez TOUT ce fichier → Run.
+--
+-- ⚠️ FONCTION REQUISE (v2) : ce cron appelle la fonction « send-report » avec
+--    mode=daily / mode=monthly. Si vous l'avez déployée AVANT le 10/09/2026,
+--    recollez d'abord la nouvelle version (dépôt → supabase/functions/send-report/)
+--    : l'ancienne version rejetait les appels du cron (aucun envoi possible).
+-- POUR TESTER UNE AUTRE HEURE : remplacez '0 22 * * *' par exemple par
+--    '40 15 * * *' (= 15h40), recollez tout ce fichier, attendez l'heure…
+--    puis recollez-le TEL QUEL pour revenir à 22h00.
 --   Réponse attendue : 2 lignes « fks-point-quotidien » et
 --   « fks-rapport-mensuel » avec active = true.
 --   Rejouable sans risque (les versions précédentes sont remplacées).
