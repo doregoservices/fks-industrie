@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.33';
+const APP_VER='35.34';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2933,7 +2933,12 @@ App.expStocks=async()=>{
   (st.types||[]).forEach(t=>syn.push([t.name,num2(t.made),num2(t.used),{v:num2(t.stock),__style:1},'kg','café transformé (machines)']));
   prods.forEach(pp=>{const s2=st.products.filter(x=>x.id===pp.id)[0]||{made:0,sold:0,stock:0};syn.push([pp.name,num(s2.made),num(s2.sold),{v:num(s2.stock),__style:1},'unités','production − ventes'+(s2.adjust?(' + ajust '+num2(s2.adjust)):'')]);});
   syn.push([],['Rendement torréfaction moyen',num2(st.roastYield)+' %','('+num2(st.roastedMade)+' kg obtenus / '+num2(st.greenUsed)+' kg verts)']);
-  const green=[['DATE','MOUVEMENT','QTÉ (kg)','SOLDE (kg)','DÉTAIL']];
+  const gPur=pur.filter(inR).reduce((a,x)=>a+Number(x.qty_kg||0),0);
+  const gUse=roast.filter(inR).reduce((a,x)=>a+Number(x.green_in||0),0);
+  const gAdj=adj.filter(x=>x.level==='green'&&inR(x)).reduce((a,x)=>a+Number(x.qty||0),0);
+  const green=[['CAFÉ VERT — EXPLICATION DU STOCK FINAL'],[esc((SETS.company&&SETS.company.name)||'CaféPro')],['Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to)],[],
+    ['Achats (période)','+ '+num2(gPur)+' kg'],['Torréfaction consommée','− '+num2(gUse)+' kg'],['Ajustements',(gAdj<0?'− ':'+ ')+num2(Math.abs(gAdj))+' kg'],[{v:'STOCK FINAL (période)',__style:1},{v:num2(gPur-gUse+gAdj)+' kg',__style:1}],['Stock global actuel (toutes périodes)',num2(st.greenStock)+' kg'],[],
+    ['JOURNAL DÉTAILLÉ — DATE','MOUVEMENT','QTÉ (kg)','SOLDE (kg)','DÉTAIL']];
   let g=0;
   pur.filter(inR).sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>{g+=Number(x.qty_kg);green.push([dFR(x.date),'Achat café vert',Number(x.qty_kg),Math.round(g*100)/100,x.supplier]);});
   roast.filter(inR).sort((a,b)=>a.date.localeCompare(b.date)).forEach(x=>{g-=Number(x.green_in);green.push([dFR(x.date),'Torréfaction (consommé)',-Number(x.green_in),Math.round(g*100)/100,x.operator||'']);});
@@ -2946,27 +2951,43 @@ App.expStocks=async()=>{
   st.products.forEach(s2=>prodsSh.push([s2.name,s2.made,s2.sold,s2.adjust,{v:s2.stock,__style:1},s2.price,s2.stock*s2.price]));
   const totVal=st.products.reduce((s,x)=>s+x.stock*x.price,0);
   prodsSh.push([{v:'TOTAL',__style:1},'','','','',{v:'Valeur',__style:1},{v:totVal,__style:1}]);
-  const mv=[['DATE','PRODUIT','MOUVEMENT','QTÉ','ORIGINE']];
-  prod.filter(inR).forEach(pp=>(pp.lines||[]).forEach(l=>mv.push([dFR(pp.date),l.name,'Production',Number(l.qty),pp.operator||''])));
-  sales.filter(inR).forEach(s2=>(s2.lines||[]).forEach(l=>mv.push([dFR(s2.date),l.name,'Vente',-Number(l.qty),s2.agent_name])));
-  adj.filter(x=>x.level==='product').forEach(x=>mv.push([dFR(x.date),x.name||'','Ajustement',Number(x.qty),x.reason||'']));
-  mv.sort((a,b)=>String(a[0]).split('/').reverse().join('').localeCompare(String(b[0]).split('/').reverse().join('')));
+  const detP=[['DÉTAIL DES STOCKS — PRODUIT PAR PRODUIT'],[esc((SETS.company&&SETS.company.name)||'CaféPro')],['Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to)+' — le stock final tient compte de toutes les périodes'],[]];
+  const mvs={};
+  prod.filter(inR).forEach(pp=>(pp.lines||[]).forEach(l=>{const k=l.product_id||l.name;(mvs[k]=mvs[k]||[]).push({d:pp.date,m:'Production',q:Number(l.qty),o:pp.operator||'',x:''});}));
+  sales.filter(inR).forEach(s2=>(s2.lines||[]).forEach(l=>{const k=l.product_id||l.name;(mvs[k]=mvs[k]||[]).push({d:s2.date,m:'Vente',q:-Number(l.qty),o:s2.agent_name||'',x:s2.client||''});}));
+  adj.filter(x=>x.level==='product'&&inR(x)).forEach(x=>{const k=x.product_id||x.name;(mvs[k]=mvs[k]||[]).push({d:x.date,m:'Ajustement',q:Number(x.qty),o:x.reason||'',x:''});});
+  prods.slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(pp=>{
+    const s2=st.products.filter(x=>x.id===pp.id)[0]||{made:0,sold:0,adjust:0,stock:0,price:0};
+    detP.push([{v:pp.name+'  ·  '+money(s2.price)+' / unité',__style:1},'','','','']);
+    detP.push(['DATE','MOUVEMENT','QTÉ','ORIGINE','DÉTAIL']);
+    const list=(mvs[pp.id]||[]).concat(mvs[pp.name]||[]).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
+    if(list.length)list.forEach(r=>detP.push([dFR(r.d),r.m,r.q,r.o,r.x]));
+    else detP.push(['—','Aucun mouvement sur la période','','','']);
+    detP.push([{v:'STOCK FINAL',__style:1},'Productions '+num(s2.made)+' · Ventes '+num(s2.sold)+(s2.adjust?' · Ajustements '+num2(s2.adjust):''),{v:num(s2.stock),__style:1},'unités','Valeur : '+money(Math.round(s2.stock*s2.price))]);
+    detP.push([]);});
   const packSh=[['EMBALLAGES — STOCKS AU '+dFR(to)],[],
     ['ARTICLE','UNITÉ','ENTRÉES','SORTIES','STOCK','COÛT MOYEN','VALEUR']];
   (st.packaging||[]).forEach(p=>packSh.push([p.name,p.unit,p.in,p.out,{v:p.stock,__style:1},Math.round(p.cmp),p.value]));
   const pkTot=(st.packaging||[]).reduce((a,x)=>a+x.value,0);
   packSh.push([{v:'TOTAL',__style:1},'','','','','',{v:pkTot,__style:1}]);
   const pke=(await DB.list('packaging_entries')).filter(e=>(!from||e.date>=from)&&(!to||e.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-  const pkMv=[['DATE','ARTICLE','MOUVEMENT','QTÉ','COÛT UNIT.','MONTANT','MOTIF']];
-  pke.forEach(e=>pkMv.push([dFR(e.date),e.item_name||'',e.type==='in'?'Entrée':'Sortie',Number(e.qty),Number(e.unit_cost||0),Number(e.amount||0),e.reason||'']));
+  const detE=[['DÉTAIL DES STOCKS — EMBALLAGE PAR EMBALLAGE'],[esc((SETS.company&&SETS.company.name)||'CaféPro')],['Période : '+dFR(from==='2000-01-01'?'':from)+' au '+dFR(to)+' — le stock final tient compte de toutes les périodes'],[]];
+  (st.packaging||[]).slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))).forEach(p=>{
+    detE.push([{v:p.name+'  ·  ('+p.unit+')',__style:1},'','','','','']);
+    detE.push(['DATE','MOUVEMENT','QTÉ','COÛT UNIT.','MONTANT','MOTIF']);
+    const list=pke.filter(e=>e.item_id===p.id);
+    if(list.length)list.forEach(e=>detE.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',e.type==='in'?Number(e.qty):-Number(e.qty),Number(e.unit_cost||0),Number(e.amount||0),e.reason||'']));
+    else detE.push(['—','Aucun mouvement sur la période','','','','']);
+    detE.push([{v:'STOCK FINAL',__style:1},'Entrées '+num2(p.in)+' · Sorties '+num2(p.out),{v:num2(p.stock),__style:1},'Coût moyen : '+money(p.cmp),'Valeur : '+money(p.value),'']);
+    detE.push([]);});
   makeXlsx([
     {name:'Synthèse',rows:syn,widths:[28,14,14,14,10,40]},
-    {name:'Café vert',rows:green,widths:[12,26,12,12,30]},
+    {name:'Café vert',rows:green,widths:[32,26,12,12,30]},
     {name:'Torréfaction',rows:roastSh,widths:[12,16,18,12,12,16]},
     {name:'Produits finis',rows:prodsSh,widths:[30,12,12,14,10,12,14]},
     {name:'Emballages',rows:packSh,widths:[26,12,12,12,10,14,14]},
-    {name:'Mouvements produits',rows:mv,widths:[12,30,14,10,24]},
-    {name:'Mouvements emballages',rows:pkMv,widths:[12,26,12,10,12,14,26]}],
+    {name:'Produits — détail',rows:detP,widths:[12,20,10,24,30]},
+    {name:'Emballages — détail',rows:detE,widths:[12,20,10,14,14,28]}],
     'Point_stocks_'+to+'.xlsx');
   toast('Point des stocks téléchargé ✅','ok');
 };
