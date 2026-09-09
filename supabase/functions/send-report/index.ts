@@ -1,5 +1,5 @@
 // ============================================================
-// CaféPro — Fonction Supabase "send-report" (VERSION 2.3 — kg par commerciale dans le point)
+// CaféPro — Fonction Supabase "send-report" (VERSION 2.4 — kg par commerciale + banque hors caisse du jour)
 // Envoie au boss les points quotidiens et rapports mensuels
 // via Resend (https://resend.com — gratuit).
 //
@@ -335,6 +335,10 @@ async function daily(): Promise<{
   });
   const kgOf = (lines: any[]) =>
     (lines || []).reduce((a, l) => a + Number(l.qty || 0) * (Number((pm[l.product_id] || pm[l.name] || {}).weight_g || 0) / 1000), 0);
+  const cashD = (cash as any[]).filter((e) => e.account !== "bank");
+  const bankOps = (cash as any[]).filter((e) => e.account === "bank");
+  const bankIn = bankOps.filter((e) => e.type === "in").reduce((a, e) => a + Number(e.amount || 0), 0);
+  const bankOut = bankOps.filter((e) => e.type === "out").reduce((a, e) => a + Number(e.amount || 0), 0);
   const pendD = (pend as any[]).filter((p) => ((p.payload || {}) as any).date === D);
   const tot = (sales as any[]).reduce((a, s) => a + Number(s.total || 0), 0);
   const pendTot = pendD.reduce((a, p) => a + Number(((p.payload || {}) as any).total || 0), 0);
@@ -379,10 +383,10 @@ async function daily(): Promise<{
       `<td>${pendD.length ? `<span class="bad">${money(pendTot)} à valider</span>` : "—"}</td><td></td></tr>`
   );
   shA.push(["TOTAL", (sales as any[]).length, tot, Math.round((sales as any[]).reduce((x, s) => x + kgOf(s.lines), 0) * 100) / 100, pendD.length, pendTot, ""]);
-  const cashIn = (cash as any[]).filter((e) => e.type === "in").reduce((a, e) => a + Number(e.amount || 0), 0);
-  const cashOut = (cash as any[]).filter((e) => e.type === "out").reduce((a, e) => a + Number(e.amount || 0), 0);
+  const cashIn = cashD.filter((e) => e.type === "in").reduce((a, e) => a + Number(e.amount || 0), 0);
+  const cashOut = cashD.filter((e) => e.type === "out").reduce((a, e) => a + Number(e.amount || 0), 0);
   const bal = { cash: 0, momo: 0 };
-  (allCash as any[]).forEach((e) => {
+  (allCash as any[]).filter((e) => e.account !== "bank").forEach((e) => {
     const v = Number(e.amount || 0);
     bal[e.account === "momo" ? "momo" : "cash"] += e.type === "in" ? v : -v;
   });
@@ -396,7 +400,10 @@ async function daily(): Promise<{
       `<h3>Caisse du jour</h3><table><tr><th></th><th style="text-align:right">Montant</th></tr>` +
       `<tr><td>Entrées</td><td style="text-align:right" class="ok">${money(cashIn)}</td></tr>` +
       `<tr><td>Sorties</td><td style="text-align:right" class="bad">${money(cashOut)}</td></tr></table>` +
-      `<p>Soldes en fin de journée — Espèces : <b>${money(bal.cash)}</b> · Mobile Money : <b>${money(bal.momo)}</b></p>`,
+      `<p>Soldes en fin de journée — Espèces : <b>${money(bal.cash)}</b> · Mobile Money : <b>${money(bal.momo)}</b></p>` +
+      (bankOps.length
+        ? `<p>🏦 Règlements par banque ce jour : ${bankIn ? "entrées " + money(bankIn) : ""}${bankIn && bankOut ? " · " : ""}${bankOut ? "sorties " + money(bankOut) : ""} — suivis à part (journal Banque), hors caisse.</p>`
+        : "") +
     company
   );
   /* Feuille Ventes du jour (mêmes colonnes que l'app) */
@@ -417,7 +424,7 @@ async function daily(): Promise<{
   shV.push(["TOTAL", "", "", "", "", tot, ""]);
   /* Feuille Caisse du jour */
   const shC: any[][] = [["CAISSE DU " + D], [], ["HEURE", "TYPE", "MOYEN", "CATÉGORIE", "LIBELLÉ", "ENTRÉE", "SORTIE"]];
-  (cash as any[]).forEach((e) =>
+  cashD.forEach((e) =>
     shC.push([
       String((e.created_at || "").slice(11, 16)),
       e.type === "in" ? "Entrée" : "Sortie",

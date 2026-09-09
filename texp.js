@@ -39,6 +39,11 @@ await App.expStocks();   check('Point complet des stocks',5);
  ['STOCK FINAL (période)','Achats (période)','Torréfaction consommée','JOURNAL DÉTAILLÉ'].forEach(x=>{if(!txtG.includes(x))throw new Error('café vert sans « '+x+' »');});
  const de=captured.sheets.filter(x=>x.name==='Emballages — détail')[0];
  if(!JSON.stringify(de.rows).includes('STOCK FINAL'))throw new Error('détail emballages sans STOCK FINAL');
+ const txtP2=JSON.stringify(dp.rows),txtE2=JSON.stringify(de.rows);
+ if(!txtP2.includes('TOTAUX PÉRIODE'))throw new Error('totaux période produits absents');
+ if(!txtE2.includes('TOTAUX PÉRIODE'))throw new Error('totaux période emballages absents');
+ if(!txtP2.includes('Net période'))throw new Error('net période produits absent');
+ if(!txtP2.includes('STOCK FINAL (toutes périodes)'))throw new Error('stock final toutes périodes absent');
  console.log('✓ Point des stocks v35.34 : onglet détaillé PAR PRODUIT (mouvements + stock final expliqué + valeur), PAR EMBALLAGE (entrées/sorties + stock final + coût moyen), et explication du stock café vert (achats − torréfaction + ajustements)');}
 await App.expCaisse();   check('Journal de caisse Sage',2);
 await App.expVentes();   check('Ventes',1);

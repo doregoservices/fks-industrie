@@ -56,6 +56,11 @@ let capB=null;const _dl=download;download=(n,b)=>{capB={n:n};};
 await App.expBanque();download=_dl;
 if(!capB||capB.n.indexOf('Journal_Banque')!==0)throw new Error('export banque attendu : '+JSON.stringify(capB));
 console.log('✓ Écran 🏦 Banque : solde + origines + export Excel dédié ; la caisse ne montre PAS les règlements bancaires');
+await createCashEntry({date:D,type:'in',account:'bank',category:'banque',label:'Règlement banque unique test',amount:12345,imputable:false,ref:'salepay:uniqbank'});
+const repB=await buildDailyReport(D);
+if(repB.html.includes('Règlement banque unique test'))throw new Error('le règlement banque ne doit pas figurer dans la caisse du jour du point');
+if(!/Règlements par banque/.test(repB.html))throw new Error('la note « Règlements par banque » doit figurer dans le point');
+console.log('✓ Point du boss : les règlements bancaires sont HORS caisse du jour (note 🏦 séparée)');
 /* ============ 4. Emballages : jamais négatif + stock initial ============ */
 const it=await DB.insert('packaging_items',{name:'sachet-test',unit:'unité',alert_min:0,active:true});
 const pp=await DB.insert('products',{name:'PROD EMB',weight_g:500,price:1000,alert_min:0,active:true,packaging:[{pack_id:it.id,qty:2}]});

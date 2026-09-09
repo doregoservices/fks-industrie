@@ -9,7 +9,8 @@ const prods=await DB.list('products');
 const p1=prods.filter(p=>p.name==='Café moulu 500 g')[0];
 await createSale({date:todayISO(),agent_id:'direct',agent_name:'Vente directe',pay_mode:'credit',client:'Épicerie Bassam',total:22500,lines:[{product_id:p1.id,name:p1.name,qty:5,price:4500}],source:'admin'});
 await DB.insert('adjustments',{date:todayISO(),level:'green',qty:50,reason:'inventaire'});
-await DB.insert('adjustments',{date:todayISO(),level:'type',type_id:(await DB.list('coffee_types'))[0].id,name:(await DB.list('coffee_types'))[0].name,qty:3,reason:'recompte'});
+await DB.insert('adjustments',{date:todayISO(),level:'roasted',qty:3,reason:'recompte'});
+await DB.insert('adjustments',{date:todayISO(),level:'product',product_id:p1.id,name:p1.name,qty:2,reason:'régularisation'});
 
 let captured=null;
 const _mk=makeXlsx;makeXlsx=(sheets,fname)=>{captured={sheets,fname};};
@@ -29,6 +30,21 @@ const check=(label,minSheets)=>{
 };
 
 await App.expStocks();   check('Point complet des stocks',5);
+{const shN=captured.sheets.map(x=>x.name);
+ if(!shN.includes('Produits — détail'))throw new Error('onglet Produits — détail absent : '+shN.join(','));
+ if(!shN.includes('Emballages — détail'))throw new Error('onglet Emballages — détail absent');
+ const dp=captured.sheets.filter(x=>x.name==='Produits — détail')[0];const txtP=JSON.stringify(dp.rows);
+ ['STOCK FINAL','Production','Vente','Ajustement',p1.name].forEach(x=>{if(!txtP.includes(x))throw new Error('détail produits sans « '+x+' »');});
+ const gv=captured.sheets.filter(x=>x.name==='Café vert')[0];const txtG=JSON.stringify(gv.rows);
+ ['STOCK FINAL (période)','Achats (période)','Torréfaction consommée','JOURNAL DÉTAILLÉ'].forEach(x=>{if(!txtG.includes(x))throw new Error('café vert sans « '+x+' »');});
+ const de=captured.sheets.filter(x=>x.name==='Emballages — détail')[0];
+ if(!JSON.stringify(de.rows).includes('STOCK FINAL'))throw new Error('détail emballages sans STOCK FINAL');
+ const txtP2=JSON.stringify(dp.rows),txtE2=JSON.stringify(de.rows);
+ if(!txtP2.includes('TOTAUX PÉRIODE'))throw new Error('totaux période produits absents');
+ if(!txtE2.includes('TOTAUX PÉRIODE'))throw new Error('totaux période emballages absents');
+ if(!txtP2.includes('Net période'))throw new Error('net période produits absent');
+ if(!txtP2.includes('STOCK FINAL (toutes périodes)'))throw new Error('stock final toutes périodes absent');
+ console.log('✓ Point des stocks v35.34 : onglet détaillé PAR PRODUIT (mouvements + stock final expliqué + valeur), PAR EMBALLAGE (entrées/sorties + stock final + coût moyen), et explication du stock café vert (achats − torréfaction + ajustements)');}
 await App.expCaisse();   check('Journal de caisse Sage',2);
 await App.expVentes();   check('Ventes',1);
 await App.expPaie();check('Journal de paie',1);

@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.34';
+const APP_VER='35.35';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2963,7 +2963,12 @@ App.expStocks=async()=>{
     const list=(mvs[pp.id]||[]).concat(mvs[pp.name]||[]).sort((a,b)=>String(a.d).localeCompare(String(b.d)));
     if(list.length)list.forEach(r=>detP.push([dFR(r.d),r.m,r.q,r.o,r.x]));
     else detP.push(['—','Aucun mouvement sur la période','','','']);
-    detP.push([{v:'STOCK FINAL',__style:1},'Productions '+num(s2.made)+' · Ventes '+num(s2.sold)+(s2.adjust?' · Ajustements '+num2(s2.adjust):''),{v:num(s2.stock),__style:1},'unités','Valeur : '+money(Math.round(s2.stock*s2.price))]);
+    const prT=list.filter(r=>r.m==='Production').reduce((a,r)=>a+r.q,0);
+    const vtT=list.filter(r=>r.m==='Vente').reduce((a,r)=>a+r.q,0);
+    const ajT=list.filter(r=>r.m==='Ajustement').reduce((a,r)=>a+r.q,0);
+    const netP=prT+vtT+ajT;
+    detP.push([{v:'TOTAUX PÉRIODE',__style:1},{v:'Production +'+num(prT),__style:1},{v:'Ventes '+num(vtT),__style:1},{v:(ajT?'Ajust. '+(ajT>0?'+':'')+num2(ajT):''),__style:1},{v:'Net période : '+(netP>=0?'+':'')+num(netP),__style:1}]);
+    detP.push([{v:'STOCK FINAL (toutes périodes)',__style:1},{v:'Productions totales '+num(s2.made)},{v:'Ventes totales '+num(s2.sold)},{v:(s2.adjust?'Ajust. totaux '+num2(s2.adjust):'')},{v:num(s2.stock)+' unités · '+money(Math.round(s2.stock*s2.price))}]);
     detP.push([]);});
   const packSh=[['EMBALLAGES — STOCKS AU '+dFR(to)],[],
     ['ARTICLE','UNITÉ','ENTRÉES','SORTIES','STOCK','COÛT MOYEN','VALEUR']];
@@ -2978,7 +2983,10 @@ App.expStocks=async()=>{
     const list=pke.filter(e=>e.item_id===p.id);
     if(list.length)list.forEach(e=>detE.push([dFR(e.date),e.type==='in'?'Entrée':'Sortie',e.type==='in'?Number(e.qty):-Number(e.qty),Number(e.unit_cost||0),Number(e.amount||0),e.reason||'']));
     else detE.push(['—','Aucun mouvement sur la période','','','','']);
-    detE.push([{v:'STOCK FINAL',__style:1},'Entrées '+num2(p.in)+' · Sorties '+num2(p.out),{v:num2(p.stock),__style:1},'Coût moyen : '+money(p.cmp),'Valeur : '+money(p.value),'']);
+    const inT=list.filter(e=>e.type==='in').reduce((a,e)=>a+Number(e.qty||0),0);
+    const outT=list.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.qty||0),0);
+    detE.push([{v:'TOTAUX PÉRIODE',__style:1},{v:'Entrées +'+num2(inT),__style:1},{v:'Sorties −'+num2(outT),__style:1},{v:''},{v:'Net période : '+num2(inT-outT),__style:1},{v:''}]);
+    detE.push([{v:'STOCK FINAL (toutes périodes)',__style:1},{v:'Entrées totales '+num2(p.in)},{v:'Sorties totales '+num2(p.out)},{v:'Coût moyen '+money(p.cmp)},{v:num2(p.stock)+' '+p.unit+' · '+money(p.value)},{v:''}]);
     detE.push([]);});
   makeXlsx([
     {name:'Synthèse',rows:syn,widths:[28,14,14,14,10,40]},
@@ -3695,7 +3703,10 @@ function emailShell(title,body){const lg=(SETS.company||{}).logo;
   return '<html><head><meta charset="utf-8"><style>'+EMAILCSS+'</style></head><body>'+(lg?'<p style="text-align:center;margin:0 0 6px"><img src="'+lg+'" style="height:52px;object-fit:contain"></p>':'')+'<h2>'+(lg?'':'☕ ')+esc((SETS.company||{}).name||'FKS Industrie')+'</h2>'+body+'<p style="color:#999;font-size:11px">Généré automatiquement — '+esc((SETS.company||{}).name||'FKS Industrie')+' · Réalisé par Doregoservices · 07 17 57 95 56</p></body></html>';}
 async function buildDailyReport(D){
   const sales=(await DB.list('sales')).filter(s=>s.date===D);
-  const cash=(await DB.list('cash_entries')).filter(e=>e.date===D);
+  const cashAll=(await DB.list('cash_entries')).filter(e=>e.date===D);
+  const cash=cashAll.filter(e=>e.account!=='bank');
+  const bankIn=cashAll.filter(e=>e.account==='bank'&&e.type==='in').reduce((a,e)=>a+Number(e.amount||0),0);
+  const bankOut=cashAll.filter(e=>e.account==='bank'&&e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
   const st=await computeStats();
   const tot=sales.reduce((a,x)=>a+Number(x.total||0),0);
   const prodsD=await DB.list('products');const pmD={};prodsD.forEach(p=>{pmD[p.id]=p;pmD[p.name]=p;});
@@ -3736,7 +3747,8 @@ async function buildDailyReport(D){
     +'<h3>Caisse du jour</h3><table><tr><th></th><th style="text-align:right">Montant</th></tr>'
     +'<tr><td>Entrées</td><td style="text-align:right" class="ok">'+money(cashIn)+'</td></tr>'
     +'<tr><td>Sorties</td><td style="text-align:right" class="bad">'+money(cashOut)+'</td></tr></table>'
-    +'<p>Soldes en fin de journée — Espèces : <b>'+money(st.bal.cash)+'</b> · Mobile Money : <b>'+money(st.bal.momo)+'</b></p>');
+    +'<p>Soldes en fin de journée — Espèces : <b>'+money(st.bal.cash)+'</b> · Mobile Money : <b>'+money(st.bal.momo)+'</b></p>'
+    +((bankIn||bankOut)?'<p>🏦 Règlements par banque ce jour : '+(bankIn?'entrées '+money(bankIn):'')+(bankIn&&bankOut?' · ':'')+(bankOut?'sorties '+money(bankOut):'')+' — suivis à part (journal Banque), hors caisse.</p>':''));
   const shV=[['POINT DU '+dFR(D)],[],['COMMERCIALE','RÈGLEMENT','PRODUIT','QTÉ','P.U.','MONTANT','CLIENT']];
   sales.forEach(s2=>(s2.lines||[]).forEach(l=>shV.push([s2.agent_name,s2.pay_mode==='credit'?'Crédit':(s2.pay_mode==='momo'?'MoMo':'Espèces'),l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s2.client||''])));
   shV.push([{v:'TOTAL',__style:1},'','','','',{v:tot,__style:1},'']);
