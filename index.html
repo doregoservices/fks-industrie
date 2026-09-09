@@ -1338,7 +1338,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.25';
+const APP_VER='35.26';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3249,8 +3249,11 @@ App.resetAll=()=>confirmBox('Tout réinitialiser ?','Toutes les données locales
 
 /* ================= FORMULAIRES PUBLICS (par lien) ================= */
 function formShell(title,sub,inner,icon){
-  return '<div class="formpage"><div class="formhead"><div class="logo">'+(icon||'☕')+'</div><div><b>'+esc(title)+'</b><small>'+esc(sub||'CaféPro')+'</small></div></div><div class="formbody">'+inner+'</div></div>';
+  let obN=0;try{obN=JSON.parse(LS.get(OUTBOX)||'[]').length;}catch(e){}
+  const obB=obN?'<div class="alert al-warn" style="margin:0 0 12px">📤 <b>'+obN+' envoi'+(obN>1?'s':'')+' en attente</b> sur cet appareil <button class="btn sm" style="margin-left:8px" onclick="App.formResend()">Renvoyer maintenant</button></div>':'';
+  return '<div class="formpage"><div class="formhead"><div class="logo">'+(icon||'☕')+'</div><div><b>'+esc(title)+'</b><small>'+esc(sub||'CaféPro')+'</small></div></div><div class="formbody">'+obB+inner+'</div><div style="text-align:center;padding:12px;font-size:11px;opacity:.6">CaféPro '+APP_VER+'</div></div>';
 }
+App.formResend=async()=>{const n=await outboxFlush();toast(n>0?'✅ '+n+' envoi'+(n>1?'s':'')+' livré'+(n>1?'s':'')+' au gestionnaire':'Aucun envoi en attente',n>0?'ok':'bad');try{render();}catch(e){}};
 function formErr(msg){$('#app').innerHTML=formShell('Lien indisponible',msg,'<div class="stamp" style="border-color:var(--bad);background:var(--badbg)"><div class="big">🔒</div><b>'+esc(msg)+'</b><div class="help" style="margin-top:6px">Contactez le gestionnaire pour obtenir un nouveau lien.</div></div>','⚠️');}
 function formOK(msg,extra){$('#app').innerHTML=formShell('Enregistré !','Merci 😊','<div class="stamp"><div class="big">✅</div><b>'+msg+'</b>'+(extra?'<div class="help" style="margin-top:6px">'+extra+'</div>':'')+'</div><button class="btn blk" onclick="render()">Nouvelle saisie</button>','✅');}
 async function formSend(source_type,source_name,payload){
