@@ -1193,7 +1193,10 @@ function fld(label,inner){return '<label class="field"><span>'+label+'</span>'+i
 /* ================= FILE D'ATTENTE HORS-LIGNE (formulaires) ================= */
 function outboxPush(item){const a=JSON.parse(LS.get(OUTBOX)||'[]');a.push(item);LS.set(OUTBOX,JSON.stringify(a));}
 async function outboxFlush(){const a=JSON.parse(LS.get(OUTBOX)||'[]');if(!a.length)return 0;const rest=[];let sent=0;
-  for(const it of a){try{await DB.insert('pending_entries',Object.assign({id:uid(),status:'pending',created_at:nowISO()},it));sent++;}catch(e){rest.push(it);}}
+  for(const it of a){try{
+    if(DB&&DB._base===Supa){await Supa.req('pending_entries',null,'POST',[Object.assign({id:uid(),status:'pending',created_at:nowISO()},it)]);}
+    else{await DB.insert('pending_entries',Object.assign({id:uid(),status:'pending',created_at:nowISO()},it));}
+    sent++;}catch(e){rest.push(it);}}
   LS.set(OUTBOX,JSON.stringify(rest));
   if(sent>0){try{const d=document.createElement('div');d.style.cssText='position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:999;background:#2e7d32;color:#fff;padding:10px 18px;border-radius:14px;font-size:14px;font-weight:600;box-shadow:0 3px 10px rgba(0,0,0,.35)';d.textContent='✅ '+sent+' envoi'+(sent>1?'s':'')+' en attente livré'+(sent>1?'s':'')+' au gestionnaire';document.body.appendChild(d);setTimeout(()=>{try{d.remove();}catch(e){}},8000);}catch(e){}}
   return sent;}
@@ -1338,7 +1341,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.26';
+const APP_VER='35.27';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3259,7 +3262,11 @@ function formOK(msg,extra){$('#app').innerHTML=formShell('Enregistré !','Merci 
 async function formSend(source_type,source_name,payload){
   const rec={source_type:source_type,source_name:source_name,payload:payload};
   if(!navigator.onLine){outboxPush(rec);return{ok:true,offline:true};}
-  try{await DB.insert('pending_entries',Object.assign({status:'pending',created_at:nowISO()},rec));return{ok:true};}
+  const row=Object.assign({status:'pending',created_at:nowISO()},rec);
+  try{
+    if(DB&&DB._base===Supa){await Supa.req('pending_entries',null,'POST',[Object.assign({id:uid()},row)]);try{if(DB&&DB.bump)DB.bump();}catch(e2){}}
+    else await DB.insert('pending_entries',row);
+    return{ok:true};}
   catch(e){outboxPush(rec);return{ok:true,offline:true,refused:/row-level security|42501|violates/i.test(String((e&&e.message)||e))};}
 }
 async function scForm(token){
