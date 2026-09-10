@@ -26,6 +26,11 @@ global.requestAnimationFrame=f=>setTimeout(f,0);
 const _siShim=setInterval;global.setInterval=(fn,ms,...a)=>{const t=_siShim(fn,ms,...a);if(t&&t.unref)t.unref();return t;};
 // ---- eval unique app+tests ----
 const fs=require('fs');
+const _path=require('path');const _SRCHTML=_path.join(__dirname,'..','index.html');
+/* auto-réparation (v35.38) : si /tmp a été purgé, régénérer qr.js et app.js depuis index.html */
+if(!fs.existsSync('/tmp/qr.js')){try{const _h=fs.readFileSync(_SRCHTML,'utf8');const _m=_h.match(/<script>([\s\S]*?var qrcodegen;[\s\S]*?)<\/script>/);if(_m&&_m[1].indexOf('QrSegment')>=0)fs.writeFileSync('/tmp/qr.js',_m[1]);}catch(e){}}
+const _appf=process.argv[2]||'/tmp/app.js';
+if(!fs.existsSync(_appf)){try{const _h=fs.readFileSync(_SRCHTML,'utf8');const _b=_h.match(/<script>[\s\S]*?<\/script>/g)||[];if(_b.length>=2)fs.writeFileSync(_appf,_b[1].slice(8,-9));}catch(e){}}
 let src='';
 try{src+=fs.readFileSync('/tmp/qr.js','utf8').replace('"use strict";','').replace(/\n"use strict";/,'\n')+'\n';}catch(e){}
 src+=fs.readFileSync(process.argv[2]||'/tmp/app.js','utf8');
