@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.38';
+const APP_VER='35.39';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2474,8 +2474,9 @@ function computeSlip(emp,x,P){
   const transportExo=Math.min(transportPay,seuil);
   const taxable=Math.max(0,brutAP);
   const itsGross=irppCalc(taxable,P.its_brackets);
-  const demi=Number(emp.tax_shares!=null?emp.tax_shares:2)||0;
-  const ricfRaw=Math.min((Number(P.ricf_par_demi_part)||0)*demi,Number(P.ricf_plafond)||0);
+  const partsF=Math.min(5,Math.max(1,Number(emp.tax_shares!=null?emp.tax_shares:2)||1));
+  const nbDemi=Math.max(0,Math.round((partsF-1)*2));
+  const ricfRaw=Math.min((Number(P.ricf_par_demi_part)||0)*nbDemi,Number(P.ricf_plafond)||0);
   const ricf=itsGross>0?ricfRaw:0;
   const its=Math.max(0,itsGross-ricf);
   const net=brutAP+transportPay+primesNonTax-cnps-cmu-its-other-adv;
@@ -2510,10 +2511,10 @@ async function paieEmpTab(){
   const emps=all.filter(e=>e.active!==false);
   const arch=all.filter(e=>e.active===false);
   return '<div class="help" style="margin-bottom:10px">Salaire de base (sans primes) + primes récurrentes. Tout est modifiable (✎). Les éléments ponctuels (absences, heures sup, primes du mois) se saisissent lors de la paie.</div>'
-  +'<button class="btn sm" style="margin-bottom:10px" onclick="App.empForm()">+ Ajouter un employé</button>'
-  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Poste</th><th>Type</th><th>Zone</th><th class="r">Base</th><th class="r">Primes</th><th class="r">Coût CNPS empl.</th><th></th></tr></thead><tbody>'
+  +'<div class="row" style="align-items:center;gap:8px;margin-bottom:10px"><input id="pqS" placeholder="🔍 Rechercher un employé (nom, poste, matricule)…" oninput="App.empFilter(this.value)" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #e5d9c9;border-radius:10px;font-size:14px;background:#fff"><span class="mut" id="pqC" style="font-size:12px;white-space:nowrap"></span><button class="btn sm" onclick="App.empForm()">+ Ajouter un employé</button></div>'
+  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Poste</th><th>Type</th><th>Zone</th><th class="r">Base</th><th class="r">Primes</th><th class="r">Coût CNPS empl.</th><th></th></tr></thead><tbody id="empsB">'
   +emps.map(e=>{const base=Number(e.base_salary||0);const prim=Number(e.transport||0)+Number(e.housing||0);const sl=computeSlip(e,{});
-    return '<tr><td><b>'+esc(e.name)+'</b>'+(e.matricule?'<div class="mut" style="font-size:10.5px">'+esc(e.matricule)+'</div>':'')+'</td><td>'+esc(e.position||'')+'</td><td>'+(e.salary_type==='daily'?'Journalier':'Mensuel')+'</td><td>'+(e.zone==='bouake'?'Bouaké':e.zone==='autres'?'Autres':'Abidjan')+'</td>'
+    return '<tr data-s="'+esc(((e.name||'')+' '+(e.position||'')+' '+(e.matricule||'')).trim())+'"><td><b>'+esc(e.name)+'</b>'+(e.matricule?'<div class="mut" style="font-size:10.5px">'+esc(e.matricule)+'</div>':'')+'</td><td>'+esc(e.position||'')+'</td><td>'+(e.salary_type==='daily'?'Journalier':'Mensuel')+'</td><td>'+(e.zone==='bouake'?'Bouaké':e.zone==='autres'?'Autres':'Abidjan')+'</td>'
     +'<td class="r">'+money(base)+(e.salary_type==='daily'?'/j':'')+'</td><td class="r">'+money(prim)+'</td><td class="r">'+money(sl.cout_employeur||0)+'</td>'
     +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.empForm(\''+e.id+'\')">✎ Modifier</button> <button class="btn sm sec" onclick="App.empArchive(\''+e.id+'\')">🗂 Archiver</button></td></tr>';}).join('')
   +'</tbody></table></div>'
@@ -2538,9 +2539,9 @@ App.empForm=async id=>{let e={name:'',position:'',phone:'',hire_date:todayISO(),
     +'<option value="abidjan"'+(e.zone==='abidjan'||!e.zone?' selected':'')+'>Abidjan — exo jusqu à 30 000 F</option>'
     +'<option value="bouake"'+(e.zone==='bouake'?' selected':'')+'>Bouaké — exo jusqu à 24 000 F</option>'
     +'<option value="autres"'+(e.zone==='autres'?' selected':'')+'>Autres villes — exo jusqu à 20 000 F</option></select>')
-    +fld('Demi-parts fiscales (réduction ITS/RICF)','<input id="eSh" type="number" inputmode="numeric" step="0.5" value="'+(e.tax_shares!=null?e.tax_shares:2)+'">')+'</div>',
+    +fld('Parts fiscales (barème RICF officiel)',(function(){const rpp=Number(SETS.payroll.ricf_par_demi_part)||5500;const cur=Math.min(5,Math.max(1,Number(e.tax_shares!=null?e.tax_shares:2)||2));return '<select id="eSh">'+[1,1.5,2,2.5,3,3.5,4,4.5,5].map(v=>'<option value="'+v+'"'+(Math.abs(cur-v)<0.01?' selected':'')+'>'+String(v).replace('.',',')+(v===1?' part':(v===5?' parts (maximum)':' parts'))+' — RICF '+money(Math.round(rpp*Math.max(0,(v-1)*2)))+' F/mois</option>').join('')+'</select>';})())+'</div>',
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.empSave(\''+(id||'')+'\')">Enregistrer</button>');};
-App.empSave=async id=>{const rec={name:$('#eN').value.trim(),position:$('#eP').value.trim(),phone:$('#eT').value.trim(),matricule:($('#eM')||{value:''}).value.trim(),hire_date:$('#eH').value,salary_type:$('#eS').value,base_salary:Number($('#eB').value)||0,transport:Number($('#eTr').value)||0,housing:Number($('#eHo').value)||0,tax_shares:Number($('#eSh').value)||0,zone:$('#eZ').value||'abidjan',primes:(SETS.payroll.primes||[]).filter(p=>($('#ePr_'+p.id)||{}).checked).map(p=>p.id)};
+App.empSave=async id=>{const rec={name:$('#eN').value.trim(),position:$('#eP').value.trim(),phone:$('#eT').value.trim(),matricule:($('#eM')||{value:''}).value.trim(),hire_date:$('#eH').value,salary_type:$('#eS').value,base_salary:Number($('#eB').value)||0,transport:Number($('#eTr').value)||0,housing:Number($('#eHo').value)||0,tax_shares:Number($('#eSh').value)||2,zone:$('#eZ').value||'abidjan',primes:(SETS.payroll.primes||[]).filter(p=>($('#ePr_'+p.id)||{}).checked).map(p=>p.id)};
   if(!rec.name)return toast('Nom obligatoire','bad');
   if(rec.matricule){const dup=(await DB.list('employees')).filter(x=>x.matricule===rec.matricule&&x.id!==id&&x.active!==false);if(dup.length)return toast('Matricule déjà utilisé par '+dup[0].name,'bad');}
   if(id)await DB.update('employees',id,rec);else await DB.insert('employees',Object.assign(rec,{active:true}));
@@ -2583,7 +2584,7 @@ async function paieRunTab(){
   const period=S.payPeriod||monthISO();
   const run=runs.filter(r=>r.period===period)[0];
   const P=SETS.payroll;
-  let html='<div class="alert al-info">Taux Côte d\'Ivoire (réforme ITS 2024) — CNPS retraite '+P.cnps_retraite_e+'% salarié / '+P.cnps_retraite_er+'% patronal · CMU '+money(P.cmu_forfait)+'/mois · ITS 0% ≤ 75 000 F puis 16/21/24/28/32 % · RICF '+money(P.ricf_par_demi_part)+'/demi-part. Modifiables dans les <a href="#/parametres">Réglages</a>.</div>'
+  let html='<div class="alert al-info">Taux Côte d\'Ivoire (réforme ITS 2024) — CNPS retraite '+P.cnps_retraite_e+'% salarié / '+P.cnps_retraite_er+'% patronal · CMU '+money(P.cmu_forfait)+'/mois · ITS 0% ≤ 75 000 F puis 16/21/24/28/32 % · RICF '+money(P.ricf_par_demi_part)+' F par ½ part au-delà de la 1re (1 part : 0 F · 2 parts : 11 000 F · max 5 parts : 44 000 F). Modifiables dans les <a href="#/parametres">Réglages</a>.</div>'
   +'<div class="row" style="align-items:flex-end">'+fld('Mois de paie','<input type="month" value="'+period+'" onchange="S.payPeriod=this.value;render()">')
   +'<div class="field"><span>&nbsp;</span><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sm sec" onclick="App.primesModal()">🏷️ Primes &amp; rubriques</button><button class="btn sm sec" onclick="App.livrePaie()">📗 Livre de paie</button></div></div></div>';
   if(!run){
@@ -2634,7 +2635,7 @@ App.primesModal=()=>{
    '<div class="help">Ces rubriques sajoutent aux bulletins de tous les employés (montant modifiable au moment de la paie). « % du salaire de base » calcule automatiquement.</div>'
    +(pr.length?'<div class="tblwrap"><table class="tbl"><thead><tr><th>Rubrique</th><th>Calcul</th><th class="r">Valeur</th><th>Fiscale</th><th></th></tr></thead><tbody>'
     +pr.map((p,i)=>'<tr><td><b>'+esc(p.name)+'</b></td><td>'+(p.mode==='pct'?'% du salaire de base':'Montant fixe')+'</td><td class="r">'+(p.mode==='pct'?p.value+' %':money(p.value))+'</td><td>'+(p.taxable!==false?'Taxable':'<b style="color:var(--ok)">Non taxable</b>')+'</td>'
-     +'<td><button class="btn sm sec" onclick="App.primeDel('+i+')">✕</button></td></tr>').join('')+'</tbody></table></div>':'<div class="help">Aucune rubrique pour le moment.</div>')
+     +'<td style="white-space:nowrap"><button class="btn sm sec" onclick="App.primeEdit('+i+')">✎ Modifier</button> <button class="btn sm sec" onclick="App.primeDel('+i+')">✕</button></td></tr>').join('')+'</tbody></table></div>':'<div class="help">Aucune rubrique pour le moment.</div>')
    +'<div class="hr"></div><h3>Nouvelle rubrique</h3>'
    +'<div class="row">'+fld('Nom','<input id="prN" placeholder="ex : Prime de rendement">')+fld('Calcul','<select id="prM"><option value="fixed">Montant fixe (FCFA)</option><option value="pct">% du salaire de base</option></select>')+'</div>'
    +'<div class="row">'+fld('Valeur','<input id="prV" type="number" inputmode="decimal" placeholder="montant ou %">'+''+'</input>')+fld('Imposable','<select id="prT"><option value="yes">Taxable (ITS)</option><option value="no">Non taxable</option></select>')+'</div>'
@@ -2649,6 +2650,22 @@ App.primeAdd=async()=>{const nm=$('#prN').value.trim();const v=Number($('#prV').
   await setSetting('payroll',P);toast('Rubrique « '+nm+' » ajoutée — elle apparaîtra à la prochaine paie','ok');App.primesModal();};
 App.primeDel=async i=>{const P=SETS.payroll;P.primes=(P.primes||[]);P.primes.splice(i,1);
   await setSetting('payroll',P);toast('Rubrique supprimée','ok');App.primesModal();};
+App.primeEdit=i=>{const p=(SETS.payroll.primes||[])[i];if(!p)return;
+  modal('✎ Modifier la rubrique',
+   '<div class="help">La modification s’applique aux prochaines paies — les bulletins déjà générés restent inchangés.</div>'
+   +'<div class="row">'+fld('Nom','<input id="prN">')+fld('Calcul','<select id="prM"><option value="fixed">Montant fixe (FCFA)</option><option value="pct">% du salaire de base</option></select>')+'</div>'
+   +'<div class="row">'+fld('Valeur','<input id="prV" type="number" inputmode="decimal">')+fld('Imposable','<select id="prT"><option value="yes">Taxable (ITS)</option><option value="no">Non taxable</option></select>')+'</div>',
+   '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.primeEditSave('+i+')">💾 Enregistrer</button>');
+  $('#prN').value=p.name||'';$('#prV').value=Number(p.value||0);
+  $('#prM').value=p.mode==='pct'?'pct':'fixed';$('#prT').value=p.taxable===false?'no':'yes';};
+App.primeEditSave=async i=>{const nm=$('#prN').value.trim();const v=Number($('#prV').value)||0;
+  if(!nm||v<=0)return toast('Nom et valeur obligatoires','bad');
+  const P=SETS.payroll;P.primes=P.primes||[];const old=P.primes[i];if(!old)return toast('Rubrique introuvable','bad');
+  P.primes[i]={id:old.id,name:nm,mode:$('#prM').value,value:v,taxable:$('#prT').value==='yes'};
+  await setSetting('payroll',P);toast('Rubrique « '+nm+' » modifiée','ok');App.primesModal();};
+App.empFilter=q=>{q=String(q||'').toLowerCase().trim();const tb=document.getElementById('empsB');if(!tb||!tb.rows)return;let n=0;
+  for(let i=0;i<tb.rows.length;i++){const r=tb.rows[i];const ok=!q||String(r.getAttribute('data-s')||'').toLowerCase().indexOf(q)>=0;if(r.style)r.style.display=ok?'':'none';if(ok)n++;}
+  const c=document.getElementById('pqC');if(c)c.textContent=q?n+' trouvé(s)':'';};
 App.exoSave=async()=>{const P=SETS.payroll;P.transport_exo={abidjan:Number($('#exA').value)||30000,bouake:Number($('#exB').value)||24000,autres:Number($('#exC').value)||20000};
   await setSetting('payroll',P);toast('Seuils d exonération enregistrés','ok');};
 App.livrePaie=()=>{
@@ -2755,6 +2772,7 @@ async function scBulletin(){
   if(Number(s.advances))ret.push(['Avances sur salaire',Number(s.advances)]);
   const totRet=Math.round(its+Number(s.cnps||0)+Number(s.cmu||0)+Number(s.other||0)+Number(s.advances||0));
   const itsG=s.its_gross!=null?Number(s.its_gross):its;const ricfV=Number(s.ricf)||0;
+  const pF=Math.min(5,Math.max(1,Number(emp.tax_shares!=null?emp.tax_shares:2)||2));const partsLbl=String(pF).replace('.',',')+(pF===1?' part':' parts');
   /* 3 · RUBRIQUES NON IMPOSABLES : versées en plus, après les retenues */
   const ni=[];
   if(Number(s.transport)){const trF=Number(s.transport_full||emp.transport||0);const trP=Number(s.transport);
@@ -2776,7 +2794,7 @@ async function scBulletin(){
   +'<div style="flex:2;min-width:170px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Salarié</div><b style="font-size:13.5px">'+esc(s.employee_name)+'</b><div style="font-size:11.5px;color:#888">'+esc(s.position||'')+'</div></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Matricule</div><b style="font-size:13.5px">'+esc(s.matricule||emp.matricule||String(s.employee_id||'').slice(0,8))+'</b></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Zone</div><b style="font-size:13.5px">'+zlb+'</b></div>'
-  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Parts fiscales</div><b style="font-size:13.5px">'+(Number(emp.tax_shares)||2)+'</b></div>'
+  +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Parts fiscales</div><b style="font-size:13.5px">'+partsLbl+'</b></div>'
   +'<div style="flex:1;min-width:95px;background:#faf7f2;border:1px solid #eee;border-radius:8px;padding:7px 10px"><div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:#a08c76">Période</div><b style="font-size:13.5px">'+monthLabel(s.run_period)+'</b></div></div>'
   /* — corps : un seul tableau, trois sections dans l'ordre demandé — */
   +'<table class="tbl" style="border:1px solid #e5dbc9">'
@@ -2791,7 +2809,7 @@ async function scBulletin(){
   +line('NET À PAYER','<b style="font-size:17px">'+money(s.net)+'</b>','border-top:2px solid #5a4030;background:#e8f5e9;font-size:15px;color:#1e8449')
   +line('<span style="font-size:11px;color:#888;font-style:italic">Brut imposable '+money(s.brut_ap)+' − retenues '+money(totRet)+' + non imposables '+money(totNI)+'</span>','<span style="font-size:11px;color:#888;font-style:italic">= '+money(s.net)+'</span>','background:#e8f5e9')
   +'</table>'
-  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable fiscal : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' (le transport et les rubriques non taxables en sont exclus). Base CNPS : '+money(s.cnps_base)+'.'+(ricfV?' RICF : '+money(ricfV)+' ('+Number(emp.tax_shares!=null?emp.tax_shares:2)+' demi-parts).':'')+'</div>'
+  +'<div class="mut" style="font-size:11px;margin:8px 0">Imposable fiscal : '+money(s.taxable!=null?s.taxable:s.brut_ap)+' (le transport et les rubriques non taxables en sont exclus). Base CNPS : '+money(s.cnps_base)+'.'+(ricfV?' RICF : '+money(ricfV)+' ('+partsLbl+' — réduction pour charges de famille).':'')+'</div>'
   /* — charges patronales (information) — */
   +'<table class="tbl" style="font-size:12px"><thead><tr><th style="background:#f4f0e8;color:#8a7659;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase">Pour information — charges patronales (à la charge de l\'employeur)</th><th class="r" style="background:#f4f0e8"></th></tr></thead><tbody>'
   +'<tr><td>CNPS retraite patronale '+P.cnps_retraite_er+' %</td><td class="r">'+money(s.cnps_er||0)+'</td></tr>'
@@ -3295,7 +3313,7 @@ async function scParametres(){
   +fld('Maternité %','<input id="pyM" type="number" inputmode="numeric" step="0.01" value="'+P.mat_rate+'">')+fld('Acc. travail %','<input id="pyA" type="number" inputmode="numeric" step="0.01" value="'+P.at_rate+'">')+fld('Plafond MAT/AT (F)','<input id="pyAp" type="number" inputmode="numeric" value="'+P.at_plafond+'">')
   +'</div><div class="row">'
   +fld('CMU forfait/mois (F)','<input id="pyCmu" type="number" inputmode="numeric" value="'+P.cmu_forfait+'">')+fld('FDFP TA %','<input id="pyTa" type="number" inputmode="numeric" step="0.01" value="'+P.fdfp_ta+'">')+fld('FDFP TFPC %','<input id="pyTf" type="number" inputmode="numeric" step="0.01" value="'+P.fdfp_tfpc+'">')
-  +fld('ITS employeur % (du salaire brut — défaut 1,2)','<input id="pyIts" type="number" inputmode="numeric" step="0.01" value="'+(P.its_er_rate!=null?P.its_er_rate:1.2)+'">')+fld('RICF / demi-part (F)','<input id="pyRi" type="number" inputmode="numeric" value="'+P.ricf_par_demi_part+'">')+fld('Plafond RICF (F)','<input id="pyRp" type="number" inputmode="numeric" value="'+P.ricf_plafond+'">')
+  +fld('ITS employeur % (du salaire brut — défaut 1,2)','<input id="pyIts" type="number" inputmode="numeric" step="0.01" value="'+(P.its_er_rate!=null?P.its_er_rate:1.2)+'">')+fld('RICF par ½ part au-delà de la 1re (F)','<input id="pyRi" type="number" inputmode="numeric" value="'+P.ricf_par_demi_part+'">')+fld('Plafond RICF (F — maximum 5 parts)','<input id="pyRp" type="number" inputmode="numeric" value="'+P.ricf_plafond+'">')
   +'</div>'
   +'<div class="field"><span>Barème ITS mensuel (sur le brut — jusqu\'à… / taux %)</span><div id="pyBr">'
   +P.its_brackets.map((b,i)=>'<div class="row" style="margin-bottom:6px">'+fld('Jusqu\'à (FCFA)','<input type="number" inputmode="numeric" data-bi="'+i+'" data-bf="up" value="'+(b.upTo==null?'':b.upTo)+'" placeholder="∞">')+fld('Taux (%)','<input type="number" inputmode="numeric" step="0.01" data-bi="'+i+'" data-bf="rate" value="'+b.rate+'">')+'</div>').join('')+'</div></div>'
