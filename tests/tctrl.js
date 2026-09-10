@@ -36,8 +36,8 @@ console.log('✓ Rubriques attribuées par employé : e1 reçoit uniquement Prim
 
 /* 2. livre : IMPOSSIBLE avant génération (période sans bulletins) */
 let dlName=null;const _dl=download;download=(n,b)=>{dlName=n;};
-$('#main').innerHTML='<input id="lvEnd"><input id="lvN">';
-$('#lvEnd').value='2024-12';$('#lvN').value='1';
+$('#main').innerHTML='<input id="lvEnd"><input id="lvN"><input id="lvT">';
+$('#lvT').value='c';$('#lvEnd').value='2024-12';$('#lvN').value='1';
 const sp2=spy();
 await App.livreGo();
 sp2.un();
@@ -46,7 +46,7 @@ if(!sp2.m.join(' ').includes('Aucun bulletin'))throw new Error('message de bloca
 console.log('✓ Livre de paie : refusé tant que les bulletins du mois ne sont pas générés');
 
 /* 3. livre : 1 mois puis 12 mois */
-$('#lvEnd').value=per;$('#lvN').value='1';
+$('#lvT').value='c';$('#lvEnd').value=per;$('#lvN').value='1';
 await App.livreGo();
 if(!dlName||dlName.indexOf(per)<0)throw new Error('livre 1 mois non produit');
 const n1=dlName;dlName=null;
