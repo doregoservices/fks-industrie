@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.36';
+const APP_VER='35.37';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1789,9 +1789,13 @@ App.achatSave=async id=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT
 
 /* ================= PRODUCTION ================= */
 async function scApropos(){
-  $('#main').innerHTML='<div class="card" style="max-width:620px;margin:0 auto"><h2>🛟 Support &amp; À propos</h2>'
+  $('#main').innerHTML='<div class="card" style="max-width:680px;margin:0 auto"><h2>🛟 Support &amp; À propos</h2>'
   +'<div class="help" style="margin-bottom:10px">📦 <b>CaféPro version '+APP_VER+'</b> — pour toute demande, indiquez cette version.</div>'
-  +'<div class="help" style="margin-bottom:10px">📦 <b>CaféPro version '+APP_VER+'</b> — pour toute demande, indiquez cette version.</div>'
+  +'<h3 style="margin:14px 0 4px">📘 Guides d\'utilisation</h3>'
+  +'<div class="row" style="gap:10px">'
+  +'<div class="field" style="flex:1;min-width:240px"><span>Tous les onglets</span><a class="btn" style="display:block;text-align:center;text-decoration:none" href="guide.html" target="_blank" rel="noopener">📖 Guide d\'utilisation complet</a><div class="mut" style="margin-top:4px">Chaque onglet expliqué simplement : Accueil, Ventes, Production, Caisse, Paie, Exploitation…</div></div>'
+  +'<div class="field" style="flex:1;min-width:240px"><span>La comptabilité</span><a class="btn sec" style="display:block;text-align:center;text-decoration:none" href="explique-exploitation.html" target="_blank" rel="noopener">📈 L\'exploitation expliquée</a><div class="mut" style="margin-top:4px">Comment CaféPro calcule ce que l\'usine gagne vraiment chaque mois.</div></div>'
+  +'</div>'
   +'<div style="display:flex;align-items:center;gap:16px;margin:16px 0"><img src="'+DORLOGO+'" alt="Doregoservices" style="height:72px;border-radius:14px"><div><div style="font-size:17px;font-weight:800">Doregoservices</div><div class="mut">Conception, déploiement et maintenance de l\'application</div></div></div>'
   +'<div class="row">'
   +'<div class="field" style="flex:1"><span>Téléphone / WhatsApp</span><a href="tel:+22507175795" style="font-size:18px;font-weight:700;color:var(--pri);text-decoration:none">📞 07 17 57 95 56</a></div>'
