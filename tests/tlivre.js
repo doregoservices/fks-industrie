@@ -3,6 +3,8 @@
 await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
 /* générer la paie du mois courant */
 location.hash='#/paie';S.route='paie';S.tab={paie:'run'};await render();
+/* 0 · barre de recherche présente AVANT génération (vue de saisie) */
+if(!$('#pqG'))throw new Error('barre de recherche absente de la vue de génération (avant bulletins)');
 await App.runGen(monthISO());
 await render();
 /* 1 · barre de recherche des bulletins (Paie du mois) */
@@ -43,7 +45,20 @@ await App.livreGo();
 if(!cap||!cap.n)throw new Error('téléchargement mensuel non déclenché');
 if(cap.n!=='livre-de-paie-'+monthISO()+'.xlsx')throw new Error('période mensuelle incorrecte : '+cap.n);
 download=_dl;
-console.log('✓ Recherche : employés (v35.39) + bulletins du mois + avances — toute la Paie est filtrable');
+/* 6 · grand livre PDF TRANSPOSÉ : rubriques en lignes (longueur A4), employés en colonnes (largeur), pagination */
+App.livrePaie();
+$('#lvT').value='m';$('#lvEnd').value=monthISO();
+await App.livrePrint();
+const ph=$('#main').innerHTML;
+if(ph.indexOf('RUBRIQUE')<0)throw new Error('livre PDF : colonne RUBRIQUE absente (transposition)');
+if(ph.indexOf('A4 portrait')<0)throw new Error('livre PDF : format A4 portrait non déclaré');
+if(ph.indexOf('lvpage')<0)throw new Error('livre PDF : pagination (lvpage) absente');
+if(ph.indexOf('NET À PAYER')<0)throw new Error('livre PDF : ligne NET À PAYER absente');
+if(ph.indexOf('>TOTAL<')<0)throw new Error('livre PDF : colonne TOTAL absente');
+if(ph.indexOf('>'+slips[0].employee_name+'<')<0)throw new Error('livre PDF : nom attendu en en-tête de colonne : '+slips[0].employee_name);
+if(ph.split('lvpage').length-1<2)throw new Error('structure de pages attendue');
+console.log('✓ Grand livre PDF TRANSPOSÉ : rubriques sur la longueur A4, un employé par colonne, colonne TOTAL, suite sur page suivante');
+console.log('✓ Recherche : employés (v35.39) + GÉNÉRATION (v35.42) + bulletins + avances — toute la Paie est filtrable');
 console.log('✓ Tous les bulletins : écran dédié un-par-page avec « Tout imprimer / Enregistrer en PDF » ('+slips.length+' bulletins)');
 console.log('✓ Bulletin individuel (👁) toujours fonctionnel après refactorisation');
 console.log('✓ Grand livre périodique : Mensuel / Trimestriel T1–T4 / Annuel / Personnalisé — '+cap.n);

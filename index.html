@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.41';
+const APP_VER='35.42';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2603,9 +2603,10 @@ async function paieRunTab(){
     const advs=await DB.list('advances');
     let KG={};try{(await agentMonthStats(period)).rows.forEach(r=>{if(r.kg>0)KG[String(r.n||'').trim().toLowerCase()]=r.kg;});}catch(e){}
     html+='<div class="help" style="margin:10px 0">Complétez les éléments du mois (facultatif) puis générez les bulletins.<br>📖 <b>Absences</b> : chaque jour absent retire <b>salaire de base ÷ '+(Number(P.day_basis)||30)+'</b> (base mensuelle). Ex. : base 150 000 F + 2 jours d absence → retenue 150 000 ÷ '+(Number(P.day_basis)||30)+' × 2 = '+money(Math.round(150000*2/(Number(P.day_basis)||30)))+'. Les primes ne sont pas réduites par les absences (à ajuster manuellement si besoin). Les journaliers sont payés sur les jours travaillés.</div>'
-    +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Employé</th><th class="r">Base</th><th class="r">J. absents</th><th class="r">J. travaillés <small>(journaliers)</small></th><th class="r">H. supp.</th><th class="r">Prime</th><th class="r">Autre retenue</th>'+(P.primes||[]).map(pr=>'<th class="r">'+esc(pr.name)+'<div class="mut" style="font-size:10px">'+(pr.auto==='kg'?'kg × '+Number(pr.kgRate||25)+' F · ':'')+(pr.net?'<b style="color:var(--ok)">AU NET</b> · ':'')+(pr.taxable!==false?'taxable':'non taxable')+'</div></th>').join('')+'<th class="r">Avances</th></tr></thead><tbody>'
+    +'<div class="row" style="align-items:center;gap:8px;margin-bottom:10px"><input id="pqG" placeholder="🔍 Rechercher un employé (nom, poste)…" oninput="App.tblFilter(this.value,\'genB\',\'ggC\')" style="flex:1;min-width:200px;padding:9px 12px;border:1px solid #e5d9c9;border-radius:10px;font-size:14px;background:#fff"><span class="mut" id="ggC" style="font-size:12px;white-space:nowrap"></span></div>'
+    +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Employé</th><th class="r">Base</th><th class="r">J. absents</th><th class="r">J. travaillés <small>(journaliers)</small></th><th class="r">H. supp.</th><th class="r">Prime</th><th class="r">Autre retenue</th>'+(P.primes||[]).map(pr=>'<th class="r">'+esc(pr.name)+'<div class="mut" style="font-size:10px">'+(pr.auto==='kg'?'kg × '+Number(pr.kgRate||25)+' F · ':'')+(pr.net?'<b style="color:var(--ok)">AU NET</b> · ':'')+(pr.taxable!==false?'taxable':'non taxable')+'</div></th>').join('')+'<th class="r">Avances</th></tr></thead><tbody id="genB">'
     +emps.map(e=>{const adv=advs.filter(a=>!a.run_id&&a.employee_id===e.id).reduce((s,a)=>s+Number(a.amount||0),0);
-      return '<tr><td><b>'+esc(e.name)+'</b><div class="mut" style="font-size:11px">'+esc(e.position||'')+'</div></td>'
+      return '<tr data-s="'+esc(((e.name||'')+' '+(e.position||'')).trim())+'"><td><b>'+esc(e.name)+'</b><div class="mut" style="font-size:11px">'+esc(e.position||'')+'</div></td>'
       +'<td class="r">'+money(e.base_salary)+(e.salary_type==='daily'?'/j':'')+'</td>'
       +'<td class="r"><input style="width:64px;text-align:right" type="number" inputmode="numeric" min="0" value="0" id="x_abs_'+e.id+'"></td>'
       +'<td class="r"><input style="width:64px;text-align:right" type="number" inputmode="numeric" min="0" value="'+(e.salary_type==='daily'?'24':'0')+'" id="x_days_'+e.id+'"'+(e.salary_type==='daily'?'':' disabled')+'></td>'
@@ -2727,7 +2728,7 @@ async function livreData(end,n){
   const zl=id=>{const z=(emps.filter(x=>x.id===id)[0]||{}).zone;return z==='bouake'?'Bouaké':z==='autres'?'Autres villes':'Abidjan';};
   const all=[];
   for(const r of runs){const slips=await DB.list('pay_slips',{eq:{run_id:r.id}});
-    slips.forEach(x=>all.push({p:r.period,x:x}));}
+    slips.forEach(x=>all.push({p:r.period,x:x,z:zl(x.employee_id)}));}
   const head=(n>1?['MOIS']:[]).concat(['NOM','POSTE','ZONE','SALAIRE BASE (hors primes)','TRANSPORT','LOGEMENT']).concat(pr.map(p=>p.name.toUpperCase())).concat(['BRUT','CNPS','CMU','IMPOSABLE','RICF','ITS','AUTRES RET.','AVANCES','NET À PAYER','COÛT EMPLOY.']);
   const rows=all.map(({p,x})=>(n>1?[p.slice(5)+'/'+p.slice(0,4)]:[]).concat([x.employee_name,x.position||'',zl(x.employee_id),x.base,x.transport||0,x.housing||0])
     .concat(pr.map(c=>((x.primes||[]).filter(y=>y.id===c.id)[0]||{}).amount||0))
@@ -2757,12 +2758,37 @@ App.livrePrint=async()=>{
   closeModal();
   const n=sp.n,end=sp.end,start=D.start;
   const lbl=n>1?monthLabel(start)+' → '+monthLabel(end):monthLabel(end);
-  $('#main').innerHTML='<div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0"><b style="align-self:center">📗 Grand livre de paie — '+lbl+'</b><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button><button class="btn sec" onclick="render()">← Retour à la paie</button></div>'
-  +'<div class="card"><h2>📗 Grand livre de paie</h2><div class="mut" style="margin-bottom:8px">'+esc((SETS.company||{}).name||'FKS Industrie')+' · '+lbl+' · '+D.all.length+' bulletin(s) — montants en FCFA</div>'
-  +'<div class="tblwrap"><table class="tbl" style="font-size:11px"><thead><tr>'+D.head.map(h=>'<th>'+esc(String(h))+'</th>').join('')+'</tr></thead><tbody>'
-  +D.rows.map(r=>'<tr>'+r.map(v=>'<td'+(typeof v==='number'?' class="r"':'')+'>'+(typeof v==='number'?money(v):esc(String(v)))+'</td>').join('')+'</tr>').join('')
-  +'</tbody><tfoot><tr class="tot">'+D.tot.map(v=>'<td'+(typeof v==='number'?' class="r"':'')+'>'+(typeof v==='number'?money(v):esc(String(v)))+'</td>').join('')+'</tr></tfoot></table></div>'
-  +'<div class="mut" style="font-size:10.5px;text-align:center;margin-top:8px">Réalisé par Doregoservices · 07 17 57 95 56</div></div>';};
+  const pr=D.pr||[];
+  const months={};D.all.forEach(e=>{(months[e.p]=months[e.p]||[]).push(e);});
+  const mkeys=Object.keys(months).sort();
+  const RUB=[['Poste',e=>e.x.position||''],['Zone',e=>e.z||''],['Matricule',e=>e.x.matricule||'—'],
+    ['Salaire de base',e=>Number(e.x.base)||0],['Transport',e=>Number(e.x.transport)||0],['Logement',e=>Number(e.x.housing)||0]]
+    .concat(pr.map(c=>[c.name,e=>Number((((e.x.primes||[]).filter(y=>y.id===c.id)[0])||{}).amount)||0]))
+    .concat([['Prime exceptionnelle',e=>Number(e.x.bonus)||0],
+    ['BRUT',e=>Number(e.x.brut_ap)||0,1],['CNPS',e=>Number(e.x.cnps)||0],['CMU',e=>Number(e.x.cmu)||0],
+    ['Imposable',e=>Number(e.x.taxable!=null?e.x.taxable:e.x.brut_ap)||0],['RICF',e=>Number(e.x.ricf)||0],
+    ['ITS',e=>Number(e.x.its!=null?e.x.its:e.x.irpp)||0],['Autres retenues',e=>Number(e.x.other)||0],
+    ['Avances',e=>Number(e.x.advances)||0],['NET À PAYER',e=>Number(e.x.net)||0,2],['Coût employeur',e=>Number(e.x.cout_employeur)||Number(e.x.brut_ap)||0,3]]);
+  const CHUNK=5;let pages='';let last=false;
+  mkeys.forEach(mk=>{const list=months[mk];
+    for(let off=0;off<list.length;off+=CHUNK){const chunk=list.slice(off,off+CHUNK);
+      last=(mk===mkeys[mkeys.length-1])&&(off+CHUNK>=list.length);
+      pages+='<div class="lvpage'+(last?' last':'')+'" style="background:#fff;border-radius:10px;padding:12px;margin:10px 0;box-shadow:0 1px 4px rgba(0,0,0,.08)">'
+        +'<div style="font-weight:900;font-size:15px;color:#5a4030">📗 GRAND LIVRE DE PAIE — '+monthLabel(mk)+'</div>'
+        +'<div class="mut" style="font-size:10.5px;margin:2px 0 8px">'+esc((SETS.company||{}).name||'FKS Industrie')+' · '+monthLabel(mk)+' · '+list.length+' bulletin(s) — montants en FCFA'+(chunk.length<list.length?' · suite page '+(off/CHUNK+1):'')+'</div>'
+        +'<div class="tblwrap"><table class="tbl" style="font-size:10px;table-layout:fixed;width:100%"><thead><tr><th style="width:92px;text-align:left">RUBRIQUE</th>'
+        +chunk.map(e=>'<th style="word-wrap:break-word;overflow-wrap:break-word">'+esc(e.x.employee_name)+'</th>').join('')
+        +'<th style="background:#5a4030;color:#fff">TOTAL</th></tr></thead><tbody>'
+        +RUB.map(r=>{const num=(typeof r[1](list[0])==='number');
+          return '<tr'+(r[2]?' style="background:#fdfaf5;font-weight:700"':'')+'><td style="white-space:nowrap;font-size:9.5px">'+esc(r[0])+'</td>'
+          +chunk.map(e=>{const v=r[1](e);return '<td class="r">'+(num?money(v):esc(String(v)))+'</td>';}).join('')
+          +'<td class="r" style="font-weight:800">'+(num?money(list.reduce((a,e)=>a+Number(r[1](e)||0),0)):'—')+'</td></tr>';}).join('')
+        +'</tbody></table></div>'
+        +'<div class="mut" style="font-size:9px;text-align:center;margin-top:6px">Réalisé par Doregoservices · 07 17 57 95 56</div></div>';}
+  });
+  $('#main').innerHTML='<style>@media print{@page{size:A4 portrait;margin:9mm}body{background:#fff!important;margin:0}#app>div:not(#main),.bottomtabs,.toasts,.noprint{display:none!important}#main{padding:0!important}.lvpage{page-break-after:always;box-shadow:none!important;border-radius:0;padding:2px 0}.lvpage.last{page-break-after:auto}.lvpage .tbl td,.lvpage .tbl th{padding:2px 3px!important}.lvpage table{page-break-inside:avoid}}</style>'
+  +'<div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0"><b style="align-self:center">📗 Grand livre de paie — '+lbl+'</b><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button><button class="btn sec" onclick="render()">← Retour à la paie</button></div>'
+  +pages;};
 App.runGen=async period=>{
   const emps=(await DB.list('employees')).filter(e=>e.active!==false);
   const slips=[];
