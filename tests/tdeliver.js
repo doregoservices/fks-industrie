@@ -26,9 +26,10 @@ S.route='parametres';location.hash='#/parametres';await render();
 const set=$('#main').innerHTML;
 ['Société','Accès','Comptes à accès restreint','Correspondance des comptes','Taux de paie','Zone sensible','rapports au boss','Supabase'].forEach(x=>{
   if(!set.includes(x))throw new Error('Réglages : section manquante → '+x);});
-if(set.includes('id="stPin"'))throw new Error('champ PIN local affiché à tort en mode Supabase');
+if(!set.includes('id="stPin"'))throw new Error('champ PIN gestionnaire absent en mode Supabase (v35.50 : code de sauvetage)');
+if(!set.includes('récupération d\'accès'))throw new Error('le libellé du PIN doit mentionner la récupération d\'accès');
 if(!set.includes('uMail'))throw new Error('champ e-mail utilisateur absent en mode Supabase');
-console.log('✓ Réglages en mode Supabase : toutes les sections présentes, champ e-mail utilisateur ok, PIN local masqué');
+console.log('✓ Réglages en mode Supabase : toutes les sections présentes, champ e-mail utilisateur ok, PIN gestionnaire = code de sauvetage (v35.50)');
 
 /* ===== 3. RENDU GÉNÉRAL EN MODE SUPABASE (données locales de secours) ===== */
 for(const r of ['dashboard','ventes','caisse','paie','exploitation','exports','apropos','stocks']){

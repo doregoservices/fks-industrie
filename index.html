@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.49';
+const APP_VER='35.50';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1427,8 +1427,30 @@ App.login=async()=>{const b=$('#lgBtn');b.disabled=true;b.textContent='Connexion
   const u=resolveUser(em);
   if(u)S.user=u;
   else if(S._setsLoaded&&Array.isArray(SETS.users)&&!SETS.users.length)S.user={email:em,name:em.split('@')[0],role:'manager'};/* premier usage : aucun compte créé */
-  else{SES=null;LS.del(SES_KEY);LS.del(USER_KEY);throw new Error('Aucun compte pour cet e-mail — demandez au gestionnaire de vous créer un accès (Réglages → Comptes à accès restreint)');}
+  else{App.rescueModal(em);/* v35.50 : le gestionnaire récupère l'accès avec son code PIN — jamais enfermé dehors */}
   if(S.user&&!S.user.role)S.user.role='manager';saveUser();await afterLogin();}catch(e){toast(e.message,'bad');b.disabled=false;b.textContent='Se connecter';}};
+/* ==== v35.50 : SAUVETAGE GESTIONNAIRE — le patron récupère son accès avec son code PIN ==== */
+App.rescueModal=em=>{const defPin=!SETS.admin_pin||String(SETS.admin_pin)==='1234';
+  modal('Aucun compte pour '+esc(em),
+    '<div class="help" style="line-height:1.7">Cet e-mail n\'est pas dans la liste des comptes de l\'application.</div>'
+    +'<div class="help" style="margin-top:10px;line-height:1.7"><b>Vous êtes le gestionnaire (le patron) ?</b> Retrouvez immédiatement l\'accès avec votre <b>code PIN gestionnaire</b> :</div>'
+    +fld('Code PIN gestionnaire','<input id="rcPin" type="password" inputmode="numeric" placeholder="Par défaut : 1234">')
+    +(defPin?fld('Nouveau code PIN (obligatoire — le 1234 par défaut n\'est pas sûr)','<input id="rcNew" inputmode="numeric" placeholder="4 chiffres ou plus">'):'')
+    +'<div class="help" style="margin-top:10px">Sinon, demandez à un gestionnaire de vous créer l\'accès : Réglages → 👤 Comptes.</div>',
+    '<button class="btn sec" onclick="App.rescueCancel()">Annuler</button><button class="btn" onclick="App.rescueGo(\''+esc(em)+'\')">Récupérer l\'accès</button>');};
+App.rescueCancel=()=>{closeModal();SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);go('login');render();};
+App.rescueGo=async em=>{try{
+  const pin=$('#rcPin')?$('#rcPin').value.trim():'';
+  if(pin!==String(SETS.admin_pin||'1234')){SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);closeModal();go('login');render();return toast('Code PIN incorrect — accès refusé','bad');}
+  const defPin=!SETS.admin_pin||String(SETS.admin_pin)==='1234';let newPin=null;
+  if(defPin){newPin=($('#rcNew')?$('#rcNew').value.trim():'');if(!newPin||newPin.length<4)return toast('Choisissez un nouveau code PIN (4 chiffres ou plus)','bad');}
+  const arr=(SETS.users||[]).slice();
+  if(!arr.some(x=>x.email&&String(x.email).toLowerCase()===String(em).toLowerCase()))arr.push({email:em,name:'Gestionnaire',role:'manager',pin:''});
+  await setSetting('users',arr);
+  if(newPin)await setSetting('admin_pin',newPin);
+  closeModal();S.user=resolveUser(em)||{email:em,name:'Gestionnaire',role:'manager'};
+  if(!S.user.role)S.user.role='manager';saveUser();toast('Accès gestionnaire rétabli ✅','ok');await afterLogin();
+}catch(e){toast('Impossible d\'enregistrer ('+e.message+') — vérifiez la connexion et réessayez','bad');}};
 App.loginLocal=async()=>{const pin=$('#lgPin').value;
   if(pin===String(SETS.admin_pin||'1234')){S.user={name:'Gestionnaire',role:'manager'};saveUser();await afterLogin();return;}
   const u=(SETS.users||[]).find(x=>x.pin&&String(x.pin)===String(pin));
@@ -3501,7 +3523,7 @@ async function scParametres(){
   +(CFG.mode==='supabase'
     ?'<div class="alert al-ok">Mode en ligne (Supabase) : '+esc(CFG.url)+' — vos données sont hébergées et synchronisées.</div><button class="btn sec sm" onclick="App.cfgModal()">Modifier la connexion Supabase</button> <button class="btn sec sm" onclick="App.dbCheck()">🔍 Vérifier la base</button>'
     :'<div class="alert al-info">Mode local : les données restent sur cet appareil (idéal pour la démonstration). Connectez Supabase pour l\'hébergement en ligne.</div><button class="btn sec sm" onclick="App.cfgModal()">Connecter Supabase</button>')
-  +(CFG.mode==='local'?'<div class="row" style="margin-top:10px">'+fld('Code PIN gestionnaire','<input id="stPin" type="text" value="'+esc(SETS.admin_pin||'1234')+'">')+'<button class="btn sm" onclick="App.savePin()">Changer le PIN</button></div>':'')
+  +'<div class="row" style="margin-top:10px">'+fld('Code PIN gestionnaire (récupération d\'accès si votre e-mail est refusé)','<input id="stPin" type="text" value="'+esc(SETS.admin_pin||'1234')+'">')+'<button class="btn sm" onclick="App.savePin()">Changer le PIN</button></div>'
   +'<div class="hr"></div><h3>👤 Comptes à accès restreint</h3>'
   +'<div class="help" style="margin-bottom:8px">Chaque personne ouvre l\'appli avec ses identifiants et ne voit que ses écrans. Le gestionnaire (PIN principal) voit tout.'+(CFG.mode==='supabase'?' En mode en ligne, l\'e-mail + le mot de passe donnent accès aux données : l\'application crée le login AUTOMATIQUEMENT — inutile d\'aller sur Supabase.':'')+'</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>PIN</th>'+(CFG.mode==='supabase'?'<th>E-mail</th>':'')+'<th></th></tr></thead><tbody>'
@@ -4664,7 +4686,7 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
       if(su){S.user=su;saveUser();await outboxFlush();}
       else{/* v35.48 : compte supprimé ou e-mail sans accès — ACCÈS REFUSÉ (fini la promotion manager silencieuse) */
         SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);
-        S._kicked='Votre compte a été supprimé ou n\'a plus d\'accès à l\'application — contactez le gestionnaire.';}
+        S._kicked='Votre compte a été supprimé ou n\'a plus d\'accès — si vous êtes le gestionnaire, retapez vos identifiats puis récupérez l\'accès avec votre code PIN gestionnaire.';}
     }else if(CFG.mode==='local'){
       await loadSettings();
     }else{
