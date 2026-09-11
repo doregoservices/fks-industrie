@@ -60,6 +60,12 @@ if(ph.split('lvpage').length-1<2)throw new Error('structure de pages attendue');
 if(ph.indexOf('IDENTITÉ')<0||ph.indexOf('GAINS')<0||ph.indexOf('RETENUES')<0||ph.indexOf('RÉCAPITULATIF')<0)throw new Error('sections du grand livre absentes');
 if(ph.indexOf('Page 1 /')<0)throw new Error('numérotation des pages absente');
 if(ph.indexOf('lvnet')<0||ph.indexOf('lvtotc')<0)throw new Error('mise en valeur NET/TOTAL absente');
+/* v35.47 : TOTAL GÉNÉRAL sur la dernière page */
+if(ph.indexOf('NET À PAYER — TOTAL GÉNÉRAL')<0)throw new Error('livre PDF : TOTAL GÉNÉRAL absent de la dernière page');
+if(ph.split('Total général du grand livre').length-1!==1)throw new Error('TOTAL GÉNÉRAL doit apparaître une seule fois (dernière page uniquement)');
+if(ph.lastIndexOf('lvpage last')>ph.indexOf('NET À PAYER — TOTAL GÉNÉRAL'))throw new Error('TOTAL GÉNÉRAL doit se trouver DANS la dernière page');
+const netT=slips.reduce((a,x)=>a+(Number(x.net)||0),0);
+if(ph.indexOf(money(netT))<0)throw new Error('livre PDF : total NET À PAYER général incorrect ('+money(netT)+' introuvable)');
 console.log('✓ Grand livre PDF TRANSPOSÉ : rubriques sur la longueur A4, un employé par colonne, colonne TOTAL, suite sur page suivante');
 console.log('✓ Recherche : employés (v35.39) + GÉNÉRATION (v35.42) + bulletins + avances — toute la Paie est filtrable');
 console.log('✓ Tous les bulletins : écran dédié un-par-page avec « Tout imprimer / Enregistrer en PDF » ('+slips.length+' bulletins)');
