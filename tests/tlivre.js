@@ -57,6 +57,9 @@ if(ph.indexOf('NET À PAYER')<0)throw new Error('livre PDF : ligne NET À PAYER 
 if(ph.indexOf('>TOTAL<')<0)throw new Error('livre PDF : colonne TOTAL absente');
 if(ph.indexOf('>'+slips[0].employee_name+'<')<0)throw new Error('livre PDF : nom attendu en en-tête de colonne : '+slips[0].employee_name);
 if(ph.split('lvpage').length-1<2)throw new Error('structure de pages attendue');
+if(ph.indexOf('IDENTITÉ')<0||ph.indexOf('GAINS')<0||ph.indexOf('RETENUES')<0||ph.indexOf('RÉCAPITULATIF')<0)throw new Error('sections du grand livre absentes');
+if(ph.indexOf('Page 1 /')<0)throw new Error('numérotation des pages absente');
+if(ph.indexOf('lvnet')<0||ph.indexOf('lvtotc')<0)throw new Error('mise en valeur NET/TOTAL absente');
 console.log('✓ Grand livre PDF TRANSPOSÉ : rubriques sur la longueur A4, un employé par colonne, colonne TOTAL, suite sur page suivante');
 console.log('✓ Recherche : employés (v35.39) + GÉNÉRATION (v35.42) + bulletins + avances — toute la Paie est filtrable');
 console.log('✓ Tous les bulletins : écran dédié un-par-page avec « Tout imprimer / Enregistrer en PDF » ('+slips.length+' bulletins)');
