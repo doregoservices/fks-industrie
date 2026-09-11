@@ -1154,7 +1154,7 @@ function defaultSettings(){
     stock_alerts:{}
   };
 }
-async function loadSettings(){const d=defaultSettings();try{const rows=await DB.list('settings');rows.forEach(r=>{try{SETS[r.key]=JSON.parse(r.value);}catch(e){SETS[r.key]=r.value;}});}catch(e){}
+async function loadSettings(){const d=defaultSettings();let _ok=true;try{const rows=await DB.list('settings');rows.forEach(r=>{try{SETS[r.key]=JSON.parse(r.value);}catch(e){SETS[r.key]=r.value;}});}catch(e){_ok=false;}S._setsLoaded=_ok;/* v35.48 : liste des comptes chargée = source de vérité (révocation des comptes supprimés) */
   for(const k in d){if(SETS[k]===undefined)SETS[k]=d[k];}
   SETS.payroll=Object.assign({},d.payroll,SETS.payroll||{});
   SETS.email=Object.assign({},d.email,SETS.email||{});
@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.47';
+const APP_VER='35.48';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1424,8 +1424,11 @@ App.menu=()=>{modal('Menu','<div class="help" style="margin-bottom:10px">Connect
   +'<div class="hr"></div><div style="display:flex;align-items:center;gap:12px"><img src="'+DORLOGO+'" alt="Doregoservices" style="height:44px"><div style="font-size:12.5px;line-height:1.5"><b>Doregoservices</b><br>Conception &amp; maintenance de l\'application<br>📞 <a href="tel:+2250717579556" style="color:inherit">07 17 57 95 56</a></div></div>');};
 App.login=async()=>{const b=$('#lgBtn');b.disabled=true;b.textContent='Connexion…';
   try{const em=$('#lgEmail').value.trim();await loginSupabase(em,$('#lgPass').value);
-  const u=(SETS.users||[]).find(x=>x.email&&x.email.toLowerCase()===em.toLowerCase());
-  if(u)S.user={email:em,name:u.name,role:u.role||'manager'};if(S.user&&!S.user.role)S.user.role='manager';saveUser();await afterLogin();}catch(e){toast(e.message,'bad');b.disabled=false;b.textContent='Se connecter';}};
+  const u=resolveUser(em);
+  if(u)S.user=u;
+  else if(S._setsLoaded&&Array.isArray(SETS.users)&&!SETS.users.length)S.user={email:em,name:em.split('@')[0],role:'manager'};/* premier usage : aucun compte créé */
+  else{SES=null;LS.del(SES_KEY);LS.del(USER_KEY);throw new Error('Aucun compte pour cet e-mail — demandez au gestionnaire de vous créer un accès (Réglages → Comptes à accès restreint)');}
+  if(S.user&&!S.user.role)S.user.role='manager';saveUser();await afterLogin();}catch(e){toast(e.message,'bad');b.disabled=false;b.textContent='Se connecter';}};
 App.loginLocal=async()=>{const pin=$('#lgPin').value;
   if(pin===String(SETS.admin_pin||'1234')){S.user={name:'Gestionnaire',role:'manager'};saveUser();await afterLogin();return;}
   const u=(SETS.users||[]).find(x=>x.pin&&String(x.pin)===String(pin));
@@ -3566,7 +3569,12 @@ App.userAdd=async()=>{const n=$('#uName').value.trim(),p=$('#uPin').value.trim()
   if(!n||!p)return toast('Nom et code PIN requis','bad');
   const arr=(SETS.users||[]).slice();arr.push({name:n,role:r,pin:p,email:($('#uMail')?$('#uMail').value.trim():'')});
   await setSetting('users',arr);toast('Compte créé','ok');render();};
-App.userDel=async ui=>{const arr=(SETS.users||[]).slice();arr.splice(ui,1);await setSetting('users',arr);toast('Compte supprimé','ok');render();};
+App.userDel=async ui=>{const arr=(SETS.users||[]).slice();const gone=arr[ui]||{};arr.splice(ui,1);await setSetting('users',arr);
+  if(CFG.mode==='supabase'&&gone.email){
+    modal('Compte supprimé ✅','<div class="help" style="line-height:1.7"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application : s\'il l\'a ouverte, il est déconnecté automatiquement (vérification toutes les 30 secondes) ; s\'il la rouvre, l\'entrée lui est refusée.</div><div class="help" style="margin-top:10px;line-height:1.7">⚠️ <b>Son identifiant Supabase (e-mail + mot de passe) existe toujours.</b> Pour empêcher toute tentative de reconnexion, supprimez-le aussi : <b>Supabase → Authentication → Users</b>, ou collez cette ligne dans le <b>SQL Editor</b> Supabase :</div><input id="delSql" readonly value="delete from auth.users where email = \''+esc(gone.email)+'\';" style="width:100%;margin-top:8px;font-family:monospace;font-size:12px"><div style="margin-top:10px"><button class="btn sm" onclick="App.delSqlCopy()">📋 Copier le SQL</button></div>','<button class="btn" onclick="closeModal()">Terminé</button>');
+  }else toast('Compte supprimé — son code PIN ne fonctionne plus ✅','ok');
+  render();};
+App.delSqlCopy=()=>{const i=$('#delSql');if(!i)return;try{i.focus();i.select();}catch(e){}try{if(navigator.clipboard)navigator.clipboard.writeText(i.value);toast('SQL copié ✅','ok');}catch(e){toast('Sélectionnez le texte et copiez-le','ok');}};
 App.xlAdd=(sec,per)=>{modal('Nouvelle ligne — '+(sec==='personnel'?'personnel':'impôts et taxes'),
   '<div class="help" style="margin-bottom:10px">Ligne analytique pour '+monthLabel(per)+' uniquement (ex. ITS patronal, TEOM, prime exceptionnelle…). Elle s\'ajoute au total de la masse choisie.</div>'
   +'<div class="field"><span>Libellé</span><input id="xlLbl" placeholder="Ex. ITS patronal"></div>'
@@ -4592,8 +4600,11 @@ App.assetSave=async id=>{const rec={name:$('#asN').value.trim(),category:$('#asC
 const USER_KEY='cafepro_user_v1';
 function saveUser(){try{if(S.user)LS.set(USER_KEY,JSON.stringify(S.user));}catch(e){}}
 function resolveUser(email){email=String(email||'').toLowerCase();
-  let u=null;try{u=(SETS.users||[]).find(x=>x.email&&String(x.email).toLowerCase()===email);}catch(e){}
-  if(u)return{email:u.email,name:u.name,role:u.role||'manager'};
+  /* v35.48 : quand la liste des comptes est chargée (en ligne), elle est la SEULE source de vérité —
+     un compte supprimé ne revient plus par le cache local. Le cache ne sert QUE hors-ligne. */
+  if(S._setsLoaded&&Array.isArray(SETS.users)){
+    const u=SETS.users.find(x=>x.email&&String(x.email).toLowerCase()===email);
+    return u?{email:u.email,name:u.name,role:u.role||'manager'}:null;}
   let c=null;try{c=JSON.parse(LS.get(USER_KEY)||'null');}catch(e){}
   if(c&&c.role&&String(c.email||'').toLowerCase()===email)return c;
   return null;}
@@ -4605,13 +4616,13 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
   setDbAdapter();
   try{
     if(CFG.mode==='supabase'&&SES&&SES.access_token){
-      let su=resolveUser(SES.email);
-      S.user=su||{email:SES.email,name:(SES.email||'').split('@')[0],role:'manager'};
       await loadSettings();
-      su=resolveUser(SES.email);
-      if(su)S.user=su;else if(!S.user.role)S.user.role='manager';
-      saveUser();
-      await outboxFlush();
+      let su=resolveUser(SES.email);
+      if(!su&&S._setsLoaded&&Array.isArray(SETS.users)&&!SETS.users.length)su={email:SES.email,name:(SES.email||'').split('@')[0],role:'manager'};/* premier usage : aucun compte créé */
+      if(su){S.user=su;saveUser();await outboxFlush();}
+      else{/* v35.48 : compte supprimé ou e-mail sans accès — ACCÈS REFUSÉ (fini la promotion manager silencieuse) */
+        SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);
+        S._kicked='Votre compte a été supprimé ou n\'a plus d\'accès à l\'application — contactez le gestionnaire.';}
     }else if(CFG.mode==='local'){
       await loadSettings();
     }else{
@@ -4619,12 +4630,22 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
     }
   }catch(e){console.warn('init',e);if(CFG.mode==='supabase'&&SES){SES=null;S.user=null;}}
   render();
+  if(S._kicked){toast('🔒 '+S._kicked,'bad');S._kicked=null;}
   if('serviceWorker' in navigator&&location.protocol.indexOf('http')===0){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 })();
 
 /* ---- Réception quasi temps réel : ventes/production/caisse envoyées depuis d'autres appareils ---- */
+async function revokeCheck(){try{/* v35.48 : un compte supprimé par le gestionnaire coupe aussi les sessions ouvertes */
+  if(CFG.mode!=='supabase'||!S.user||S.user.role==='manager'||!S.user.email||(typeof navigator!=='undefined'&&!navigator.onLine))return;
+  const rows=await DB.list('settings',{eq:{key:'users'}});
+  let L=null;if(rows&&rows.length){try{L=JSON.parse(rows[0].value);}catch(e){}}
+  if(!Array.isArray(L))return;
+  const em=String(S.user.email).toLowerCase();
+  if(!L.some(x=>x.email&&String(x.email).toLowerCase()===em)){logout();toast('🔒 Votre compte a été supprimé — accès révoqué','bad');}
+}catch(e){}}
 setInterval(async()=>{try{
   if(typeof CFG==='undefined'||CFG.mode!=='supabase'||!S.user||typeof document!=='undefined'&&document.hidden)return;
+  await revokeCheck();
   const nb=await pendingCount();
   if(S._pendSeen===undefined){S._pendSeen=nb;return;}
   if(nb>S._pendSeen){toast('📥 '+(nb-S._pendSeen)+' nouvelle(s) saisie(s) reçue(s) via les liens — À valider','ok');S._pendSeen=nb;
