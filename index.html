@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.48';
+const APP_VER='35.49';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3503,16 +3503,17 @@ async function scParametres(){
     :'<div class="alert al-info">Mode local : les données restent sur cet appareil (idéal pour la démonstration). Connectez Supabase pour l\'hébergement en ligne.</div><button class="btn sec sm" onclick="App.cfgModal()">Connecter Supabase</button>')
   +(CFG.mode==='local'?'<div class="row" style="margin-top:10px">'+fld('Code PIN gestionnaire','<input id="stPin" type="text" value="'+esc(SETS.admin_pin||'1234')+'">')+'<button class="btn sm" onclick="App.savePin()">Changer le PIN</button></div>':'')
   +'<div class="hr"></div><h3>👤 Comptes à accès restreint</h3>'
-  +'<div class="help" style="margin-bottom:8px">Chaque personne ouvre l\'appli avec son propre code PIN et ne voit que ses écrans. Le gestionnaire (PIN principal) voit tout.'+(CFG.mode==='supabase'?' En mode en ligne, indiquez aussi l\'e-mail du compte pour lui attribuer son rôle.':'')+'</div>'
+  +'<div class="help" style="margin-bottom:8px">Chaque personne ouvre l\'appli avec ses identifiants et ne voit que ses écrans. Le gestionnaire (PIN principal) voit tout.'+(CFG.mode==='supabase'?' En mode en ligne, l\'e-mail + le mot de passe donnent accès aux données : l\'application crée le login AUTOMATIQUEMENT — inutile d\'aller sur Supabase.':'')+'</div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>PIN</th>'+(CFG.mode==='supabase'?'<th>E-mail</th>':'')+'<th></th></tr></thead><tbody>'
-  +((SETS.users||[]).map((u,ui)=>'<tr><td><b>'+esc(u.name)+'</b></td><td>'+(ROLE_LBL[u.role]||u.role)+'</td><td>'+esc(u.pin)+'</td>'+(CFG.mode==='supabase'?'<td>'+esc(u.email||'—')+'</td>':'')+'<td><button class="btn sm danger" onclick="App.userDel('+ui+')">✕</button></td></tr>').join('')||'<tr><td colspan="5" class="mut">Aucun compte restreint — créez-en ci-dessous</td></tr>')
+  +((SETS.users||[]).map((u,ui)=>'<tr><td><b>'+esc(u.name)+'</b></td><td>'+(ROLE_LBL[u.role]||u.role)+'</td><td>'+esc(u.pin)+'</td>'+(CFG.mode==='supabase'?'<td>'+esc(u.email||'—')+'</td>':'')+'<td style="white-space:nowrap">'+(CFG.mode==='supabase'&&u.email?'<button class="btn sm sec" title="Créer / gérer le login d\'accès" onclick="App.authModal('+ui+')">🔑</button> ':'')+'<button class="btn sm danger" onclick="App.userDel('+ui+')">✕</button></td></tr>').join('')||'<tr><td colspan="5" class="mut">Aucun compte restreint — créez-en ci-dessous</td></tr>')
   +'</tbody></table></div>'
   +'<div class="row" style="margin-top:8px">'
   +fld('Nom','<input id="uName" placeholder="Ex. Awa">')
   +fld('Rôle','<select id="uRole">'+Object.keys(ROLE_LBL).filter(r=>r!=='manager').map(r=>'<option value="'+r+'">'+ROLE_LBL[r]+'</option>').join('')+'<option value="manager">Manager (tout voir)</option>'+'</select>')
   +fld('Code PIN','<input id="uPin" inputmode="numeric" placeholder="ex. 2468">')
-  +(CFG.mode==='supabase'?fld('E-mail (optionnel)','<input id="uMail" placeholder="awa@fks.com">'):'')
+  +(CFG.mode==='supabase'?fld('E-mail (accès aux données)','<input id="uMail" type="email" placeholder="awa@fks.com">')+fld('Mot de passe initial','<input id="uPass" autocomplete="new-password" placeholder="généré automatiquement si vide">'):'')
   +'<button class="btn sm" style="align-self:flex-end" onclick="App.userAdd()">＋ Créer le compte</button></div>'
+  +(CFG.mode==='supabase'?'<div class="row" style="margin-top:8px">'+fld('Clé d\'administration des comptes (USERMGT_KEY — optionnel)','<input id="ukKey" value="'+esc(SETS.usermgt_key||'')+'" placeholder="si la fonction user-admin est déployée">')+'<button class="btn sm" style="align-self:flex-end" onclick="App.saveUsermgt()">Enregistrer</button></div><div class="help">Avec la fonction « user-admin » collée une seule fois dans Supabase (Edge Functions — voir GUIDE.md), supprimer un compte supprime AUSSI son login : plus aucune ligne SQL à copier.</div>':'')
   +'<div class="hr"></div><h3>📧 Envoi des rapports au boss</h3>'
   +(CFG.mode==='supabase'
     ?'<div class="help" style="margin-bottom:8px">Nécessite la fonction « send-report » déployée sur votre projet Supabase (voir GUIDE.md) et une clé Resend gratuite. Alternative sans configuration : les boutons « ✉️ Préparer l\'email » ouvrent votre messagerie avec le rapport prêt.</div>'
@@ -3566,15 +3567,56 @@ App.savePayroll=async()=>{const P=JSON.parse(JSON.stringify(SETS.payroll));
   await setSetting('payroll',P);toast('Taux de paie enregistrés','ok');};
 App.savePin=async()=>{await setSetting('admin_pin',$('#stPin').value||'1234');toast('PIN modifié','ok');};
 App.userAdd=async()=>{const n=$('#uName').value.trim(),p=$('#uPin').value.trim(),r=$('#uRole').value;
-  if(!n||!p)return toast('Nom et code PIN requis','bad');
-  const arr=(SETS.users||[]).slice();arr.push({name:n,role:r,pin:p,email:($('#uMail')?$('#uMail').value.trim():'')});
-  await setSetting('users',arr);toast('Compte créé','ok');render();};
+  if(!n)return toast('Nom requis','bad');
+  if(CFG.mode!=='supabase'&&!p)return toast('Nom et code PIN requis','bad');
+  const mail=($('#uMail')?$('#uMail').value.trim():'');
+  if(CFG.mode==='supabase'&&!mail)return toast('En mode en ligne, l\'e-mail est nécessaire : c\'est lui qui donne accès aux données (le login est créé automatiquement)','bad');
+  const pw=(($('#uPass')?$('#uPass').value:'')||('fks'+Math.floor(100000+Math.random()*900000))).replace(/[\\'"]/g,'');/* v35.49 : mot de passe propre, généré si vide */
+  const arr=(SETS.users||[]).slice();arr.push({name:n,role:r,pin:p,email:mail});await setSetting('users',arr);
+  if(CFG.mode==='supabase'&&mail)await App.authCreate(mail,pw,n,r);
+  else toast('Compte créé — son code PIN est actif ✅','ok');
+  render();};
 App.userDel=async ui=>{const arr=(SETS.users||[]).slice();const gone=arr[ui]||{};arr.splice(ui,1);await setSetting('users',arr);
+  if(CFG.mode==='supabase'&&gone.email&&SETS.usermgt_key){/* v35.49 : fonction user-admin déployée → login supprimé aussi, sans SQL */
+    let ok=false;try{const r=await fetch(Supa.base()+'/functions/v1/user-admin',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.anon,Authorization:'Bearer '+CFG.anon,'x-usermgt-key':SETS.usermgt_key},body:JSON.stringify({action:'delete',email:gone.email})});ok=r.ok;}catch(e){}
+    if(ok){modal('Compte supprimé ✅','<div class="help" style="line-height:1.8"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application :<div class="hr"></div>• login d\'accès aux données <b>supprimé</b> (fonction user-admin)<br>• applie ouverte sur son téléphone → déconnectée en ≤ 30 secondes<br>• réouverture → refusée</div>','<button class="btn" onclick="closeModal()">Terminé</button>');render();return;}}
   if(CFG.mode==='supabase'&&gone.email){
     modal('Compte supprimé ✅','<div class="help" style="line-height:1.7"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application : s\'il l\'a ouverte, il est déconnecté automatiquement (vérification toutes les 30 secondes) ; s\'il la rouvre, l\'entrée lui est refusée.</div><div class="help" style="margin-top:10px;line-height:1.7">⚠️ <b>Son identifiant Supabase (e-mail + mot de passe) existe toujours.</b> Pour empêcher toute tentative de reconnexion, supprimez-le aussi : <b>Supabase → Authentication → Users</b>, ou collez cette ligne dans le <b>SQL Editor</b> Supabase :</div><input id="delSql" readonly value="delete from auth.users where email = \''+esc(gone.email)+'\';" style="width:100%;margin-top:8px;font-family:monospace;font-size:12px"><div style="margin-top:10px"><button class="btn sm" onclick="App.delSqlCopy()">📋 Copier le SQL</button></div>','<button class="btn" onclick="closeModal()">Terminé</button>');
   }else toast('Compte supprimé — son code PIN ne fonctionne plus ✅','ok');
   render();};
 App.delSqlCopy=()=>{const i=$('#delSql');if(!i)return;try{i.focus();i.select();}catch(e){}try{if(navigator.clipboard)navigator.clipboard.writeText(i.value);toast('SQL copié ✅','ok');}catch(e){toast('Sélectionnez le texte et copiez-le','ok');}};
+/* ==== v35.49 : logins d'accès aux données créés/gérés DEPUIS l'appli ==== */
+App.authModal=ui=>{const u=(SETS.users||[])[ui]||{};if(!u.email)return toast('Ce compte n\'a pas d\'e-mail','bad');
+  modal('🔑 Login d\'accès aux données — '+esc(u.name),
+    fld('Mot de passe','<input id="auP" value="fks'+Math.floor(100000+Math.random()*900000)+'">')
+    +'<div class="help" style="margin-top:8px">« Créer / recréer le login » fabrique l\'identifiant d\'accès aux données (e-mail + mot de passe). Si le login existe déjà, utilisez plutôt « ✉️ Réinitialiser » : la personne recevra un e-mail pour choisir elle-même un nouveau mot de passe.</div>',
+    '<button class="btn sec sm" onclick="App.authRecover('+ui+')">✉️ Réinitialiser par e-mail</button><button class="btn" onclick="App.authCreateRun('+ui+')">Créer / recréer le login</button>');};
+App.authCreateRun=async ui=>{const u=(SETS.users||[])[ui]||{};const pw=($('#auP')?$('#auP').value:'').replace(/[\\'"]/g,'');if(!u.email||!pw)return toast('Mot de passe requis','bad');closeModal();await App.authCreate(u.email,pw,u.name,u.role);};
+App.authRecover=async ui=>{const u=(SETS.users||[])[ui]||{};if(!u.email)return;try{
+  const r=await fetch(Supa.base()+'/auth/v1/recover',{method:'POST',headers:{apikey:CFG.anon,'Content-Type':'application/json'},body:JSON.stringify({email:u.email})});
+  let j={};try{j=await r.json();}catch(e){}
+  toast(r.ok?'✉️ E-mail de réinitialisation envoyé à '+u.email:'Échec : '+((j.msg||j.message)||('HTTP '+r.status)),r.ok?'ok':'bad');
+}catch(e){toast('Échec : '+e.message,'bad');}};
+App.copyTxt=t=>{try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t);toast('Copié ✅','ok');}catch(e){toast(String(t),'ok');}};
+App.saveUsermgt=async()=>{await setSetting('usermgt_key',($('#ukKey')?$('#ukKey').value.trim():''));toast('Clé enregistrée ✅','ok');};
+App.authCreate=async(mail,pw,name,role)=>{try{
+  if(SETS.usermgt_key){/* v35.49 : fonction user-admin déployée → login créé et actif immédiatement */
+    try{const r=await fetch(Supa.base()+'/functions/v1/user-admin',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.anon,Authorization:'Bearer '+CFG.anon,'x-usermgt-key':SETS.usermgt_key},body:JSON.stringify({action:'create',email:mail,password:pw,name:name})});
+      if(r.ok){modal('Login créé et actif ✅','<div class="help" style="line-height:1.9"><b>'+esc(name)+'</b> ('+(ROLE_LBL[role]||role)+') peut se connecter à l\'application :<div class="hr"></div>📧 '+esc(mail)+'<br>🔑 '+esc(pw)+'<div class="hr"></div>📝 Notez ce mot de passe et communiquez-le à la personne.</div>','<button class="btn sm sec" onclick="App.copyTxt(\''+esc(mail+' · '+pw)+'\')">📋 Copier</button><button class="btn" onclick="closeModal()">Terminé</button>');return;}
+    }catch(e){}}
+  const r=await fetch(Supa.base()+'/auth/v1/signup',{method:'POST',headers:{apikey:CFG.anon,'Content-Type':'application/json'},body:JSON.stringify({email:mail,password:pw})});
+  let j={};try{j=await r.json();}catch(e){}
+  if(r.ok){
+    const conf=!!(j.access_token||(j.user&&(j.user.email_confirmed_at||j.user.confirmed_at)));
+    if(conf)modal('Login créé et actif ✅','<div class="help" style="line-height:1.9"><b>'+esc(name)+'</b> ('+(ROLE_LBL[role]||role)+') peut se connecter à l\'application :<div class="hr"></div>📧 '+esc(mail)+'<br>🔑 '+esc(pw)+'<div class="hr"></div>📝 Notez ce mot de passe et communiquez-le à la personne.</div>','<button class="btn sm sec" onclick="App.copyTxt(\''+esc(mail+' · '+pw)+'\')">📋 Copier</button><button class="btn" onclick="closeModal()">Terminé</button>');
+    else modal('Login créé — confirmation e-mail 📧','<div class="help" style="line-height:1.8"><b>'+esc(name)+'</b> recevra un e-mail de Supabase : il devra cliquer sur son lien « Confirm my email » avant sa première connexion.<div class="hr"></div>📧 '+esc(mail)+'<br>🔑 '+esc(pw)+'<div class="hr"></div>Pour éviter cette étape à l\'avenir (optionnel, une seule fois) : Supabase → Authentication → Sign In / Up → désactiver « Confirm email ».</div>','<button class="btn sm sec" onclick="App.copyTxt(\''+esc(mail+' · '+pw)+'\')">📋 Copier</button><button class="btn" onclick="closeModal()">Terminé</button>');
+  }else{
+    const m=String(j.msg||j.message||j.error||'');
+    if(r.status===422&&/already|exist|register|déjà/i.test(m))modal('Login déjà existant ℹ️','<div class="help" style="line-height:1.8">Un login existe déjà pour '+esc(mail)+' — son mot de passe actuel reste inchangé.<div class="hr"></div>Le compte <b>'+esc(name)+'</b> ('+(ROLE_LBL[role]||role)+') est bien créé. Pour lui donner un nouveau mot de passe : bouton 🔑 → « ✉️ Réinitialiser par e-mail ».</div>','<button class="btn" onclick="closeModal()">Terminé</button>');
+    else if(r.status===403)modal('Inscriptions désactivées ⚠️','<div class="help" style="line-height:1.8">Votre projet Supabase refuse les nouvelles inscriptions.<div class="hr"></div>Le compte <b>'+esc(name)+'</b> est créé. Activez ensuite (une seule fois) : Supabase → Authentication → Sign In / Up → « Allow new users to sign up », puis bouton 🔑 → « Créer / recréer le login ».</div>','<button class="btn" onclick="closeModal()">OK</button>');
+    else modal('Login non créé ⚠️','<div class="help">Le compte <b>'+esc(name)+'</b> est créé, mais le login a échoué : '+esc(m||('HTTP '+r.status))+'</div><div class="help" style="margin-top:8px">Réessayez plus tard : bouton 🔑 sur la ligne du compte.</div>','<button class="btn" onclick="closeModal()">OK</button>');
+  }
+}catch(e){modal('Login non créé ⚠️','<div class="help">Supabase injoignable ('+esc(e.message)+'). Le compte <b>'+esc(name)+'</b> est créé — réessayez avec le bouton 🔑.</div>','<button class="btn" onclick="closeModal()">OK</button>');}};
 App.xlAdd=(sec,per)=>{modal('Nouvelle ligne — '+(sec==='personnel'?'personnel':'impôts et taxes'),
   '<div class="help" style="margin-bottom:10px">Ligne analytique pour '+monthLabel(per)+' uniquement (ex. ITS patronal, TEOM, prime exceptionnelle…). Elle s\'ajoute au total de la masse choisie.</div>'
   +'<div class="field"><span>Libellé</span><input id="xlLbl" placeholder="Ex. ITS patronal"></div>'
