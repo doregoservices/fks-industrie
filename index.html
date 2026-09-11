@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.50';
+const APP_VER='35.51';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3526,8 +3526,8 @@ async function scParametres(){
   +'<div class="row" style="margin-top:10px">'+fld('Code PIN gestionnaire (récupération d\'accès si votre e-mail est refusé)','<input id="stPin" type="text" value="'+esc(SETS.admin_pin||'1234')+'">')+'<button class="btn sm" onclick="App.savePin()">Changer le PIN</button></div>'
   +'<div class="hr"></div><h3>👤 Comptes à accès restreint</h3>'
   +'<div class="help" style="margin-bottom:8px">Chaque personne ouvre l\'appli avec ses identifiants et ne voit que ses écrans. Le gestionnaire (PIN principal) voit tout.'+(CFG.mode==='supabase'?' En mode en ligne, l\'e-mail + le mot de passe donnent accès aux données : l\'application crée le login AUTOMATIQUEMENT — inutile d\'aller sur Supabase.':'')+'</div>'
-  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th><th>PIN</th>'+(CFG.mode==='supabase'?'<th>E-mail</th>':'')+'<th></th></tr></thead><tbody>'
-  +((SETS.users||[]).map((u,ui)=>'<tr><td><b>'+esc(u.name)+'</b></td><td>'+(ROLE_LBL[u.role]||u.role)+'</td><td>'+esc(u.pin)+'</td>'+(CFG.mode==='supabase'?'<td>'+esc(u.email||'—')+'</td>':'')+'<td style="white-space:nowrap">'+(CFG.mode==='supabase'&&u.email?'<button class="btn sm sec" title="Créer / gérer le login d\'accès" onclick="App.authModal('+ui+')">🔑</button> ':'')+'<button class="btn sm danger" onclick="App.userDel('+ui+')">✕</button></td></tr>').join('')||'<tr><td colspan="5" class="mut">Aucun compte restreint — créez-en ci-dessous</td></tr>')
+  +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Nom</th><th>Rôle</th>'+(CFG.mode==='local'?'<th>PIN</th>':'')+(CFG.mode==='supabase'?'<th>E-mail</th>':'')+'<th></th></tr></thead><tbody>'
+  +((SETS.users||[]).map((u,ui)=>'<tr><td><b>'+esc(u.name)+'</b></td><td>'+(ROLE_LBL[u.role]||u.role)+'</td>'+(CFG.mode==='local'?'<td>'+esc(u.pin)+'</td>':'')+(CFG.mode==='supabase'?'<td>'+esc(u.email||'—')+'</td>':'')+'<td style="white-space:nowrap">'+(CFG.mode==='supabase'&&u.email?'<button class="btn sm sec" title="Créer / gérer le login d\'accès" onclick="App.authModal('+ui+')">🔑</button> ':'')+'<button class="btn sm danger" onclick="App.userDel('+ui+')">✕</button></td></tr>').join('')||'<tr><td colspan="5" class="mut">Aucun compte restreint — créez-en ci-dessous</td></tr>')
   +'</tbody></table></div>'
   +'<div class="row" style="margin-top:8px">'
   +fld('Nom','<input id="uName" placeholder="Ex. Awa">')
@@ -3587,21 +3587,26 @@ App.savePayroll=async()=>{const P=JSON.parse(JSON.stringify(SETS.payroll));
     if(bf==='up')P.its_brackets[bi].upTo=i.value===''?null:Number(i.value);
     else P.its_brackets[bi].rate=Number(i.value)||0;});
   await setSetting('payroll',P);toast('Taux de paie enregistrés','ok');};
-App.savePin=async()=>{await setSetting('admin_pin',$('#stPin').value||'1234');toast('PIN modifié','ok');};
+App.savePin=async()=>{const v=($('#stPin')?$('#stPin').value:'').trim();/* v35.51 : PIN solide exigé */
+  if(!v||v.length<4||!/^\d+$/.test(v))return toast('Code PIN : 4 chiffres minimum (chiffres uniquement)','bad');
+  await setSetting('admin_pin',v);toast('Code PIN modifié ✅','ok');};
 App.userAdd=async()=>{const n=$('#uName').value.trim(),p=$('#uPin').value.trim(),r=$('#uRole').value;
   if(!n)return toast('Nom requis','bad');
   if(CFG.mode!=='supabase'&&!p)return toast('Nom et code PIN requis','bad');
   const mail=($('#uMail')?$('#uMail').value.trim():'');
   if(CFG.mode==='supabase'&&!mail)return toast('En mode en ligne, l\'e-mail est nécessaire : c\'est lui qui donne accès aux données (le login est créé automatiquement)','bad');
   const pw=(($('#uPass')?$('#uPass').value:'')||('fks'+Math.floor(100000+Math.random()*900000))).replace(/[\\'"]/g,'');/* v35.49 : mot de passe propre, généré si vide */
-  const arr=(SETS.users||[]).slice();arr.push({name:n,role:r,pin:p,email:mail});await setSetting('users',arr);
+  const arr=(SETS.users||[]).slice();
+  if(CFG.mode==='supabase'&&mail&&arr.some(x=>x.email&&String(x.email).toLowerCase()===String(mail).toLowerCase()))return toast('Un compte existe déjà avec cet e-mail','bad');/* v35.51 : anti-doublon */
+  if(p&&arr.some(x=>x.pin&&String(x.pin)===String(p)))return toast('Ce code PIN est déjà utilisé par un autre compte','bad');/* v35.51 : jamais deux personnes sur le même compte */
+  arr.push({name:n,role:r,pin:p,email:mail});await setSetting('users',arr);
   if(CFG.mode==='supabase'&&mail)await App.authCreate(mail,pw,n,r);
   else toast('Compte créé — son code PIN est actif ✅','ok');
   render();};
 App.userDel=async ui=>{const arr=(SETS.users||[]).slice();const gone=arr[ui]||{};arr.splice(ui,1);await setSetting('users',arr);
   if(CFG.mode==='supabase'&&gone.email&&SETS.usermgt_key){/* v35.49 : fonction user-admin déployée → login supprimé aussi, sans SQL */
     let ok=false;try{const r=await fetch(Supa.base()+'/functions/v1/user-admin',{method:'POST',headers:{'Content-Type':'application/json',apikey:CFG.anon,Authorization:'Bearer '+CFG.anon,'x-usermgt-key':SETS.usermgt_key},body:JSON.stringify({action:'delete',email:gone.email})});ok=r.ok;}catch(e){}
-    if(ok){modal('Compte supprimé ✅','<div class="help" style="line-height:1.8"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application :<div class="hr"></div>• login d\'accès aux données <b>supprimé</b> (fonction user-admin)<br>• applie ouverte sur son téléphone → déconnectée en ≤ 30 secondes<br>• réouverture → refusée</div>','<button class="btn" onclick="closeModal()">Terminé</button>');render();return;}}
+    if(ok){modal('Compte supprimé ✅','<div class="help" style="line-height:1.8"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application :<div class="hr"></div>• login d\'accès aux données <b>supprimé</b> (fonction user-admin)<br>• appli ouverte sur son téléphone → déconnectée en ≤ 30 secondes<br>• réouverture → refusée</div>','<button class="btn" onclick="closeModal()">Terminé</button>');render();return;}}
   if(CFG.mode==='supabase'&&gone.email){
     modal('Compte supprimé ✅','<div class="help" style="line-height:1.7"><b>'+esc(gone.name)+'</b> n\'a plus accès à l\'application : s\'il l\'a ouverte, il est déconnecté automatiquement (vérification toutes les 30 secondes) ; s\'il la rouvre, l\'entrée lui est refusée.</div><div class="help" style="margin-top:10px;line-height:1.7">⚠️ <b>Son identifiant Supabase (e-mail + mot de passe) existe toujours.</b> Pour empêcher toute tentative de reconnexion, supprimez-le aussi : <b>Supabase → Authentication → Users</b>, ou collez cette ligne dans le <b>SQL Editor</b> Supabase :</div><input id="delSql" readonly value="delete from auth.users where email = \''+esc(gone.email)+'\';" style="width:100%;margin-top:8px;font-family:monospace;font-size:12px"><div style="margin-top:10px"><button class="btn sm" onclick="App.delSqlCopy()">📋 Copier le SQL</button></div>','<button class="btn" onclick="closeModal()">Terminé</button>');
   }else toast('Compte supprimé — son code PIN ne fonctionne plus ✅','ok');
@@ -4686,7 +4691,7 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
       if(su){S.user=su;saveUser();await outboxFlush();}
       else{/* v35.48 : compte supprimé ou e-mail sans accès — ACCÈS REFUSÉ (fini la promotion manager silencieuse) */
         SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);
-        S._kicked='Votre compte a été supprimé ou n\'a plus d\'accès — si vous êtes le gestionnaire, retapez vos identifiats puis récupérez l\'accès avec votre code PIN gestionnaire.';}
+        S._kicked='Votre compte a été supprimé ou n\'a plus d\'accès — si vous êtes le gestionnaire, retapez vos identifiants puis récupérez l\'accès avec votre code PIN gestionnaire.';}
     }else if(CFG.mode==='local'){
       await loadSettings();
     }else{

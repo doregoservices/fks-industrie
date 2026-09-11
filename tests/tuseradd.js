@@ -57,6 +57,23 @@ global.fetch=_f;CFG.mode=_m;CFG.url=_u;CFG.anon=_a;SETS.usermgt_key=undefined;
 console.log('✓ Créer un compte crée AUSSI le login d accès aux données, automatiquement (signup public, zéro configuration)');
 console.log('✓ Avec la fonction user-admin (optionnelle) : login actif immédiatement à la création, ET supprimé à la suppression du compte');
 console.log('✓ Cas gérés avec message clair : login déjà existant (422), réinitialisation par e-mail, inscriptions désactivées, panne réseau');
-console.log('✓ E-mail obligatoire en mode en ligne (accès aux données) · PIN obligatoire en mode local');
+/* 8 · v35.51 : doublons refusés — jamais deux comptes sur le même e-mail ou le même PIN */
+const n0=(SETS.users||[]).length;
+$('#uName').value='Clone';$('#uRole').value='caissier';$('#uPin').value='3333';$('#uMail').value='CISE@fks.ci';
+await App.userAdd();
+if((SETS.users||[]).length!==n0)throw new Error('doublon d e-mail (ou de PIN) accepté');
+$('#uMail').value='nouveau@fks.ci';/* e-mail libre mais PIN 3333 déjà pris */
+await App.userAdd();
+if((SETS.users||[]).length!==n0)throw new Error('doublon de PIN accepté (deux personnes sur le même compte)');
+$('#uPin').value='9999';/* e-mail libre + PIN libre → créé */
+await App.userAdd();
+if((SETS.users||[]).length!==n0+1)throw new Error('compte légitime refusé à tort');
+/* 9 · v35.51 : le PIN gestionnaire doit être solide (4 chiffres minimum) */
+SETS.admin_pin='1234';
+$('#stPin').value='12';await App.savePin();
+if(String(SETS.admin_pin)!=='1234')throw new Error('PIN trop court accepté');
+$('#stPin').value='9876';await App.savePin();
+if(String(SETS.admin_pin)!=='9876')throw new Error('PIN valide refusé');
+console.log('✓ Anti-doublons : même e-mail ou même PIN refusés (jamais deux personnes sur un compte)');
 console.log('TUSERADD: TOUT PASSE');
 })().catch(e=>{console.log('ECHEC TUSERADD:',e.message);process.exit(1);});
