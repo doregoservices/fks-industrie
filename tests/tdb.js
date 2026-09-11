@@ -74,7 +74,7 @@ console.log('✓ Après connexion : alerte dès qu\'un élément manque (table O
 /* 8. adjSave n\'envoie plus les colonnes nulles (compat anciennes bases) */
 S.route='production';S.tab={production:'adj'};location.hash='#/production';
 await render();
-$('#jQ').value='25';$('#jR').value='Stock initial';
+$('#jQ').value='25';$('#jR').value='Stock initial';$('#jL').value='green';
 let ins=null;const _i=DB.insert;DB.insert=async function(t,o){ins={t:t,o:o};return _i.apply(this,arguments);};
 await App.adjSave();
 DB.insert=_i;
@@ -98,5 +98,45 @@ const pm=Array.isArray(posted)?posted:[posted];
 if(!pm[0].id||pm[1].id!=='x2')throw new Error('insert tableau : ids incorrects');
 global.fetch=_f2;
 console.log('✓ Insert en ligne : id + created_at générés automatiquement (1 objet, tableau, id fourni respecté)');
-console.log('TDB: 9/9 OK');
+
+/* 10. résilience migration : les colonnes absentes sont filtrées au lieu d'échouer (400 PostgREST) */
+const _f3=global.fetch;let posts=[];
+global.fetch=async(u,o)=>{
+  const us=String(u);
+  if(us.endsWith('/rest/v1/')||us.endsWith('/rest/v1')){
+    const E={id:{},name:{},position:{},phone:{},hire_date:{},salary_type:{},base_salary:{},transport:{},housing:{},tax_shares:{},zone:{},primes:{},active:{}};
+    const S={id:{},run_id:{},employee_id:{},employee_name:{},base:{},transport:{},matricule:{},net:{},paid:{}};
+    return{ok:true,json:async()=>({definitions:{employees:{properties:E},pay_slips:{properties:S}}})};}
+  if(o&&o.method==='POST'){const b=JSON.parse(o.body);posts.push({u:us,b:b});const arr=Array.isArray(b)?b:[b];return{ok:true,json:async()=>arr};}
+  if(o&&o.method==='PATCH'){const pb=JSON.parse(o.body);posts.push({u:us,b:pb});return{ok:true,json:async()=>[pb]};}
+  return{ok:true,json:async()=>([])};};
+CFG.mode='supabase';CFG.url='https://demo.supabase.co';CFG.anon='cle';SES=null;
+setDbAdapter();
+const okLoad=await Supa.loadCols();
+if(!okLoad)throw new Error('loadCols a échoué');
+if(Supa._cols.employees.indexOf('matricule')>=0)throw new Error('schéma mock : matricule devrait être absent');
+const eNew=await DB.insert('employees',{name:'Test Résilience',matricule:'FKS-999',base_salary:100000,transport:10000});
+if(!eNew||eNew.name!=='Test Résilience')throw new Error('insert résilient : échec ou données perdues');
+const pE=posts.filter(p=>String(p.u).includes('/employees')).slice(-1)[0];
+const bodyE=Array.isArray(pE.b)?pE.b[0]:pE.b;
+if('matricule' in bodyE)throw new Error('matricule aurait dû être filtré (colonne absente)');
+if(bodyE.name!=='Test Résilience')throw new Error('données valides perdues au filtrage !');
+await DB.update('employees','abc',{matricule:'FKS-888',name:'Renommé'});
+const pU=posts.filter(p=>String(p.u).includes('/employees')).slice(-1)[0];
+if('matricule' in pU.b)throw new Error('PATCH : matricule aurait dû être filtré');
+if(pU.b.name!=='Renommé')throw new Error('PATCH : nom perdu');
+await DB.insert('pay_slips',{run_id:'r1',employee_name:'X',matricule:'FKS-001',transport:9333,transport_full:10000,net:50000});
+const pS=posts.filter(p=>String(p.u).includes('/pay_slips')).slice(-1)[0];
+const bodyS=Array.isArray(pS.b)?pS.b[0]:pS.b;
+if(bodyS.matricule!=='FKS-001')throw new Error('matricule pay_slips ne devrait PAS être filtré (colonne présente)');
+if('transport_full' in bodyS)throw new Error('transport_full aurait dû être filtré');
+if(!Supa._missed||!Supa._missed.employees||!Supa._missed.pay_slips)throw new Error('colonnes manquantes non signalées');
+Supa._cols=null;
+await DB.insert('employees',{name:'Sans Schéma',matricule:'FKS-777'});
+const pN=posts.filter(p=>String(p.u).includes('/employees')).slice(-1)[0];
+const bodyN=Array.isArray(pN.b)?pN.b[0]:pN.b;
+if(bodyN.matricule!=='FKS-777')throw new Error('sans schéma chargé, pass-through attendu');
+global.fetch=_f3;Supa._cols=null;Supa._missed=null;Supa._warned=false;CFG.mode='local';setDbAdapter();
+console.log('✓ Résilience migration : colonnes absentes filtrées (insert+PATCH), présentes conservées, pass-through sans schéma — matricule/paie ne bloquent plus jamais sur une base non migrée');
+console.log('TDB: 10/10 OK');
 })().catch(e=>{console.error('ÉCHEC TDB:',e.stack||e.message);process.exit(1);});

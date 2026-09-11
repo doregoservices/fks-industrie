@@ -16,11 +16,11 @@ if(!h1.includes('en une seule saisie'))throw new Error('titre saisie unique abse
 if(!h1.includes('Baromètre usine'))throw new Error('baromètre usine absent de l écran Production');
 if(!$('#cIn'))throw new Error('champ torréfié consommé absent');
 if(!h1.includes('kg café/u'))throw new Error('café par unité non affiché');
-if(!h1.includes('peser le café en vrac'))throw new Error('option vrac absente');
+if(h1.includes('peser le café en vrac'))throw new Error('étape pesée vrac encore présente (supprimée)');
 if(!h1.includes('Café conditionné'))throw new Error('colonne Café conditionné absente');
 if(!h1.includes('Rendement'))throw new Error('colonne Rendement absente');
 if(!h1.includes('App.condEdit('))throw new Error('✎ conditionnement absent');
-console.log('✓ Saisie unique : torréfié consommé + unités produites, colonnes Café conditionné / Perte / Rendement, ✎, option vrac repliée');
+console.log('✓ Saisie unique : torréfié consommé + unités produites, colonnes Café conditionné / Perte / Rendement, ✎, étape vrac supprimée');
 /* 2. saisie combinée : 100 kg → assez d'unités pour 95 kg de café, perte 5 kg */
 const U=Math.round(95/cafeU(av));            /* unités pour conditionner 95 kg */
 const pr0=(await DB.list('productions')).length;
@@ -54,27 +54,14 @@ const bom=(av.packaging||[]).reduce((a,b)=>a+Number(b.qty||0),0);
 const pkNow=(await DB.list('packaging_entries')).filter(e=>e.ref==='production:'+pr.id);
 if(pkNow.length&&Math.abs(pkNow.reduce((a,e)=>a+Number(e.qty||0),0)-bom*Math.max(1,U-90))>0.01)throw new Error('emballages non resynchronisés');
 console.log('✓ Édition '+U+'→'+Math.max(1,U-90)+' unités : emballages re-consommés au juste montant, zéro doublon');
-/* 5. option vrac : transformation seule (dans les détails) fonctionne toujours */
-const tr0=(await DB.list('transformations')).length;
-const ctype=(await DB.list('coffee_types'))[0];
-const stIn={id:'tq_'+ctype.id,value:'30'};
-document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq]:sl==='input[id^=tq_]'?[stIn]:_qsa(sl);
-$('#tD').value=todayISO();$('#tIn').value='32';stIn.value='30';
-await App.trSave();
-if((await DB.list('transformations')).length!==tr0+1)throw new Error('vrac non créé');
-const tr=(await DB.list('transformations')).pop();
-if(Number(tr.roasted_used)!==32)throw new Error('vrac : torréfié non enregistré');
-console.log('✓ Option vrac : transformation seule 32→30 kg (perte 2 kg) enregistrée');
+/* 5. étape pesée vrac supprimée : plus d'option transformation seule ni de types */
 /* 6. aucun type : la saisie unique fonctionne quand même (café/u via poids produit) */
 document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq]:_qsa(sl);
-const ctys=await DB.list('coffee_types');
-for(const t of ctys)await DB.update('coffee_types',t.id,{active:false});
 await render();
 const h2=$('#main').innerHTML;
-if(!$('#cIn'))throw new Error('sans types : saisie unique absente');
-if(h2.includes('peser le café en vrac'))throw new Error('sans types : option vrac devrait disparaître');
-if(!h2.includes('kg café/u'))throw new Error('sans types : café/u (via poids) non affiché');
-for(const t of ctys)await DB.update('coffee_types',t.id,{active:true});
+if(!$('#cIn'))throw new Error('saisie unique absente');
+if(h2.includes('peser le café en vrac')||h2.includes('Transformations seules'))throw new Error('restes de l étape vrac');
+if(!h2.includes('kg café/u'))throw new Error('café/u (via poids) non affiché');
 console.log('✓ Sans types de café : la saisie unique reste pleinement utilisable (café/u = poids du produit)');
 /* 7. emballages : édition d\’un mouvement */
 S.route='emballages';S.tab={};location.hash='#/emballages';

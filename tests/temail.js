@@ -58,5 +58,85 @@ const log=(await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.status==='s
 if(!log.length)throw new Error('sendDaily : email_log non renseigné');
 toast=_t;global.fetch=_fetch;
 console.log('✓ Point quotidien au boss : même canal corrigé + journal email_log renseigné');
-console.log('TEMAIL: 5/5 OK');
+/* 6. filet de sécurité 22h : rattrapage automatique + anti-doublon */
+App._autoDaily=null;
+for(const l of (await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.ref===todayISO()))await DB.remove('email_log',l.id);
+let calls6=0;const _f6=global.fetch;global.fetch=async(u,o)=>{calls6++;return{ok:true,json:async()=>({ok:true})};};
+let toasts6=[];const _t6=toast;toast=(x,k)=>{toasts6.push(String(x));return _t6(x,k);};
+if(await App.autoDailyCheck(20)!==false||calls6!==0)throw new Error('avant 22h : aucun envoi attendu (calls='+calls6+')');
+const s6=await App.autoDailyCheck(23);
+if(s6!==true||calls6!==1)throw new Error('après 22h : envoi attendu (calls='+calls6+')');
+if(!toasts6.some(x=>x.includes('automatiquement')))throw new Error('toast de rattrapage absent');
+const lg6=(await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.ref===todayISO()&&x.status==='sent');
+if(!lg6.length)throw new Error('log du rattrapage absent');
+if(await App.autoDailyCheck(23)!==false||calls6!==1)throw new Error('anti-doublon : le point ne doit pas partir 2 fois (calls='+calls6+')');
+toast=_t6;global.fetch=_f6;
+console.log('✓ Filet 22h : avant 22h rien · après 22h envoi auto + toast · anti-doublon (jamais 2 fois)');
+/* 7. heure à la minute près (13h30…) + vérification immédiate au réglage */
+App._autoDaily=null;
+for(const l of (await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.ref===todayISO()))await DB.remove('email_log',l.id);
+if(parseEmailTime('13h30')!==810||parseEmailTime('13H')!==780||parseEmailTime('9:15')!==555||parseEmailTime('22h00')!==1320||parseEmailTime('13h75')!==null||parseEmailTime('25h')!==null||parseEmailTime('abc')!==null)throw new Error('parseEmailTime : '+[parseEmailTime('13h30'),parseEmailTime('13H'),parseEmailTime('9:15'),parseEmailTime('13h75'),parseEmailTime('25h')]);
+if(emailTimeMin()!==1320)throw new Error('défaut devrait être 22h00 : '+emailTimeMin());
+SETS.email={boss:'boss@fks.ci',key:'k',hour:13};
+if(emailTimeMin()!==780)throw new Error('héritage heure simple 13 → 13h00 : '+emailTimeMin());
+SETS.email={boss:'boss@fks.ci',key:'k',time:810};
+if(emailTimeStr()!=='13h30')throw new Error('emailTimeStr : '+emailTimeStr());
+let calls7=0;global.fetch=async(u,o)=>{calls7++;return{ok:true,json:async()=>({ok:true})};};
+if(await App.autoDailyCheck(13,29)!==false||calls7!==0)throw new Error('à 13h29 : rien n est attendu (calls='+calls7+')');
+const s7=await App.autoDailyCheck(13,30);
+if(s7!==true||calls7!==1)throw new Error('à 13h30 : envoi attendu (calls='+calls7+')');
+App._autoDaily=null;
+for(const l of (await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.ref===todayISO()))await DB.remove('email_log',l.id);
+let toasts7=[];const _t7=toast;toast=(x,k)=>{toasts7.push(String(x));return _t7(x,k);};
+$('#emT').value='13h75';await App.saveEmail();
+if(!toasts7.some(x=>/invalide/i.test(x)))throw new Error('heure invalide devrait être refusée : '+toasts7.join(' / '));
+if(((SETS.email||{}).time)!==810)throw new Error('un réglage invalide ne doit pas écraser l ancien');
+$('#emT').value='9h15';await App.saveEmail();
+if((SETS.email||{}).time!==555)throw new Error('9h15 devrait être enregistré : '+(SETS.email||{}).time);
+if(!toasts7.some(x=>x.includes('9h15')))throw new Error('confirmation 9h15 absente : '+toasts7.join(' / '));
+toast=_t7;SETS.email={boss:'boss@fks.ci',key:'k'};global.fetch=_f6;
+console.log('✓ Heure à la minute près : « 13h30 » « 9:15 » « 22h00 » acceptées, refus explicite si invalide ; rien à 13h29, envoi à 13h30 ; vérification immédiate au réglage');
+/* 8. jour néant : point envoyé quand même, avec « rien à signaler » */
+const NE='2030-01-05';
+const dE=await dayStatus(NE);
+if(!dE.empty||dE.complete)throw new Error('jour néant mal détecté : '+JSON.stringify({empty:dE.empty,complete:dE.complete}));
+if(!dayBadge(dE).includes('néant'))throw new Error('badge néant absent : '+dayBadge(dE));
+const repE=await buildDailyReport(NE);
+if(!repE.html.includes('sans activité'))throw new Error('bandeau « sans activité » absent du point');
+if(!repE.html.includes('Aucun envoi reçu'))throw new Error('les commerciales silencieuses doivent être listées');
+if(!repE.blob)throw new Error('Excel du point néant manquant');
+console.log('✓ Jour néant : badge 🌑 + point complet quand même (« Journée sans activité ») + chaque commerciale listée + Excel');
+/* 9. plus jamais de silence : raisons nommées, échec toasté, avertissement unique */
+SETS.email={boss:'boss@fks.ci',key:'k'};
+if(dailyBlockReason()!==null)throw new Error('config complète → aucune raison attendue');
+const _m9=CFG.mode;CFG.mode='local';
+if(!/mode local/.test(dailyBlockReason()||''))throw new Error('mode local non signalé : '+dailyBlockReason());
+CFG.mode=_m9;
+const _u9=S.user;S.user=null;
+if(!/gestionnaire/.test(dailyBlockReason()||''))throw new Error('non gestionnaire non signalé');
+S.user=_u9;
+SETS.email={boss:'',key:'k'};
+if(!/email du boss/.test(dailyBlockReason()||''))throw new Error('boss manquant non signalé');
+SETS.email={boss:'boss@fks.ci',key:''};
+if(!/REPORT_KEY/.test(dailyBlockReason()||''))throw new Error('clé manquante non signalé');
+/* échec réel : toasté */
+App._autoDaily=null;
+for(const l of (await DB.list('email_log')).filter(x=>x.kind==='daily'&&x.ref===todayISO()))await DB.remove('email_log',l.id);
+SETS.email={boss:'boss@fks.ci',key:'k',time:0};
+let toasts9=[];const _t9=toast;toast=(x,k)=>{toasts9.push(String(x));return _t9(x,k);};
+global.fetch=async()=>({ok:false,status:404,json:async()=>({msg:'Function not found'})});
+if(await App.autoDailyCheck(0,0)!==false)throw new Error('échec attendu');
+if(!toasts9.some(x=>/non envoyé/.test(x)))throw new Error('l échec réel doit être toasté : '+toasts9.join(' / '));
+/* dailyTick : blocage nommé, avertissement unique */
+toasts9.length=0;App._dailyWarn=null;
+SETS.email={boss:'',key:'k',time:0};
+await App.dailyTick();
+if(!toasts9.some(x=>/NON envoyé/.test(x)))throw new Error('blocage non signalé par dailyTick : '+toasts9.join(' / '));
+toasts9.length=0;
+await App.dailyTick();
+if(toasts9.length)throw new Error('l avertissement ne doit pas se répéter à chaque tick : '+toasts9.join(' / '));
+/* état dépannage présent dans Réglages */
+toast=_t9;SETS.email={boss:'boss@fks.ci',key:'k'};global.fetch=_f6;
+console.log('✓ Plus jamais de silence : blocages nommés (mode/compte/boss/clé), échec réel toasté, avertissement unique ; Réglages → 📧 état en direct + bouton d\'envoi immédiat');
+console.log('TEMAIL: 9/9 OK');
 })().catch(e=>{console.error('ÉCHEC TEMAIL:',e.stack||e.message);process.exit(1);});

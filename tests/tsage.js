@@ -31,9 +31,10 @@ if(!captured||!captured.fname.includes('Sage_6_journaux'))throw new Error('fichi
 const sh={};captured.sheets.forEach(x=>sh[x.name.split(' — ')[0]]=x);
 const KS=['VE','AC','CA','BQ','PA','OD'];
 KS.forEach(k=>{if(!sh[k])throw new Error('journal '+k+' absent des feuilles');});
-if(captured.sheets.length!==8)throw new Error(captured.sheets.length+' feuilles au lieu de 8');
+if(captured.sheets.length!==9)throw new Error(captured.sheets.length+' feuilles au lieu de 9');
+if(!captured.sheets.some(x=>x.name==='Tiers'))throw new Error('feuille Tiers absente');
 if(!csv||!csv.n.includes('Sage_6_journaux'))throw new Error('csv global absent');
-console.log('✓ 8 feuilles [Synthèse · VE · AC · CA · BQ · PA · OD · Mouvements] + csv global ('+csv.rows.length+' lignes)');
+console.log('✓ 9 feuilles [Synthèse · VE · AC · CA · BQ · PA · OD · Tiers · Mouvements] + csv global ('+csv.rows.length+' lignes)');
 
 /* 3. Équilibre Débit = Crédit dans chacun des 6 journaux */
 let gD=0,gC=0;
@@ -60,13 +61,16 @@ console.log('✓ VE : 702 produits finis + 4111 clients — AUCUN compte de cais
 /* 6. Aucun double comptage dans CA */
 ['702000','602100','608100','661000','664100'].forEach(a=>{if(has('CA',a))throw new Error('CA : compte '+a+' présent en double (déjà dans VE/AC/PA)');});
 if(!has('CA','411100'))throw new Error('CA : encaissement de créance 411100 absent');
-if(!has('CA','612000'))throw new Error('CA : charge transport 612000 absente');
+if(!has('AC','612000'))throw new Error('AC : charge transport 612000 absente (via fournisseur divers)');
+if(has('CA','612000'))throw new Error('CA : la charge 612000 doit passer par le fournisseur divers, pas en direct');
 console.log('✓ CA : charges réglées en espèces (612…) + encaissement créance 4111 — rien en double');
 
 /* 7. Journal AC : achats réglés et à crédit */
 if(!has('AC','602100'))throw new Error('AC : matière première 602100 absente');
 if(!has('AC','608100'))throw new Error('AC : emballages 608100 absents');
-if(!has('AC','401100'))throw new Error('AC : fournisseur 401100 absent (achat à crédit)');
+if(!has('AC','401100'))throw new Error('AC : fournisseur divers 401100 absent');
+if(!has('AC','401101'))throw new Error('AC : compte dédié du fournisseur nommé (Coop Test → 401101) absent');
+if(!has('VE','4111001'))throw new Error('VE : compte dédié du client nommé (Épicerie Bassam → 4111001) absent');
 if(has('AC','571000')||has('AC','552100'))throw new Error('AC : compte de caisse interdit dans le journal des achats');
 console.log('✓ AC : 6021 café vert + 6081 emballages / 4011 fournisseurs — AUCUN compte de caisse (règle fournisseur)');
 

@@ -25,22 +25,21 @@ await App.expStocks();
 if(!cap)throw new Error('expStocks n’a rien généré');
 const syn=cap.rows.filter(r=>r.name==='Synthèse')[0].rows;
 const torr=syn.filter(r=>r[0]==='Café torréfié')[0];
-eq(torr[2],st.roastedUsed+st.roastedUsedTransf,'sorties torréfié (cond + machines)');
+eq(torr[2],(st.roastedUsed||0),'sorties torréfié (conditionnement, rendement unique)');
 eq(torr[3].v,num2(st.roastedStock),'stock torréfié export');
-const typeLine=syn.filter(r=>r[0]==='Moulu premium')[0];
-if(!typeLine||typeLine[3].v!==num2(st.types.filter(t=>t.name==='Moulu premium')[0].stock))throw new Error('types absents du point stocks');
+if(syn.some(r=>r[0]==='Moulu premium'))throw new Error('types encore listés dans le point stocks (étape supprimée)');
 const vertLine=syn.filter(r=>r[0]==='Café vert')[0];
 if(!String(vertLine[5]).includes('dont ajust.'))throw new Error('détail ajustement vert absent');
-console.log('✓ Point complet des stocks : torréfié = conditionné + machines, types de café listés, ajustements signalés');
+console.log('✓ Point complet des stocks : torréfié = conditionnement (rendement unique), plus de types, ajustements signalés');
 
 /* ===== 3. GARDE-FOU : transformation avec entrée 0 (donnée corrompue) sans NaN ===== */
-await DB.insert('transformations',{date:todayISO(),roasted_used:0,lines:[{type_id:'x',name:'Moulu premium',qty:5}],operator:'?',note:'',source:'admin'});
+await DB.insert('productions',{date:todayISO(),roasted_used:0,lines:[{product_id:'zz',name:'Produit fantôme',qty:5,price:0}],operator:'?',note:'',source:'admin'});
 S.tab=S.tab||{};S.tab.production='hist';S.route='production';
 await scProduction();
 if($('#main').innerHTML.includes('NaN'))throw new Error('NaN dans historique production');
-if(!$('#main').innerHTML.includes('—'))throw new Error('rendement 0 non remplacé par tiret');
+if(!$('#main').innerHTML.includes('—'))throw new Error('production à 0 kg torréfié : tiret attendu');
 S.tab.production='roast';
-console.log('✓ Historique : transformation à 0 kg entrant → rendement « — » au lieu de NaN %');
+console.log('✓ Historique : production corrompue à 0 kg torréfié → « — » au lieu de NaN %');
 
 /* ===== 4. EMBALLAGES : l’écran Stocks affiche les vrais stocks ===== */
 await scStocks();
@@ -61,7 +60,7 @@ console.log('✓ Analytique robuste : mois sans lot machines → coût recette =
 const inc=await computeIncome(per);
 const chargesMan=inc.consVert+inc.consEmb+inc.servicesTot+inc.personnel.total+inc.impotsTot+inc.dotations;
 eq(inc.chargesTot,chargesMan,'charges');
-eq(inc.produitsTot,inc.ventes+inc.dPF+inc.dSemi,'produits');
+eq(inc.produitsTot,inc.ventes+inc.dPF+(inc.dRoast||0)+inc.dSemi,'produits');
 eq(inc.resultat,inc.produitsTot-inc.chargesTot,'résultat');
 eq(inc.paTot.ca,inc.prodAnalysis.reduce((a,r)=>a+r.ca,0),'analytique Σ CA');
 console.log('✓ Identités comptables intactes après les 5 correctifs');

@@ -1,115 +1,95 @@
-;/* TEST FEATURE : transformation (machines) — torréfaction → MACHINES → conditionnement */
+;/* TEST : rendement UNIQUE — étape de pesée intermédiaire (types/machines) supprimée */
 ;(async()=>{
-await loadSettings();
-await seedDemo();
-S.user={name:'test'};
-const per=todayISO().slice(0,7);
+await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
 const eq=(a,b,m)=>{if(Math.abs(a-b)>0.01)throw new Error(m+': '+a+' ≠ '+b);};
 
-/* ===== 1. SEED : types + transformations ===== */
-const ctypes=await DB.list('coffee_types');
-if(ctypes.length!==3)throw new Error('types démo: '+ctypes.length);
+/* 1. seed sans étape types */
+if((await DB.list('coffee_types')).length)throw new Error('types résiduels en seed');
+if((await DB.list('transformations')).length)throw new Error('transformations résiduelles en seed');
 const prods=await DB.list('products');
-if(prods.some(p=>!(p.recipes||[]).length))throw new Error('recettes produits manquantes');
-if(prods.filter(p=>p.name==='Café moulu 1 kg')[0].recipes[0].qty!==1)throw new Error('recette 1 kg');
+const p1=prods.filter(p=>p.name==='Café moulu 1 kg')[0];
+if(!p1||(p1.recipes||[])[0].qty!==1)throw new Error('kg/u absent des recettes');
 if(prods.filter(p=>p.name==='Café moulu 500 g')[0].recipes[0].qty!==0.5)throw new Error('recette 500 g');
-const transf=await DB.list('transformations');
-if(transf.length!==2)throw new Error('transformations démo: '+transf.length);
-const tUsed=transf.reduce((a,t)=>a+Number(t.roasted_used),0);
-const tOut=transf.reduce((a,t)=>(t.lines||[]).reduce((x,l)=>x+Number(l.qty),0)+a,0);
-eq(tUsed,520,'torréfié consommé machines');
-eq(tOut,514,'kg obtenus machines');
-console.log('✓ Seed : 3 types, recettes produits (1 kg→1, 500 g→0.5), 2 transformations 280→276 et 240→238 kg');
+console.log('✓ Seed sans types : recettes produits en kg de café/u directement');
 
-/* ===== 2. STOCKS : vert / torréfié / types ===== */
+/* 2. stocks : vert + torréfié (rendement pesé UNIQUEMENT à la torréfaction) */
 let st=await computeStats();
-eq(st.greenStock,2000-800,'stock vert');           /* seed : 2000 kg achetés, 800 torréfiés */
-eq(st.roastedStock,667-520,'stock torréfié après machines'); /* 418+249−280−240 */
-eq(Math.round(st.transfYield*10),988,'rendement machines %');
-const byName=n=>st.types.filter(t=>t.name===n)[0];
-eq(byName('Moulu premium').stock,60,'stock premium');
-eq(byName('Moulu standard').stock,70,'stock standard');
-eq(byName('Grains (non moulu)').stock,54,'stock grains');
-console.log('✓ Stocks : torréfié 147 kg (520 déduits par machines) · premium 60 · standard 70 · grains 54 kg');
+eq(st.greenStock,1200,'stock vert');
+eq(st.roastedStock,320,'stock torréfié');
+console.log('✓ Stocks : 1 200 kg vert · 320 kg torréfié — une seule pesée (torréfaction), café des sachets réellement consommé (205+142 kg)');
 
-/* ===== 3. createProduction : déduction type_lines depuis recettes ===== */
-const p1kg=prods.filter(p=>p.name==='Café moulu 1 kg')[0];
-const p500=prods.filter(p=>p.name==='Café moulu 500 g')[0];
-await createProduction({date:todayISO(),roasted_used:0,lines:[
-  {product_id:p1kg.id,name:p1kg.name,qty:10,price:8000},
-  {product_id:p500.id,name:p500.name,qty:4,price:4500}],operator:'Test',note:'',source:'admin'});
-const lastProd=(await DB.list('productions')).sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||'')).slice(-1)[0];
-if(!lastProd.type_lines||!lastProd.type_lines.length)throw new Error('type_lines non déduits');
-const tl={};lastProd.type_lines.forEach(l=>tl[l.name]=l.qty);
-eq(tl['Moulu premium'],10,'auto premium');
-eq(tl['Moulu standard'],2,'auto standard (0.5×4)');
+/* 3. saisie unique : le conditionnement consomme directement le torréfié */
+$('#main').innerHTML='<input id="cD"><input id="cIn"><input id="cOp"><input id="cN">';
+$('#cD').value=todayISO();$('#cIn').value='100';$('#cOp').value='Machine 1';$('#cN').value='';
+const _qsa=document.querySelectorAll;const stCq={id:'cq_'+p1.id,value:'90'};
+document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq]:_qsa(sl);
+const _t9=toast;toast=(m,k)=>{if(String(m).includes('Refusé')||String(m).includes('dépasse'))throw new Error('refus inattendu: '+m);return _t9(m,k);};
+await App.condSave();document.querySelectorAll=_qsa;toast=_t9;
+const pr=(await DB.list('productions')).slice(-1)[0];
+if(Number(pr.roasted_used)!==100)throw new Error('torréfié consommé non enregistré: '+pr.roasted_used);
 st=await computeStats();
-eq(byName('Moulu premium').stock,50,'stock premium après cond.');
-eq(byName('Moulu standard').stock,68,'stock standard après cond.');
-console.log('✓ Conditionnement sans pesée : 10×1 kg + 4×500 g → 10 kg premium + 2 kg standard consommés automatiquement');
+eq(st.roastedStock,220,'torréfié décrémenté par le conditionnement');
+const pkOut=(await DB.list('packaging_entries')).filter(e=>e.ref==='production:'+pr.id&&e.type==='out');
+if(!pkOut.length)throw new Error('emballages non consommés automatiquement');
+console.log('✓ Saisie unique : 100 kg torréfié → 90 unités (1 kg/u) · stock torréfié 220 kg · emballages auto');
 
-/* ===== 4. EXPLOITATION : coût semi-fini + variation ===== */
-let inc=await computeIncome(per);
-if(!(inc.semiCost>0))throw new Error('coût semi-fini: '+inc.semiCost);
-const semiNat=inc.transfUsed>0?inc.semiCost*inc.transfMade:0;
-eq(inc.produitsTot,inc.ventes+inc.dPF+inc.dSemi,'total produits avec semi-finis');
-if(inc.dSemi===undefined||inc.typeRows.length!==3)throw new Error('typeRows manquants');
-const sfTot=inc.typeRows.reduce((a,r)=>a+r.sf,0);
-eq(sfTot,50+68+54,'SF types exploitation');
-console.log('✓ Exploitation : coût semi-fini '+money(inc.semiCost)+'/kg (valorisé au CMP vert) · variation semi-finis '+money(inc.dSemi)+' dans les produits');
+/* 4. écran production : rendement unique affiché, étape machines absente */
+S.route='production';S.tab={production:'hist'};location.hash='#/production';
+await render();
+const h=$('#main').innerHTML;
+if(!h.includes('Rendement torréfaction (unique)'))throw new Error('rendement unique absent');
+if(h.includes('Rendement machines')||h.includes('Types obtenus'))throw new Error('restes de l étape machines');
+console.log('✓ Historique : un seul rendement (torréfaction), zéro trace de l étape machines');
 
-/* ===== 5. FLUX TERRAIN : transformation via lien → pending → apply ===== */
-const before=(await DB.list('transformations')).length;
-const tprem=ctypes.filter(t=>t.name==='Moulu premium')[0];
-const res=await formSend('transformation','Machine 1',{date:todayISO(),roasted_used:20,
-  lines:[{type_id:tprem.id,name:'Moulu premium',qty:19}],operator:'Machine 1'});
-if(!res.ok)throw new Error('formSend');
-let pend=(await DB.list('pending_entries')).filter(p=>p.status==='pending').slice(-1)[0];
-if(pend.source_type!=='transformation')throw new Error('pending type');
-await applyPending(pend);
-if((await DB.list('transformations')).length!==before+1)throw new Error('applyPending transformation');
+/* 5. stocks JAMAIS négatifs : toutes les consommations sont bloquées au-delà du disponible */
+let refuse='';
+const _t5=toast;toast=(m,k)=>{if(String(m).includes('Refusé'))refuse=String(m);return _t5(m,k);};
+/* 5a. conditionnement > stock torréfié (220 kg restants) */
+$('#main').innerHTML='<input id="cD"><input id="cIn"><input id="cOp"><input id="cN">';
+$('#cD').value=todayISO();$('#cIn').value='600';$('#cOp').value='';$('#cN').value='';
+const stCq2={id:'cq_'+p1.id,value:'500'};
+document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq2]:_qsa(sl);
+const nbP0=(await DB.list('productions')).length;
+refuse='';await App.condSave();
+document.querySelectorAll=_qsa;
+if(!refuse.includes('torréfié'))throw new Error('conditionnement > stock : pas de refus ('+refuse+')');
+if((await DB.list('productions')).length!==nbP0)throw new Error('production enregistrée malgré stock insuffisant !');
+/* 5b. torréfaction > stock vert (1 200 kg) */
+$('#main').innerHTML='<input id="rD"><input id="rIn"><input id="rOut"><input id="rOp"><input id="rN">';
+$('#rD').value=todayISO();$('#rIn').value='9999';$('#rOut').value='9900';$('#rOp').value='';$('#rN').value='';
+const nbR0=(await DB.list('roastings')).length;
+refuse='';await App.roastSave();
+if(!refuse.includes('vert'))throw new Error('torréfaction > stock vert : pas de refus ('+refuse+')');
+if((await DB.list('roastings')).length!==nbR0)throw new Error('torréfaction enregistrée malgré stock insuffisant !');
+/* 5c. ajustement qui rendrait le stock négatif */
+$('#main').innerHTML='<input id="jD"><input id="jL"><input id="jQ"><input id="jR">';
+$('#jD').value=todayISO();$('#jL').value='green';$('#jQ').value='-9999';$('#jR').value='test';
+const nbA0=(await DB.list('adjustments')).length;
+refuse='';await App.adjSave();
+if(!refuse.includes('négatif'))throw new Error('ajustement négatif : pas de refus ('+refuse+')');
+if((await DB.list('adjustments')).length!==nbA0)throw new Error('ajustement enregistré malgré stock négatif !');
+/* 5d. saisie atelier (à valider) refusée si stock insuffisant, laissée en attente */
+const pe=await DB.insert('pending_entries',{source_type:'production',source_name:'Atelier',payload:{date:todayISO(),roasted_used:9999,lines:[{product_id:p1.id,name:p1.name,qty:10,price:0}]},status:'pending'});
+refuse='';await App.pendOK(pe.id);
+const peAfter=(await DB.list('pending_entries',{eq:{id:pe.id}}))[0];
+if(!refuse.includes('torréfié'))throw new Error('validation saisie atelier : pas de refus ('+refuse+')');
+if(peAfter.status!=='pending')throw new Error('la saisie atelier aurait dû rester en attente (statut: '+peAfter.status+')');
+/* 5e. tout reste modifiable : le ✎ d'une saisie existante passe (ancienne conso recréditée avant vérification) */
+$('#main').innerHTML='<input id="cD"><input id="cIn"><input id="cOp"><input id="cN">';
+$('#cD').value=todayISO();$('#cIn').value='50';$('#cOp').value='';$('#cN').value='';
+const stCq3={id:'cq_'+p1.id,value:'45'};
+document.querySelectorAll=sl=>sl==='input[id^=cq_]'?[stCq3]:_qsa(sl);
+S.condEdit=pr.id;
+refuse='';let okEdit=false;
+toast=(m,k)=>{if(String(m).includes('Refusé'))refuse=String(m);if(String(m).includes('Modification enregistrée'))okEdit=true;return _t5(m,k);};
+await App.condSave();
+toast=_t5;document.querySelectorAll=_qsa;
+if(refuse||!okEdit)throw new Error('modification ✎ refusée à tort : '+refuse);
+const prMod=(await DB.list('productions',{eq:{id:pr.id}}))[0];
+if(Number(prMod.roasted_used)!==50)throw new Error('modification non enregistrée: '+prMod.roasted_used);
+toast=_t5;
 st=await computeStats();
-eq(st.roastedStock,127,'stock torréfié après transf terrain');
-eq(byName('Moulu premium').stock,69,'premium après transf terrain');
-console.log('✓ Lien terrain : onglet Machines → pending → validation → stock torréfié 127 kg, premium 69 kg');
-
-/* ===== 6. EXPORTS : annexe stocks + feuille Mouv. stocks ===== */
-const rows=incomeRows(inc);
-const semiRow=rows.filter(r=>r[0]==='Café transformé par les machines (kg)')[0];
-if(!semiRow||semiRow[1]!==0||semiRow[2]!==172)throw new Error('annexe semi-finis: '+JSON.stringify(semiRow));
-/* SI mois = SF mois (tout est arrivé ce mois-ci, achats/transf de ce mois) */
-const sheets=monthlySheets(inc);
-const mv=sheets.filter(x=>x.name==='Mouv. stocks')[0];
-const mvTxt=JSON.stringify(mv.rows);
-if(!mvTxt.includes('CAFÉ TORRÉFIÉ'))throw new Error('mouv torréfié absent');
-if(!mvTxt.includes('CAFÉ TRANSFORMÉ'))throw new Error('mouv types absent');
-if(!mvTxt.includes('Moulu premium'))throw new Error('mouv types détail absent');
-console.log('✓ Exports : annexe stocks (torréfié SI/SF + semi-finis par type) et feuille « Mouv. stocks » enrichie');
-
-/* ===== 7. AJUSTEMENTS : niveau type ===== */
-await DB.insert('adjustments',{date:todayISO(),level:'type',type_id:tprem.id,name:'Moulu premium',qty:5,reason:'recompte'});
-st=await computeStats();
-eq(byName('Moulu premium').stock,74,'ajustement type');
-inc=await computeIncome(per);
-eq(inc.typeRows.filter(r=>r.name==='Moulu premium')[0].sf,74,'SF après ajustement');
-console.log('✓ Ajustements : niveau « Café transformé » +5 kg → stock 74 kg, répercuté dans l’exploitation');
-
-/* ===== 8. GARDE-FOOUS ===== */
-/* sortie machines > entrée : refusée côté UI (App.trSave) — ici on teste la cohérence computeStats si données brutes */
-const prod2=await DB.list('productions');
-const directRoastUsed=prod2.reduce((a,p)=>a+Number(p.roasted_used||0),0);
-eq(directRoastUsed,0,'plus aucune prod directe torréfié (tout passe par les types)');
-console.log('✓ Garde-fous : les conditionnements démo ne consomment plus de torréfié en direct');
-
-/* ===== 9. SAUVEGARDE 21 TABLES ===== */
-let savedBlob=null;download=(n,b)=>{savedBlob=b;};
-await App.expBackup();
-const backup=JSON.parse(savedBlob.parts.join(''));
-const keys=Object.keys(backup).filter(k=>!['exported_at','mode','company'].includes(k));
-if(!backup.coffee_types||!backup.transformations)throw new Error('tables backup absentes');
-if(keys.length!==21)throw new Error('nb tables backup: '+keys.length);
-if(backup.coffee_types.length!==3||backup.transformations.length!==3)throw new Error('contenu backup types/transf');
-console.log('✓ Sauvegarde/restauration : 21 tables, coffee_types ('+backup.coffee_types.length+') et transformations ('+backup.transformations.length+') incluses');
-
-console.log('TTRANS: 9/9 OK');
+if(st.greenStock<0||st.roastedStock<0)throw new Error('stock négatif détecté : vert '+st.greenStock+' / torréfié '+st.roastedStock);
+console.log('✓ Jamais négatif : conditionnement, torréfaction, ajustement et saisie atelier refusés au-delà du disponible — MAIS tout reste modifiable (✎ 100→50 kg accepté, ancienne conso recréditée) — vert '+st.greenStock+' kg · torréfié '+st.roastedStock+' kg');
+console.log('TTRANS: 5/5 OK');
 })().catch(e=>{console.error('ÉCHEC TTRANS:',e.message);process.exit(1);});

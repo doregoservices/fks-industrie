@@ -51,7 +51,7 @@ if(Number(s1.base)!==200000)throw new Error('base ne doit contenir aucune prime 
 await App.slipView(s1.id);
 await new Promise(r=>setTimeout(r,20));
 const hb=$('#main').innerHTML;
-for(const m of ['BULLETIN DE PAIE','NET À PAYER','GAINS','RETENUES','CHARGES PATRONALES','COÛT TOTAL EMPLOYEUR','exonérés d','Imprimer / PDF','Signature employé'])if(!hb.includes(m))throw new Error('bulletin incomplet : '+m+' manquant');
+for(const m of ['BULLETIN DE PAIE','Gains et salaire brut','Retenues sur salaire','SALAIRE BRUT','NET À PAYER','Rubriques non imposables','charges patronales','COÛT TOTAL EMPLOYEUR','exonérés d','Imprimer / PDF','Signature employé','Matricule'])if(!hb.includes(m))throw new Error('bulletin incomplet : '+m+' manquant');
 console.log('✓ Bulletin professionnel : en-tête société, gains détaillés (base sans primes, exo zone), retenues, charges patronales, signatures, impression');
 
 /* 6. gardes de paie : double clôture + suppression d'une paie clôturée refusées */

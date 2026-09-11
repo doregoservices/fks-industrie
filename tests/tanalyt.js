@@ -26,7 +26,7 @@ console.log('   ex. Café grain 1 kg : '+grain.qty+' u · CA '+money(grain.ca)+'
 
 /* ===== 2. COÛT UNITAIRE : recette + emballages ===== */
 /* moulu 1 kg = 1 kg premium + 1 sachet 1 kg + 1 étiquette ; coût attendu = semiCost×1 + CMP sachet + CMP étiquette */
-const semi=inc.semiCost;
+const semi=inc.matCostKg||0;/* rendement unique : coût café (torréfié) au kg */
 const pkIts=await DB.list('packaging_items');
 const pkE1=pkIts.filter(x=>x.name==='Sachet 1 kg')[0];
 const pkE2=pkIts.filter(x=>x.name==='Étiquette autocollante')[0];
@@ -35,7 +35,7 @@ const cmpOf=id=>{let a=0,q=0;ent.filter(e=>e.item_id===id&&e.type==='in').forEac
 const expected=semi*1+cmpOf(pkE1.id)+cmpOf(pkE2.id);
 const moulu1kg=inc.prodAnalysis.filter(r=>r.name==='Café moulu 1 kg')[0];
 eq(moulu1kg.cu,expected,'coût unitaire moulu 1 kg = semi-fini + emballages');
-console.log('✓ Coût unitaire vérifié : Café moulu 1 kg = 1 kg de semi-fini ('+money(semi)+') + sachet ('+money(cmpOf(pkE1.id))+') + étiquette ('+money(cmpOf(pkE2.id))+') = '+money(Math.round(expected)));
+console.log('✓ Coût unitaire vérifié : Café moulu 1 kg = 1 kg de café au coût rendement unique ('+money(semi)+') + sachet ('+money(cmpOf(pkE1.id))+') + étiquette ('+money(cmpOf(pkE2.id))+') = '+money(Math.round(expected)));
 
 /* ===== 3. ÉCRAN STOCKS ===== */
 S.user={name:'test',role:'manager'};
@@ -43,8 +43,26 @@ await scStocks();
 let html=$('#main').innerHTML;
 if(!html.includes('Tous les stocks'))throw new Error('écran stocks');
 ['Café vert','Café torréfié','Produits finis','Emballages'].forEach(x=>{if(!html.includes(x))throw new Error('section manquante: '+x);});
-if(!html.includes('Moulu premium'))throw new Error('types absents');
+if(html.includes('Café transformé'))throw new Error('étape pesée types encore affichée');
+if(!html.includes('Café torréfié'))throw new Error('stock torréfié absent');
 if(!html.includes('Valeur totale emballages'))throw new Error('valeur emballages absente');
+/* invariant KPI alertes = vrais articles sous le seuil (emballages + produits) */
+await DB.insert('products',{name:'Produit test seuil',weight_g:250,price:1000,alert_min:50,active:true});
+await scStocks();
+const hA=$('#main').innerHTML;
+const stX=await computeStats();
+const expAlert=(stX.packaging||[]).filter(p=>p.alert_min>0&&p.stock<=p.alert_min).length+(stX.products||[]).filter(p=>p.alert_min>0&&p.stock<=p.alert_min).length;
+if(expAlert<1)throw new Error('précondition : au moins 1 article sous le seuil attendu');
+const mk=hA.match(/Alertes seuils<\/div><div class="v"[^>]*>(\d+)</);
+if(!mk)throw new Error('KPI alertes non trouvé');
+if(Number(mk[1])!==expAlert)throw new Error('KPI alertes faux : '+mk[1]+' ≠ '+expAlert+' (emballages+produits sous seuil)');
+if(!hA.includes('Produit test seuil'))throw new Error('produit test absent du tableau stocks (lignes à 0 attendues)');
+const tDel=(await DB.list('products',{eq:{name:'Produit test seuil'}}))[0];
+if(tDel)await DB.remove('products',tDel.id);
+console.log('✓ KPI Alertes seuils = '+expAlert+' (emballages + produits réellement sous le seuil, badge ⚠️ cohérent)');
+S.tab={production:'hist'};await scProduction();html=$('#main').innerHTML;
+if(!html.includes('Rendement torréfaction (unique)'))throw new Error('rendement unique absent');
+if(html.includes('Rendement machines'))throw new Error('rendement machines encore présent (devrait être unique)');
 if(html.includes('NaN'))throw new Error('NaN dans l’écran stocks');
 const prods=await DB.list('products');
 prods.forEach(p=>{if(!html.includes(esc(p.name)))throw new Error('produit absent: '+p.name);});
@@ -97,7 +115,7 @@ console.log('✓ Rapport mensuel Excel : feuille « Analyse produits » (qtés, 
 /* ===== 8. RÉGRESSION RAPIDE : identité comptable intacte ===== */
 const chargesMan=inc.consVert+inc.consEmb+inc.servicesTot+inc.personnel.total+inc.impotsTot+inc.dotations;
 eq(inc.chargesTot,chargesMan,'total charges');
-eq(inc.produitsTot,inc.ventes+inc.dPF+inc.dSemi,'total produits');
+eq(inc.produitsTot,inc.ventes+inc.dPF+(inc.dRoast||0)+inc.dSemi,'total produits (ventes + Δ torréfié + Δ PF + Δ semi)');
 eq(inc.resultat,inc.produitsTot-inc.chargesTot,'résultat');
 console.log('✓ Rien de cassé : charges, produits (avec semi-finis) et résultat identiques à avant');
 
