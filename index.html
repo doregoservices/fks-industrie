@@ -1086,7 +1086,7 @@ async function loginSupabase(email,pw){
   LS.set(SES_KEY,JSON.stringify(SES));
   S.user={email:email,name:email.split('@')[0]};
 }
-function logout(){SES=null;S.user=null;LS.del(SES_KEY);go('login');}
+function logout(){SES=null;S.user=null;LS.del(SES_KEY);LS.del(USER_KEY);go('login');}
 
 /* ================= PARAMÈTRES (table settings) ================= */
 const SETS={};
@@ -1327,7 +1327,7 @@ async function seedDemo(){
 }
 
 /* ================= ROUTEUR ================= */
-const ROLE_SCREENS={caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes','produits'],production:['dashboard','achats','production','stocks','produits','emballages','immobilisations']};
+const ROLE_SCREENS={caissier:['dashboard','caisse','banque','achats','impayes'],commercial:['dashboard','ventes','commerciaux','impayes','produits'],production:['dashboard','achats','production','stocks','produits','emballages','immobilisations']};
 const ROLE_LBL={manager:'Manager',caissier:'Caissier',commercial:'Chef commercial',production:'Chef production'};
 function roleAllowed(r){const a=ROLE_SCREENS[(S.user&&S.user.role)||'manager'];return !a||a.indexOf(r)>=0;}
 function roleHome(){const a=ROLE_SCREENS[(S.user&&S.user.role)||'manager'];return (a&&a[0])||'dashboard';}
@@ -1361,10 +1361,10 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.42';
+const APP_VER='35.43';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
-const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
+const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
 function bottomHtml(){
   const role=(S.user&&S.user.role)||'manager';
   const picks=(BTAB_PRI[role]||['dashboard']).filter(r=>roleAllowed(r)).slice(0,4);
@@ -1425,12 +1425,12 @@ App.menu=()=>{modal('Menu','<div class="help" style="margin-bottom:10px">Connect
 App.login=async()=>{const b=$('#lgBtn');b.disabled=true;b.textContent='Connexion…';
   try{const em=$('#lgEmail').value.trim();await loginSupabase(em,$('#lgPass').value);
   const u=(SETS.users||[]).find(x=>x.email&&x.email.toLowerCase()===em.toLowerCase());
-  if(u)S.user={email:em,name:u.name,role:u.role||'manager'};await afterLogin();}catch(e){toast(e.message,'bad');b.disabled=false;b.textContent='Se connecter';}};
+  if(u)S.user={email:em,name:u.name,role:u.role||'manager'};if(S.user&&!S.user.role)S.user.role='manager';saveUser();await afterLogin();}catch(e){toast(e.message,'bad');b.disabled=false;b.textContent='Se connecter';}};
 App.loginLocal=async()=>{const pin=$('#lgPin').value;
-  if(pin===String(SETS.admin_pin||'1234')){S.user={name:'Gestionnaire',role:'manager'};await afterLogin();return;}
+  if(pin===String(SETS.admin_pin||'1234')){S.user={name:'Gestionnaire',role:'manager'};saveUser();await afterLogin();return;}
   const u=(SETS.users||[]).find(x=>x.pin&&String(x.pin)===String(pin));
-  if(u){S.user={name:u.name,role:u.role||'caissier'};await afterLogin();}else toast('Code PIN incorrect','bad');};
-App.demo=async()=>{await seedDemo();if(DB&&DB.bump)DB.bump();await loadSettings();S.user={name:'Démonstration'};await afterLogin();};
+  if(u){S.user={name:u.name,role:u.role||'caissier'};saveUser();await afterLogin();}else toast('Code PIN incorrect','bad');};
+App.demo=async()=>{await seedDemo();if(DB&&DB.bump)DB.bump();await loadSettings();S.user={name:'Démonstration',role:'manager'};saveUser();await afterLogin();};
 async function afterLogin(){await loadSettings();if(CFG.mode==='supabase'){try{await Supa.loadCols();}catch(e){}}await outboxFlush();dbCheckSilent();go('dashboard');if(location.hash==='#/dashboard')render();}
 async function dbCheckSilent(){try{
   if(CFG.mode!=='supabase'||!CFG.url||!CFG.anon)return;
@@ -2777,7 +2777,7 @@ App.livrePrint=async()=>{
         +'<div style="font-weight:900;font-size:15px;color:#5a4030">📗 GRAND LIVRE DE PAIE — '+monthLabel(mk)+'</div>'
         +'<div class="mut" style="font-size:10.5px;margin:2px 0 8px">'+esc((SETS.company||{}).name||'FKS Industrie')+' · '+monthLabel(mk)+' · '+list.length+' bulletin(s) — montants en FCFA'+(chunk.length<list.length?' · suite page '+(off/CHUNK+1):'')+'</div>'
         +'<div class="tblwrap"><table class="tbl" style="font-size:10px;table-layout:fixed;width:100%"><thead><tr><th style="width:92px;text-align:left">RUBRIQUE</th>'
-        +chunk.map(e=>'<th style="word-wrap:break-word;overflow-wrap:break-word">'+esc(e.x.employee_name)+'</th>').join('')
+        +chunk.map(e=>'<th style="white-space:normal;overflow-wrap:anywhere;word-break:break-word;vertical-align:bottom;line-height:1.25">'+esc(e.x.employee_name)+(e.x.matricule?'<div style="font-weight:400;font-size:8.5px;opacity:.7">'+esc(e.x.matricule)+'</div>':'')+'</th>').join('')
         +'<th style="background:#5a4030;color:#fff">TOTAL</th></tr></thead><tbody>'
         +RUB.map(r=>{const num=(typeof r[1](list[0])==='number');
           return '<tr'+(r[2]?' style="background:#fdfaf5;font-weight:700"':'')+'><td style="white-space:nowrap;font-size:9.5px">'+esc(r[0])+'</td>'
@@ -2786,7 +2786,7 @@ App.livrePrint=async()=>{
         +'</tbody></table></div>'
         +'<div class="mut" style="font-size:9px;text-align:center;margin-top:6px">Réalisé par Doregoservices · 07 17 57 95 56</div></div>';}
   });
-  $('#main').innerHTML='<style>@media print{@page{size:A4 portrait;margin:9mm}body{background:#fff!important;margin:0}#app>div:not(#main),.bottomtabs,.toasts,.noprint{display:none!important}#main{padding:0!important}.lvpage{page-break-after:always;box-shadow:none!important;border-radius:0;padding:2px 0}.lvpage.last{page-break-after:auto}.lvpage .tbl td,.lvpage .tbl th{padding:2px 3px!important}.lvpage table{page-break-inside:avoid}}</style>'
+  $('#main').innerHTML='<style>@media print{@page{size:A4 portrait;margin:9mm}body{background:#fff!important;margin:0}#app>div:not(#main),.bottomtabs,.toasts,.noprint{display:none!important}#main{padding:0!important}.lvpage{page-break-after:always;box-shadow:none!important;border-radius:0;padding:2px 0}.lvpage.last{page-break-after:auto}.lvpage .tbl td,.lvpage .tbl th{padding:2px 3px!important}.lvpage th{white-space:normal!important}.lvpage table{page-break-inside:avoid}}</style>'
   +'<div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:12px 0"><b style="align-self:center">📗 Grand livre de paie — '+lbl+'</b><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button><button class="btn sec" onclick="render()">← Retour à la paie</button></div>'
   +pages;};
 App.runGen=async period=>{
@@ -4528,6 +4528,15 @@ App.assetSave=async id=>{const rec={name:$('#asN').value.trim(),category:$('#asC
   if(id)await DB.update('assets',id,rec);else await DB.insert('assets',rec);
   closeModal();toast('Immobilisation enregistrée','ok');render();};
 
+/* ==== persistance du rôle (v35.43) : le rôle survit au rechargement de la page ==== */
+const USER_KEY='cafepro_user_v1';
+function saveUser(){try{if(S.user)LS.set(USER_KEY,JSON.stringify(S.user));}catch(e){}}
+function resolveUser(email){email=String(email||'').toLowerCase();
+  let u=null;try{u=(SETS.users||[]).find(x=>x.email&&String(x.email).toLowerCase()===email);}catch(e){}
+  if(u)return{email:u.email,name:u.name,role:u.role||'manager'};
+  let c=null;try{c=JSON.parse(LS.get(USER_KEY)||'null');}catch(e){}
+  if(c&&c.role&&String(c.email||'').toLowerCase()===email)return c;
+  return null;}
 /* ================= INITIALISATION ================= */
 (function watchLogoFile(){try{const img=new Image();img.onload=()=>{S.hasLogoFile=true;$$('.brand .logo,.formhead .logo').forEach(el=>{if(!(SETS.company&&SETS.company.logo))el.innerHTML='<img src="logo.png" style="width:100%;height:100%;object-fit:contain;border-radius:9px">';});};img.src='logo.png';}catch(e){}})();
 window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&SETS.company.logo))$$('.brand .logo,.formhead .logo').forEach(el=>{el.innerHTML='<img src="logo.png" style="width:100%;height:100%;object-fit:contain;border-radius:9px">';});}catch(e){}});
@@ -4536,8 +4545,12 @@ window.addEventListener('hashchange',()=>{try{if(S.hasLogoFile&&!(SETS.company&&
   setDbAdapter();
   try{
     if(CFG.mode==='supabase'&&SES&&SES.access_token){
-      S.user={email:SES.email,name:(SES.email||'').split('@')[0]};
+      let su=resolveUser(SES.email);
+      S.user=su||{email:SES.email,name:(SES.email||'').split('@')[0],role:'manager'};
       await loadSettings();
+      su=resolveUser(SES.email);
+      if(su)S.user=su;else if(!S.user.role)S.user.role='manager';
+      saveUser();
       await outboxFlush();
     }else if(CFG.mode==='local'){
       await loadSettings();
