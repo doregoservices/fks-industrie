@@ -1230,8 +1230,8 @@ async function createSale(rec){
   await saleStockCheck(rec.lines,[]);
   const sale=await DB.insert('sales',Object.assign({status:'validated',credit_status:rec.pay_mode==='credit'?'due':'paid',created_at:nowISO()},rec));
   if(rec.pay_mode!=='credit'){
-    await createCashEntry({date:rec.date,type:'in',account:rec.pay_mode==='momo'?'momo':'cash',category:'ventes',
-      label:'Ventes '+rec.agent_name,amount:rec.total,imputable:true,ref:'sale:'+sale.id,source:rec.source||'admin'});
+    await createCashEntry({date:rec.date,type:'in',account:rec.pay_mode==='bank'?'bank':(rec.pay_mode==='momo'?'momo':'cash'),category:rec.pay_mode==='bank'?'banque':'ventes',
+      label:'Ventes '+rec.agent_name,amount:rec.total,imputable:rec.pay_mode!=='bank',ref:'sale:'+sale.id,source:rec.source||'admin'});
   }
   return sale;
 }
@@ -1305,7 +1305,7 @@ async function seedDemo(){
   await Local.insert('productions',{date:D(3),roasted_used:142,lines:lines2,operator:'Équipe B',note:'',source:'admin'});
   const mkSale=async(date,agent,lines,pay_mode,client)=>{const total=lines.reduce((s,l)=>s+l.qty*l.price,0);
     const s=await Local.insert('sales',{date,agent_id:aids[agent],agent_name:agent,pay_mode,client:client||'',total,lines,source:'form',status:'validated',credit_status:pay_mode==='credit'?'due':'paid'});
-    if(pay_mode!=='credit')await Local.insert('cash_entries',{date,type:'in',account:pay_mode==='momo'?'momo':'cash',category:'ventes',label:'Ventes '+agent,amount:total,imputable:true,ref:'sale:'+s.id,source:'form',status:'validated'});};
+    if(pay_mode!=='credit')await Local.insert('cash_entries',{date,type:'in',account:pay_mode==='bank'?'bank':(pay_mode==='momo'?'momo':'cash'),category:pay_mode==='bank'?'banque':'ventes',label:'Ventes '+agent,amount:total,imputable:pay_mode!=='bank',ref:'sale:'+s.id,source:'form',status:'validated'});};
   await mkSale(D(5),'Awa Koné',[{product_id:pids['Café moulu 1 kg'],name:'Café moulu 1 kg',qty:15,price:8000}],'cash');
   await mkSale(D(4),'Fatou Bamba',[{product_id:pids['Café moulu 500 g'],name:'Café moulu 500 g',qty:30,price:4500},{product_id:pids['Café saveur gingembre 500 g'],name:'Café saveur gingembre 500 g',qty:10,price:5000}],'momo');
   await mkSale(D(2),'Koffi Yao',[{product_id:pids['Café grain 1 kg'],name:'Café grain 1 kg',qty:12,price:9000}],'credit','Hôtel Ivoire Café');
@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.44';
+const APP_VER='35.45';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1618,13 +1618,14 @@ async function scDashboard(){
      +lastSales.map(s=>'<tr><td>'+dFR(s.date)+'</td><td>'+esc(s.agent_name)+'</td><td class="mut">'+(s.lines||[]).map(l=>num(l.qty)+' '+esc(l.name)).join('<br>')+'</td><td class="r"><b>'+money(s.total)+'</b></td><td>'+payPill(s)+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty"><span class="ic">🛒</span>Aucune vente enregistrée</div>')+'</div>';
 }
 function payPill(s){if(s.pay_mode==='credit')return s.credit_status==='due'?'<span class="badge b-wait">Crédit — à encaisser</span>':'<span class="badge b-ok">Crédit encaissé</span>';
+  if(s.pay_mode==='bank')return '<span class="badge b-info">🏦 Banque</span>';
   return s.pay_mode==='momo'?'<span class="badge b-info">Mobile Money</span>':'<span class="badge b-ok">Espèces</span>';}
 
 /* ================= FILE DE VALIDATION ================= */
 function pendSummary(p){
   const d=p.payload||{};
   if(p.source_type==='sales'){const ls=(d.lines||[]).map(l=>num(l.qty)+' '+l.name).join(' + ');
-    return '<b>Vente</b> par '+esc(d.agent_name)+' — '+ls+' · <b>'+money(d.total)+'</b> · '+(d.pay_mode==='credit'?'à crédit ('+esc(d.client||'client')+')':(d.pay_mode==='momo'?'Mobile Money':'espèces'));}
+    return '<b>Vente</b> par '+esc(d.agent_name)+' — '+ls+' · <b>'+money(d.total)+'</b> · '+(d.pay_mode==='credit'?'à crédit ('+esc(d.client||'client')+')':(d.pay_mode==='bank'?'banque':(d.pay_mode==='momo'?'Mobile Money':'espèces')));}
   if(p.source_type==='roasting')return '<b>Torréfaction</b> — '+num2(d.green_in)+' kg verts → <b>'+num2(d.roasted_out)+' kg torréfiés</b> · perte '+num2(Number(d.green_in||0)-Number(d.roasted_out||0))+' kg';
   if(p.source_type==='production'){const ls=(d.lines||[]).map(l=>num(l.qty)+' '+l.name).join(' + ');
     return '<b>Conditionnement</b> — '+num2(d.roasted_used)+' kg torréfiés → <b>'+ls+'</b>';}
@@ -1767,7 +1768,7 @@ App.achatForm=async id=>{let p=null;
     +'<div class="row">'+fld('Quantité (kg)','<input id="aQ" type="number" step="0.1" inputmode="decimal" value="'+(p?Number(p.qty_kg)||'':'')+'">')+fld('Prix au kg (FCFA)','<input id="aP" type="number" inputmode="numeric" oninput="App.achatTot()" value="'+(p?Number(p.price_per_kg)||'':'')+'">')+'</div>'
     +fld('Montant (FCFA)','<input id="aT" type="number" inputmode="numeric" oninput="$(\'#aAuto\').value=\'\'" value="'+(p?Number(p.amount)||'':'')+'">')
     +'<input type="hidden" id="aAuto" value="1">'
-    +fld('Moyen de paiement','<select id="aM"><option value="cash">Espèces</option><option value="momo">Mobile Money</option><option value="later">À payer plus tard</option></select>')
+    +fld('Moyen de paiement','<select id="aM"><option value="cash">Espèces</option><option value="momo">Mobile Money</option><option value="bank">🏦 Banque (à part)</option><option value="later">À payer plus tard</option></select>')
     +fld('Note','<input id="aN" value="'+(p?esc(p.note||''):'')+'" placeholder="qualité, lot… (facultatif)">'),
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.achatSave('+(id?"'"+id+"'":'')+')">Enregistrer</button>');
   if(p){$('#aD').value=p.date||todayISO();$('#aS').value=p.supplier||'';$('#aQ').value=Number(p.qty_kg)||'';$('#aP').value=Number(p.price_per_kg)||'';$('#aT').value=Number(p.amount)||'';$('#aN').value=p.note||'';$('#aM').value=p.pay_method||'cash';}};
@@ -1775,16 +1776,16 @@ App.achatTot=()=>{const q=Number($('#aQ').value)||0,p=Number($('#aP').value)||0;
 App.achatSave=async id=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT').value)||q*(Number($('#aP').value)||0);
   if(!q||!t)return toast('Quantité et montant obligatoires','bad');
   const rec={date:$('#aD').value||todayISO(),supplier:$('#aS').value.trim()||'Fournisseur',qty_kg:q,price_per_kg:Number($('#aP').value)||Math.round(t/q),amount:t,pay_method:$('#aM').value,note:$('#aN').value};
-  const acc=rec.pay_method==='momo'?'momo':'cash';
-  if(rec.pay_method!=='later'){const bal=await accBalance(acc,id);if(t>bal+0.005)return toast('Achat refusé : solde '+(acc==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F) — enregistrez d abord la rentrée d argent','bad');}
+  const isBk=rec.pay_method==='bank';const acc=isBk?'bank':(rec.pay_method==='momo'?'momo':'cash');
+  if(rec.pay_method!=='later'&&!isBk){const bal=await accBalance(acc,id);if(t>bal+0.005)return toast('Achat refusé : solde '+(acc==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F) — enregistrez d abord la rentrée d argent','bad');}
   if(id){await DB.update('purchases',id,rec);
     const ce=(await DB.list('cash_entries')).filter(x=>x.ref==='purchase:'+id)[0];
     if(rec.pay_method==='later'){if(ce)await DB.remove('cash_entries',ce.id);}
     else if(ce)await DB.update('cash_entries',ce.id,{date:rec.date,account:acc,amount:t,label:'Achat café vert — '+rec.supplier});
-    else await createCashEntry({date:rec.date,type:'out',account:acc,category:'achat_vert',label:'Achat café vert — '+rec.supplier,amount:t,imputable:true,ref:'purchase:'+id});
+    else await createCashEntry({date:rec.date,type:'out',account:acc,category:isBk?'banque':'achat_vert',label:'Achat café vert — '+rec.supplier,amount:t,imputable:!isBk,ref:'purchase:'+id});
     closeModal();toast('Achat modifié ✅','ok');render();return;}
   const p=await DB.insert('purchases',Object.assign({status:'validated'},rec));
-  if(rec.pay_method!=='later')await createCashEntry({date:p.date,type:'out',account:acc,category:'achat_vert',label:'Achat café vert — '+p.supplier,amount:t,imputable:true,ref:'purchase:'+p.id});
+  if(rec.pay_method!=='later')await createCashEntry({date:p.date,type:'out',account:acc,category:isBk?'banque':'achat_vert',label:'Achat café vert — '+p.supplier,amount:t,imputable:!isBk,ref:'purchase:'+p.id});
   closeModal();toast('Achat enregistré','ok');render();};
 
 /* ================= PRODUCTION ================= */
@@ -2146,7 +2147,7 @@ App.venteForm=async id=>{
   App._editSale=id||null;
   modal(id?'Modifier la vente':'Nouvelle vente',
     '<div class="row">'+fld('Date','<input id="vD" type="date" value="'+(sv?sv.date:todayISO())+'">')+fld('Commerciale','<select id="vA">'+agents.map(a=>'<option value="'+a.id+'|'+esc(a.name)+'">'+esc(a.name)+'</option>').join('')+'</select>')+'</div>'
-    +'<div class="field"><span>Règlement</span><div class="toggle" id="vM"><button type="button" class="on in" onclick="App.payMode(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.payMode(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.payMode(this,\'credit\')">📝 Crédit</button></div></div>'
+    +'<div class="field"><span>Règlement</span><div class="toggle" id="vM"><button type="button" class="on in" onclick="App.payMode(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.payMode(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.payMode(this,\'credit\')">📝 Crédit</button><button type="button" onclick="App.payMode(this,\'bank\')">🏦 Banque</button></div></div>'
     +'<div class="field" id="vCli"><span>Client (optionnel)</span><input id="vClient" placeholder="ex : Hôtel Ivoire — compte Sage dédié (4111001…) si nommé, sinon Client divers" value="'+(sv?esc(sv.client||''):'')+'"></div>'
     +'<div class="field"><span>Produits</span><div id="vLines"></div><button class="btn sm sec" onclick="App.venteLine()">+ Ajouter une ligne</button></div>'
     +'<div class="pill" id="vTot">Total : 0 F</div>',
@@ -2158,7 +2159,7 @@ App.venteForm=async id=>{
     const av=(sv.agent_id||'')+'|'+(sv.agent_name||'');
     if(!agents.some(a=>(a.id+'|'+a.name)===av)){$('#vA').innerHTML+='<option value="'+esc(av)+'">'+esc(sv.agent_name||'')+'</option>';}
     $('#vA').value=av;
-    const bs=$$('#vM button');const ix={cash:0,momo:1,credit:2}[sv.pay_mode];const n=(ix===0||ix)?ix:0;
+    const bs=$$('#vM button');const ix={cash:0,momo:1,credit:2,bank:3}[sv.pay_mode];const n=(ix===0||ix)?ix:0;
     bs.forEach(b=>b.className='');if(bs[n]){bs[n].className='on '+sv.pay_mode;App._pay=sv.pay_mode;}
     if($('#vClient'))$('#vClient').value=sv.client||'';
     $$('#vLines .linerow').forEach(r=>r.remove());
@@ -2322,6 +2323,15 @@ App.encaisserSave=async id=>{const s=(await DB.list('sales',{eq:{id:id}}))[0];if
   render();};
 
 /* ================= BANQUE ================= */
+App.bankOpForm=()=>{
+  modal('🏦 Écrire une opération bancaire',
+   '<div class="help" style="margin-bottom:10px">Versement (entrée) ou retrait (sortie) sur le compte bancaire — journal isolé, sans incidence sur la caisse ni l\'exploitation.</div>'
+   +'<div class="row">'+fld('Date','<input id="bkD" type="date" value="'+todayISO()+'">')+fld('Sens','<select id="bkT"><option value="in">↘️ Versement (entrée)</option><option value="out">↗️ Retrait (sortie)</option></select>')+'</div>'
+   +'<div class="row">'+fld('Libellé','<input id="bkL" placeholder="ex : Versement espèces du 15">')+fld('Montant (FCFA)','<input id="bkM" type="number" inputmode="numeric">')+'</div>',
+   '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.bankOpSave()">Enregistrer</button>');};
+App.bankOpSave=async()=>{const amt=Math.round(Number($('#bkM').value)||0);if(amt<=0)return toast('Montant invalide','bad');
+  await createCashEntry({date:$('#bkD').value||todayISO(),type:$('#bkT').value,account:'bank',category:'banque',label:$('#bkL').value.trim()||($('#bkT').value==='in'?'Versement banque':'Retrait banque'),amount:amt,imputable:false});
+  closeModal();toast('Opération bancaire enregistrée','ok');render();};
 async function scBanque(){
   const ents=(await DB.list('cash_entries')).filter(e=>e.account==='bank').sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.created_at||'').localeCompare(a.created_at||''));
   const solde=ents.reduce((a,e)=>a+(e.type==='in'?1:-1)*Number(e.amount||0),0);
@@ -2330,7 +2340,7 @@ async function scBanque(){
   const totIn=ents.filter(e=>e.type==='in').reduce((a,e)=>a+Number(e.amount||0),0);
   const totOut=ents.filter(e=>e.type==='out').reduce((a,e)=>a+Number(e.amount||0),0);
   const orig=e=>{const r=String(e.ref||'');if(r.indexOf('salepay:')===0)return'Crédit client';if(r.indexOf('purchasepay:')===0)return'Fournisseur';return e.category||'';};
-  $('#main').innerHTML='<div class="card"><h2>🏦 Banque<span class="spacer"></span><button class="btn sm sec" onclick="App.expBanque()">📥 Fichier banque (Excel)</button></h2>'
+  $('#main').innerHTML='<div class="card"><h2>🏦 Banque<span class="spacer"></span><button class="btn sm" onclick="App.bankOpForm()">+ Écrire une opération</button> <button class="btn sm sec" onclick="App.expBanque()">📥 Fichier banque (Excel)</button></h2>'
   +'<div class="help" style="margin-bottom:10px">Journal <b>réel</b> des règlements passés par banque : éponger une créance client ou une dette fournisseur sans toucher la caisse ni l\'exploitation. Chaque opération est listée ici, rien ailleurs.</div>'
   +'<div class="grid g4" style="margin-bottom:12px"><div class="kpi"><div class="t">Solde banque</div><div class="v">'+money(solde)+'</div></div><div class="kpi"><div class="t">Crédits clients réglés</div><div class="v" style="color:var(--ok)">'+money(inC)+'</div></div><div class="kpi"><div class="t">Fournisseurs réglés</div><div class="v" style="color:var(--bad)">'+money(outF)+'</div></div><div class="kpi"><div class="t">Opérations</div><div class="v">'+ents.length+'</div></div></div>'
   +'<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Heure</th><th>Libellé</th><th>Origine</th><th class="r">Entrée</th><th class="r">Sortie</th></tr></thead><tbody>'
@@ -2575,7 +2585,8 @@ App.advForm=async()=>{
   modal('Nouvelle avance sur salaire',
     fld('Employé','<select id="avE">'+emps.map(e=>'<option value="'+e.id+'|'+esc(e.name)+'">'+esc(e.name)+' — '+esc(e.position||'')+'</option>').join('')+'</select>')
     +'<div class="row">'+fld('Date','<input id="avD" type="date" value="'+todayISO()+'">')+fld('Montant (FCFA)','<input id="avM" type="number" inputmode="numeric">')+'</div>'
-    +fld('Note','<input id="avN" placeholder="motif (facultatif)">'),
+    +fld('Note','<input id="avN" placeholder="motif (facultatif)">')
+    +fld('Versée sur','<select id="avA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option><option value="bank">🏦 Banque (à part)</option></select>'),
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.advSave()">Enregistrer</button>');};
 App.advSave=async()=>{if(App._advBusy)return;App._advBusy=true;try{const amt=Number($('#avM').value)||0;if(!amt)return toast('Montant obligatoire','bad');
   const[eid,ename]=$('#avE').value.split('|');
@@ -2586,7 +2597,8 @@ App.advSave=async()=>{if(App._advBusy)return;App._advBusy=true;try{const amt=Num
   const deja=(await DB.list('advances')).filter(a=>a.employee_id===eid&&!a.run_id&&String(a.date||'').slice(0,7)===mois).reduce((x,a)=>x+Number(a.amount||0),0);
   if(sal&&deja+amt>sal)return toast('Refusé : cumul du mois ('+money(deja+amt)+') dépasserait le salaire ('+money(sal)+')','bad');
   const av=await DB.insert('advances',{employee_id:eid,employee_name:ename,date:$('#avD').value||todayISO(),amount:amt,note:$('#avN').value,run_id:null});
-  try{await createCashEntry({date:$('#avD').value||todayISO(),type:'out',account:'cash',category:'personnel_avances',label:'Avance sur salaire — '+ename+($('#avN').value?' · '+$('#avN').value:''),amount:amt,ref:'advance:'+av.id});}
+  const avB=($('#avA')&&$('#avA').value)==='bank';
+  try{await createCashEntry({date:$('#avD').value||todayISO(),type:'out',account:avB?'bank':(($('#avA')||{value:'cash'}).value),category:avB?'banque':'personnel_avances',label:'Avance sur salaire — '+ename+($('#avN').value?' · '+$('#avN').value:''),amount:amt,ref:'advance:'+av.id});}
   catch(err){await DB.remove('advances',av.id);return toast('Avance annulée — '+err.message,'bad');}
   closeModal();toast('Avance enregistrée et sortie de caisse créée (plafond : '+money(sal)+')','ok');render();}finally{App._advBusy=false;}};
 App.advDel=id=>confirmBox('Supprimer cette avance ?','La sortie de caisse correspondante sera également supprimée et le solde recalculé.','Supprimer',async()=>{const ces=await DB.list('cash_entries');const ce=ces.filter(e=>String(e.ref||'')==='advance:'+id)[0];if(ce)await DB.remove('cash_entries',ce.id);await DB.remove('advances',id);toast('Avance supprimée','ok');render();});
@@ -2635,7 +2647,7 @@ async function paieRunTab(){
     if(run.status!=='closed'){
       html+='<div class="row"><button class="btn danger" onclick="App.runDel(\''+run.id+'\')">Supprimer le brouillon</button><button class="btn ok" onclick="App.runClose(\''+run.id+'\')">💰 Clôturer &amp; payer ('+money(totNet)+')</button></div>';
     }else{
-      html+='<div class="alert al-ok">Paie payée le '+dFR(run.paid_date)+' — '+(run.account==='momo'?'Mobile Money':'espèces')+'. Une sortie de caisse « Salaires » a été créée automatiquement.</div>'
+      html+='<div class="alert al-ok">Paie payée le '+dFR(run.paid_date)+' — '+(run.account==='bank'?'Banque':(run.account==='momo'?'Mobile Money':'espèces'))+'. Une '+(run.account==='bank'?'écriture banque':'sortie de caisse')+' « Salaires » a été créée automatiquement.</div>'
       +'<button class="btn sm" style="margin-top:8px" onclick="App.ediITS(\''+run.period+'\')">📄 Annexe ITS DGI (Excel) — '+monthLabel(run.period)+'</button>';
     }
   }
@@ -2846,7 +2858,7 @@ App.runDel=id=>confirmBox('Supprimer ce brouillon de paie ?','Les bulletins non 
 App.runClose=id=>modal('Clôturer & payer',
   '<div class="help">Ceci marque la paie comme payée, déduit les avances concernées et crée la sortie de caisse « Salaires ».</div>'
   +fld('Date de paiement','<input id="pcD" type="date" value="'+todayISO()+'">')
-  +fld('Payé sur','<select id="pcA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option></select>'),
+  +fld('Payé sur','<select id="pcA"><option value="cash">💵 Espèces</option><option value="momo">📱 Mobile Money</option><option value="bank">🏦 Banque (à part)</option></select>'),
   '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.runCloseGo(\''+id+'\')">Confirmer le paiement</button>');
 App.runCloseGo=async id=>{if(App._rcBusy)return;App._rcBusy=true;try{
   const run=(await DB.list('pay_runs',{eq:{id:id}}))[0];
@@ -2855,13 +2867,14 @@ App.runCloseGo=async id=>{if(App._rcBusy)return;App._rcBusy=true;try{
   if(dup)return toast('Une sortie de caisse « Salaires » existe déjà pour cette paie','bad');
   const slips=await DB.list('pay_slips',{eq:{run_id:id}});
   const tot=slips.reduce((s,x)=>s+Number(x.net||0),0);
-  {const bal=await accBalance($('#pcA').value);if(tot>bal+0.005)return toast('Clôture refusée : solde '+(($('#pcA').value)==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F < '+money(tot)+' F à payer)','bad');}
+  {const aC=$('#pcA').value;if(aC!=='bank'){const bal=await accBalance(aC);if(tot>bal+0.005)return toast('Clôture refusée : solde '+(aC==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F < '+money(tot)+' F à payer)','bad');}}
   const advs=await DB.list('advances');
   for(const a of advs.filter(a=>!a.run_id&&slips.some(s=>s.employee_id===a.employee_id)))await DB.update('advances',a.id,{run_id:id});
   for(const s of slips)await DB.update('pay_slips',s.id,{paid:true});
   await DB.update('pay_runs',id,{status:'closed',paid_date:$('#pcD').value||todayISO(),account:$('#pcA').value,total_net:tot});
-  await createCashEntry({date:$('#pcD').value||todayISO(),type:'out',account:$('#pcA').value,category:'salaires',label:'Salaires '+monthLabel(run.period)+' ('+slips.length+' employés)',amount:tot,imputable:true,ref:'payrun:'+id});
-  closeModal();toast('Paie clôturée ✅ sortie de caisse créée','ok');render();}finally{App._rcBusy=false;}};
+  const pB=($('#pcA').value)==='bank';
+  await createCashEntry({date:$('#pcD').value||todayISO(),type:'out',account:$('#pcA').value,category:pB?'banque':'salaires',label:'Salaires '+monthLabel(run.period)+' ('+slips.length+' employés)',amount:tot,imputable:!pB,ref:'payrun:'+id});
+  closeModal();toast('Paie clôturée ✅ '+(pB?'écriture banque':'sortie de caisse')+' créée','ok');render();}finally{App._rcBusy=false;}};
 App.slipView=async id=>{S._slipId=id;go('bulletin');if(location.hash==='#/bulletin')render();};
 App.slipsAll=runId=>{S._slipsRun=runId;go('bulletins');if(location.hash==='#/bulletins')render();};
 async function scBulletins(){
@@ -3329,7 +3342,7 @@ App.expVentes=async()=>{
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const agents=await DB.list('sales_agents');
   const det=[['DATE','COMMERCIALE','PRODUIT','QTÉ','PRIX U.','MONTANT','RÈGLEMENT','CLIENT']];
-  sales.forEach(s=>(s.lines||[]).forEach(l=>det.push([dFR(s.date),s.agent_name,l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s.pay_mode==='credit'?'Crédit':(s.pay_mode==='momo'?'Mobile Money':'Espèces'),s.client||''])));
+  sales.forEach(s=>(s.lines||[]).forEach(l=>det.push([dFR(s.date),s.agent_name,l.name,Number(l.qty),Number(l.price),Number(l.qty)*Number(l.price),s.pay_mode==='credit'?'Crédit':(s.pay_mode==='bank'?'Banque':(s.pay_mode==='momo'?'Mobile Money':'Espèces')),s.client||''])));
   const byAg=[['COMMERCIALE','VENTES','CA TOTAL','ESPÈCES','MOMO','CRÉDIT EN COURS']];
   const names=agents.map(a=>a.name).concat(sales.filter(s=>!agents.some(a=>a.id===s.agent_id)).map(s=>s.agent_name)).filter((v,i,arr)=>arr.indexOf(v)===i);
   names.forEach(n=>{const ss=sales.filter(s=>s.agent_name===n);
@@ -3603,7 +3616,7 @@ async function formSales(agent){
     +'<div class="field"><span>Produits vendus (touchez + et −)</span><div class="qtygrid">'
     +prods.map(p=>'<div class="qcard"><div class="nm">'+esc(p.name)+'</div><div class="pr">'+money(p.price)+'</div><div class="stepper"><button onclick="App.step(\'fq_'+p.id+'\',-1);App.fTot('+esc(JSON.stringify(prods.map(x=>[x.id,x.price]))).replace(/"/g,'&quot;')+')">−</button><input id="fq_'+p.id+'" type="number" inputmode="numeric" min="0" value="0" oninput="App.fTot('+esc(JSON.stringify(prods.map(x=>[x.id,x.price]))).replace(/"/g,'&quot;')+')"><button onclick="App.step(\'fq_'+p.id+'\',1);App.fTot('+esc(JSON.stringify(prods.map(x=>[x.id,x.price]))).replace(/"/g,'&quot;')+');">+</button></div></div>').join('')
     +'</div></div>'
-    +'<div class="field"><span>Règlement</span><div class="toggle" id="fM"><button type="button" class="on in" onclick="App.fPay(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.fPay(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.fPay(this,\'credit\')">🧾 À crédit</button></div></div>'
+    +'<div class="field"><span>Règlement</span><div class="toggle" id="fM"><button type="button" class="on in" onclick="App.fPay(this,\'cash\')">💵 Espèces</button><button type="button" onclick="App.fPay(this,\'momo\')">📱 Mobile Money</button><button type="button" onclick="App.fPay(this,\'credit\')">🧾 À crédit</button><button type="button" onclick="App.fPay(this,\'bank\')">🏦 Banque</button></div></div>'
     +'<div class="field" id="fCli" style="display:none"><span>Nom du client (pour le crédit)</span><input id="fClient" placeholder="ex : Restaurant Le Maquis"></div>'
     +'<div class="pill" id="fTot" style="font-size:16px;margin-bottom:14px">Total : <b>0 F</b></div>'
     +'<button class="btn blk" style="font-size:17px;padding:14px" onclick="App.fSend(\''+agent.id+'\',\''+esc(agent.name)+'\')">Envoyer mes ventes ✅</button>');
@@ -3769,17 +3782,18 @@ App.pkInForm=async()=>{
     fld('Article','<select id="pkI">'+items.map(i=>'<option value="'+i.id+'|'+esc(i.name)+'">'+esc(i.name)+'</option>').join('')+'</select>')
     +'<div class="row">'+fld('Date','<input id="pkD" type="date" value="'+todayISO()+'">')+fld('Quantité','<input id="pkQ" type="number" inputmode="numeric" step="0.01">')+fld('Coût unitaire (FCFA)','<input id="pkC" type="number" inputmode="numeric" step="0.01" oninput="$(\'pkTot\').textContent=money((Number(this.value)||0)*(Number(document.getElementById(\'pkQ\').value)||0))">')+'</div>'
     +'<div class="pill" id="pkTot">0 F</div>'
-    +'<div class="field"><span>Créer aussi la sortie de caisse correspondante ?</span><select id="pkPay"><option value="cash">Oui — espèces</option><option value="momo">Oui — Mobile Money</option><option value="no">Non (déjà comptabilisé)</option></select></div>'
+    +'<div class="field"><span>Créer aussi la sortie de caisse correspondante ?</span><select id="pkPay"><option value="cash">Oui — espèces</option><option value="momo">Oui — Mobile Money</option><option value="bank">Oui — 🏦 banque</option><option value="no">Non (déjà comptabilisé)</option></select></div>'
     +fld('Note','<input id="pkR" placeholder="fournisseur… (facultatif)">'),
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn ok" onclick="App.pkInSave()">Enregistrer</button>');};
 App.pkInSave=async()=>{const q=Number($('#pkQ').value)||0,c=Number($('#pkC').value)||0;
   if(!q)return toast('Quantité obligatoire','bad');
   const[iid,iname]=$('#pkI').value.split('|');
   const amt=Math.round(q*c);
-  if($('#pkPay').value!=='no'&&amt>0){const bal=await accBalance($('#pkPay').value);
+  const pkB=($('#pkPay').value)==='bank';
+  if($('#pkPay').value!=='no'&&amt>0&&!pkB){const bal=await accBalance($('#pkPay').value);
     if(amt>bal+0.005)return toast('Refusé : solde '+(($('#pkPay').value)==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F) pour '+money(amt)+' F — pas de solde négatif','bad');}
   const e=await DB.insert('packaging_entries',{date:$('#pkD').value||todayISO(),type:'in',qty:q,unit_cost:c,amount:Math.round(q*c),reason:$('#pkR').value||'Achat emballages',ref:'',item_id:iid,item_name:iname,source:'admin',status:'validated'});
-  if($('#pkPay').value!=='no')await createCashEntry({date:e.date,type:'out',account:$('#pkPay').value,category:'emballages',label:'Achat emballages — '+iname,amount:e.amount,imputable:true,ref:'pkentry:'+e.id});
+  if($('#pkPay').value!=='no')await createCashEntry({date:e.date,type:'out',account:$('#pkPay').value,category:pkB?'banque':'emballages',label:'Achat emballages — '+iname,amount:e.amount,imputable:!pkB,ref:'pkentry:'+e.id});
   closeModal();toast('Entrée enregistrée','ok');render();};
 App.pkOutForm=async()=>{
   const items=(await DB.list('packaging_items')).filter(x=>x.active!==false);
