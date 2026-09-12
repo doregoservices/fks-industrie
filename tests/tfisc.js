@@ -103,6 +103,8 @@ if(!flatI.includes('RICF')||!flatI.includes('BRUT IMPOSABLE'))throw new Error('c
 if(!flatI.includes('430000'))throw new Error('total brut 430000 absent');
 if(!flatI.includes('28800'))throw new Error('total ITS net 28800 absent');
 if(!flatI.includes('KOUAME Jean,brut'))throw new Error('ligne employé (points-virgules neutralisés) absente');
+if(!/1\|—\|KOUAME/.test(flatI))throw new Error('matricule vide doit s afficher « — » (pas un id technique)');
+if(/mtyh|EMP-\d{3}/.test(flatI))throw new Error('id technique ou faux matricule dans l annexe ITS');
 if(!flatI.includes('e-impots.gouv.ci'))throw new Error('mention e-impots absente');
 makeXlsx=_mk;
 console.log('✓ Annexe ITS DGI : refus sans paie clôturée puis Annexe_ITS_DGI_'+per+'.xlsx (2 employés, ITS net − RICF, barème 2024 rappelé)');
@@ -116,6 +118,22 @@ if(Math.abs(inc9.resultat-(expP-expC))>2)throw new Error('résultat HT: '+inc9.r
 const d9=inc9.ventes-inc9.tva.ventesHT;
 if(d9<=0)throw new Error('écart TTC/HT inattendu');
 console.log('✓ TVA activée : résultat sur base HT — produits '+inc9.produitsTot+' (ventes HT '+inc9.tva.ventesHT+') et charges sans la TVA déductible ('+inc9.tva.ded+' F retirées)');
+/* 10. Matricule automatique à l'embauche (champ laisser vide) + matricules démo complets */
+const before=(await DB.list('employees')).length;
+$('#eN').value='TEST Auto';$('#eP').value='Ouvrier';$('#eM').value='';$('#eH').value=todayISO();$('#eS').value='monthly';$('#eB').value='100000';$('#eTr').value='0';$('#eHo').value='0';$('#eSh').value='2';$('#eZ').value='abidjan';
+await App.empSave();
+const emps10=await DB.list('employees');
+if(emps10.length!==before+1)throw new Error('employé non créé');
+const e10=emps10.filter(x=>x.name==='TEST Auto')[0];
+if(!/^EMP-\d{3}$/.test(e10.matricule||''))throw new Error('matricule auto attendu EMP-xxx : '+JSON.stringify(e10.matricule));
+$('#eN').value='TEST Auto2';$('#eM').value='';$('#eH').value=todayISO();$('#eS').value='monthly';$('#eB').value='100000';
+await App.empSave();
+const e10b=(await DB.list('employees')).filter(x=>x.name==='TEST Auto2')[0];
+if(!/^EMP-\d{3}$/.test(e10b.matricule||'')||e10b.matricule===e10.matricule)throw new Error('2e matricule auto distinct attendu : '+e10.matricule+' / '+e10b.matricule);
+const seed10=(await DB.list('employees')).filter(x=>/^FKS-\d{3}$/.test(x.matricule||'')).length;
+if(seed10<5)throw new Error('employés démo : matricules FKS-001..005 attendus (trouvés '+seed10+')');
+console.log('✓ Matricule auto à l embauche ('+e10.matricule+' / '+e10b.matricule+') + démo complète FKS-001..005 — annexe ITS : « — » si vide');
+
 toast=_t;
-console.log('TFISC: 9/9 OK');
+console.log('TFISC: 10/10 OK');
 })().catch(e=>{console.error('ÉCHEC TFISC:',e.message);process.exit(1);});

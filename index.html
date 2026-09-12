@@ -1318,7 +1318,7 @@ async function seedDemo(){
   await Local.insert('cash_entries',{date:D(6),type:'out',account:'cash',category:'emballages',label:'Achat emballages (sachets, étiquettes)',amount:90000,imputable:true,source:'admin',status:'validated'});
   const pkUse=[['Sachet 1 kg',180],['Sachet 500 g',300],['Étiquette autocollante',480]];
   for(const nmq of pkUse){await Local.insert('packaging_entries',{date:D(11),type:'out',qty:nmq[1],unit_cost:0,amount:0,reason:'Production conditionnement',ref:'production-demo',item_id:pkids[nmq[0]],item_name:nmq[0],source:'admin',status:'validated'});}
-  const E=[{name:'Bakary Traoré',matricule:'FKS-001',position:'Torréfacteur',base_salary:150000,transport:10000,housing:0},{name:'Mariam Diallo',matricule:'FKS-002',position:'Conditionnement',base_salary:110000,transport:5000,housing:0},{name:'Jean Kouassi',position:'Magasinier',base_salary:130000,transport:10000,housing:0},{name:'Awa Koné',position:'Commerciale',base_salary:120000,transport:15000,housing:0},{name:'Fatou Bamba',position:'Commerciale',base_salary:120000,transport:15000,housing:0}];
+  const E=[{name:'Bakary Traoré',matricule:'FKS-001',position:'Torréfacteur',base_salary:150000,transport:10000,housing:0},{name:'Mariam Diallo',matricule:'FKS-002',position:'Conditionnement',base_salary:110000,transport:5000,housing:0},{name:'Jean Kouassi',matricule:'FKS-003',position:'Magasinier',base_salary:130000,transport:10000,housing:0},{name:'Awa Koné',matricule:'FKS-004',position:'Commerciale',base_salary:120000,transport:15000,housing:0},{name:'Fatou Bamba',matricule:'FKS-005',position:'Commerciale',base_salary:120000,transport:15000,housing:0}];
   for(const e of E)await Local.insert('employees',Object.assign({phone:'',hire_date:D(300),salary_type:'monthly',active:true},e));
   await Local.insert('advances',{employee_name:'Bakary Traoré',date:D(9),amount:25000,note:'Avance urgence familiale',run_id:null});
   await Local.insert('assets',{name:'Torréfacteur industriel',category:'Matériel de production',acq_date:D(400),cost:4500000,salvage:500000,life_years:8,active:true,note:''});
@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.53';
+const APP_VER='35.54';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -2590,6 +2590,8 @@ App.empForm=async id=>{let e={name:'',position:'',phone:'',hire_date:todayISO(),
 App.empSave=async id=>{const rec={name:$('#eN').value.trim(),position:$('#eP').value.trim(),phone:$('#eT').value.trim(),matricule:($('#eM')||{value:''}).value.trim(),hire_date:$('#eH').value,salary_type:$('#eS').value,base_salary:Number($('#eB').value)||0,transport:Number($('#eTr').value)||0,housing:Number($('#eHo').value)||0,tax_shares:Number($('#eSh').value)||2,zone:$('#eZ').value||'abidjan',primes:(SETS.payroll.primes||[]).filter(p=>($('#ePr_'+p.id)||{}).checked).map(p=>p.id)};
   if(!rec.name)return toast('Nom obligatoire','bad');
   if(rec.matricule){const dup=(await DB.list('employees')).filter(x=>x.matricule===rec.matricule&&x.id!==id&&x.active!==false);if(dup.length)return toast('Matricule déjà utilisé par '+dup[0].name,'bad');}
+  /* v35.54 : matricule automatique à l'embauche si laisser vide (comme annoncé par le champ) */
+  if(!id&&!rec.matricule){const all=await DB.list('employees');let n=all.length+1,m;do{m='EMP-'+String(n).padStart(3,'0');n++;}while(all.some(x=>x.matricule===m));rec.matricule=m;}
   if(id)await DB.update('employees',id,rec);else await DB.insert('employees',Object.assign(rec,{active:true}));
   closeModal();toast('Employé enregistré','ok');render();};
 async function paieAdvTab(){
@@ -3511,7 +3513,7 @@ App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
     const ig=Math.round(Number(x.its_gross!=null?x.its_gross:(x.its!=null?x.its:x.irpp))||0);
     const rc=Math.round(Number(x.ricf)||0);const it=Math.round(Number(x.its!=null?x.its:x.irpp)||0);
     tb+=b;tn+=it;n++;
-    rows.push([n,String(x.matricule||'').replace(/;/g,',')||String(x.employee_id||'').slice(0,8),String(x.employee_name||'').replace(/;/g,','),b,bs,ig,rc,it]);});
+    rows.push([n,String(x.matricule||'').replace(/;/g,',')||'—',String(x.employee_name||'').replace(/;/g,','),b,bs,ig,rc,it]);});
   rows.push([{v:'TOTAL',__style:1},'',{v:n+' employé(s)',__style:1},{v:tb,__style:1},'','',{v:'',__style:1},{v:tn,__style:1}]);
   rows.push([],['ITS retenu à la source — reversement au plus tard le 10 du mois suivant. Barème 2024 : 0 / 16 / 21 / 24 / 28 / 32 % (tranches mensuelles sur le brut), RICF déduite.'],
     ['À téléverser sur e-impots.gouv.ci en annexe de la déclaration mensuelle — formats acceptés : PDF, XLS, XLSX (2 Mo max).']);
