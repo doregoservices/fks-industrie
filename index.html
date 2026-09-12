@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.51';
+const APP_VER='35.52';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3127,12 +3127,13 @@ async function scExports(){
   +'<div class="row">'+fld('Du','<input type="date" value="'+f.from+'" onchange="S.expFilter.from=this.value">')+fld('Au','<input type="date" value="'+f.to+'" onchange="S.expFilter.to=this.value">')+'</div>'
   +'<div class="grid g2" style="margin-top:14px">'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expStocks()"><div class="t">📦 Point complet des stocks</div><div class="s">Café vert, torréfié, produits finis, rendements réels et mouvements détaillés</div></div>'
-  +'<div class="kpi" style="cursor:pointer" onclick="App.expCaisse()"><div class="t">💰 Sage 100 — 6 journaux</div><div class="s">VE · AC · CA · BQ · PA · OD — écritures équilibrées Débit/Crédit, prêtes à importer (xlsx + csv)</div></div>'
+  +'<div class="kpi" style="cursor:pointer" onclick="App.expCaisse()"><div class="t">💰 Sage 100 — 6 journaux</div><div class="s">VE · AC · CA · BQ · PA · OD — écritures équilibrées · 3 fichiers : xlsx + csv (contrôle) + Import_Sage.txt (import direct : Échanges > Importer des écritures)</div></div>'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expVentes()"><div class="t">🛒 Ventes</div><div class="s">Détail, synthèse par commerciale et par produit</div></div>'
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button></div>'
+  +((SETS.sage_rows||[]).length?'<div class="card"><h3>📥 Historique Sage importé</h3><div class="help" style="margin-bottom:8px">'+(SETS.sage_rows.length)+' écritures — <b>consultation seule</b> (sans incidence sur la caisse ni l\'exploitation)</div><button class="btn sec sm" onclick="App.sageImpXl()">📗 Exporter l\'historique</button> <button class="btn sm danger" onclick="App.sageImpDel()">✕ Supprimer</button></div>':'')
   +'</div>';
 }
 App.expFilterRange=()=>{const f=S.expFilter||{};const to=f.to||todayISO();const from=f.from||'2000-01-01';return{from,to};};
@@ -3344,8 +3345,58 @@ App.expCaisse=async()=>{
   const csv=[HEAD].concat(KS.reduce((a,k)=>a.concat(L[k]),[]));
   csv.push([{v:'TOTAL',__style:1},'','','',{v:Math.round(gD),__style:1},{v:Math.round(gC),__style:1}]);
   dlCsv('Sage_6_journaux_'+to+'.csv',csv);
-  toast('Sage 6 journaux téléchargé (xlsx + csv) ✅ '+((Math.abs(gD-gC)<0.01)?'— équilibré ✔':'— ⚠️ ÉCART')) ;
+  /* v35.52 : FICHIER D'IMPORT SAGE (.txt) — format des imports paramétrables Sage 100 :
+     point-virgule, SANS ligne d'en-tête, colonnes JOURNAL;DATE;COMPTE;LIBELLÉ;DÉBIT;CRÉDIT,
+     dates JJ/MM/AAAA, montants à décimale virgule (import : Échanges > Importer des écritures) */
+  const nfr=v=>{v=Math.round(Number(v)*100)/100;if(!v)return '';return String(v).replace('.',',');};
+  const trows=KS.reduce((a,k)=>a.concat(L[k].map(r=>[r[1],r[0],r[2],r[3],nfr(r[4]),nfr(r[5])])),[]);
+  const ttxt=trows.map(r=>r.map(c=>String(c).replace(/[;\r\n]/g,' ')).join(';')).join('\r\n');
+  dlTxt('Import_Sage_'+to+'.txt',ttxt);
+  toast('Sage téléchargé ✅ xlsx + csv (contrôle) + Import_Sage.txt (à importer dans Sage : Échanges > Importer des écritures) '+((Math.abs(gD-gC)<0.01)?'— équilibré ✔':'— ⚠️ ÉCART')) ;
 };
+/* ==== v35.52 : IMPORT D'UN JOURNAL SAGE — reprise d'historique (consultation seule, sans double comptabilité) ==== */
+App.sageImp=()=>{modal('📥 Importer un journal Sage','<div class="help" style="line-height:1.7">Exportez vos écritures depuis Sage 100 (Échanges > Exporter, ou la liste des écritures vers Excel/texte — point-virgule ou tabulation), puis chargez le fichier ici : l\'historique devient <b>consultable dans l\'application</b> (écran Exports), sans incidence sur la caisse ni l\'exploitation — donc sans double comptabilité.</div><input type="file" id="sgF" accept=".csv,.txt,.tsv" style="margin-top:10px"><div class="help" id="sgPrev" style="margin-top:10px"></div>','<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.sageImpGo()">Importer</button>');const f=$('#sgF');if(f)f.addEventListener('change',()=>App.sageImpPrev());};
+App.sageImpRead=()=>{const f=$('#sgF');if(!f||!f.files||!f.files.length)return Promise.resolve(null);return new Promise(res=>{const r=new FileReader();r.onload=()=>res(String(r.result||''));r.onerror=()=>res(null);r.readAsText(f.files[0],'utf-8');});};
+App.sageImpParse=txt=>{
+  txt=String(txt||'').replace(/^\ufeff/,'');
+  const lines=txt.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
+  if(!lines.length)throw new Error('fichier vide');
+  const sep=lines[0].indexOf(';')>=0?';':(lines[0].indexOf('\t')>=0?'\t':(lines[0].indexOf(',')>=0?',':';'));
+  const numF=v=>{v=String(v||'').replace(/\s|\u00a0/g,'').replace(',','.');if(!v||isNaN(Number(v)))return null;return Number(v);};
+  const isD=v=>/^\d{2}\/\d{2}\/\d{4}$/.test(v)||/^\d{6}$/.test(v)||/^\d{4}-\d{2}-\d{2}$/.test(v);
+  const normD=v=>{if(/^\d{6}$/.test(v))return v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4);if(/^\d{4}-\d{2}-\d{2}$/.test(v))return v.slice(8,10)+'/'+v.slice(5,7)+'/'+v.slice(0,4);return v;};
+  const rows=[];let skipped=0;
+  lines.forEach((ln,li)=>{
+    const c=ln.split(sep).map(x=>x.replace(/^"|"$/g,'').trim());
+    if(!c.length)return;
+    if(li===0&&c.some(x=>/journal/i.test(x)))return;/* ligne d'en-tête ignorée */
+    const di=c.findIndex(isD);
+    if(di<0){skipped++;return;}
+    const d=normD(c[di]);
+    /* v35.52 : lecture POSITIONNELLE — débit = avant-dernière colonne, crédit = dernière (format Sage standard) */
+    let de=0,cr=0;
+    if(c.length>=3){const a=numF(c[c.length-2]),b=numF(c[c.length-1]);if(a!==null)de=a;if(b!==null)cr=b;}
+    let j='',acct='',lib='';
+    c.forEach((x,i)=>{
+      if(i===di||i===c.length-1||i===c.length-2||!x)return;
+      if(!j&&x.length<=5&&/^[A-Za-z0-9]+$/.test(x)){j=x;return;}
+      if(!acct&&/^[\d\s\u00a0]{4,}$/.test(x)){acct=x.replace(/[\s\u00a0]/g,'');return;}
+      lib=lib?lib+' '+x:x;});
+    if(!de&&!cr){skipped++;return;}
+    rows.push({d:d,j:j||'?',c:acct||'',l:lib||'',de:Math.round(de*100)/100,cr:Math.round(cr*100)/100});
+  });
+  if(!rows.length)throw new Error('aucune écriture reconnue — format attendu : journal ; date ; compte ; libellé ; débit ; crédit');
+  const dD=rows.reduce((a,r)=>a+r.de,0),dC=rows.reduce((a,r)=>a+r.cr,0);
+  const ds=rows.map(r=>r.d).sort();
+  return {rows:rows,n:rows.length,dD:Math.round(dD),dC:Math.round(dC),from:ds[0],to:ds[ds.length-1],skipped:skipped};
+};
+App.sageImpPrev=async()=>{const t=await App.sageImpRead();if(t==null)return;try{const p=App.sageImpParse(t);$('#sgPrev').innerHTML='✅ <b>'+p.n+' écritures</b> · du '+p.from+' au '+p.to+' · Débit '+money(p.dD)+' · Crédit '+money(p.dC)+(Math.abs(p.dD-p.dC)<0.01?' — équilibré ✔':' — ⚠️ déséquilibre (vérifiez le fichier)')+(p.skipped?' · '+p.skipped+' ligne(s) ignorée(s)':'');}catch(e){$('#sgPrev').innerHTML='❌ '+esc(e.message);}};
+App.sageImpGo=async()=>{const t=await App.sageImpRead();if(t==null)return toast('Choisissez un fichier','bad');
+  try{const p=App.sageImpParse(t);await setSetting('sage_rows',p.rows);closeModal();toast('Historique Sage importé : '+p.n+' écritures ✅ (consultation dans Exports)','ok');render();}
+  catch(e){toast(e.message,'bad');}};
+App.sageImpDel=async()=>{await setSetting('sage_rows',[]);toast('Historique Sage supprimé','ok');render();};
+App.sageImpXl=()=>{const R=SETS.sage_rows||[];if(!R.length)return toast('Aucun historique importé','bad');
+  makeXlsx([{name:'Historique Sage',rows:[['HISTORIQUE SAGE IMPORTÉ'],[esc((SETS.company&&SETS.company.name)||'')],['Importé le '+dFR(todayISO())+' — consultation seule (sans incidence caisse/exploitation)'],[],['DATE','JOURNAL','COMPTE','LIBELLÉ','DÉBIT','CRÉDIT']].concat(R.map(r=>[r.d,r.j,r.c,r.l,Number(r.de)||0,Number(r.cr)||0])),widths:[12,10,14,46,14,14]}],'Historique_Sage_importe.xlsx');};
 function dlTxt(name,txt){download(name,new Blob(['\ufeff'+txt],{type:'text/plain;charset=utf-8'}));}
 App.ediTVA=async period=>{period=period||S.expPeriod||monthISO();
   const inc=await computeIncome(period);const F=SETS.fiscal||{};const C=SETS.company||{};const t=inc.tva||{};
