@@ -1123,7 +1123,7 @@ function defaultSettings(){
       {key:'virement_interne',label:'Virements de fonds — compte de passage (585)',account:'585000',group:'treso'}
     ],
     journals:{VE:'VE',AC:'AC',CA:'CA',BQ:'BQ',PA:'PA',OD:'OD'},
-    fiscal:{mode:'',bic:25,tee:5,tva:false,tva_rate:18,nif:''},
+    fiscal:{mode:'',bic:25,tee:5,tva:false,tva_rate:18,nif:'',ncc:''},
     payroll:{ // Taux Côte d'Ivoire en vigueur (réforme ITS 2024) — modifiables dans Réglages
       cnps_retraite_e:6.3,        // CNPS retraite : part salarié (%)
       cnps_retraite_er:7.7,       // CNPS retraite : part patronale (%)
@@ -1318,7 +1318,7 @@ async function seedDemo(){
   await Local.insert('cash_entries',{date:D(6),type:'out',account:'cash',category:'emballages',label:'Achat emballages (sachets, étiquettes)',amount:90000,imputable:true,source:'admin',status:'validated'});
   const pkUse=[['Sachet 1 kg',180],['Sachet 500 g',300],['Étiquette autocollante',480]];
   for(const nmq of pkUse){await Local.insert('packaging_entries',{date:D(11),type:'out',qty:nmq[1],unit_cost:0,amount:0,reason:'Production conditionnement',ref:'production-demo',item_id:pkids[nmq[0]],item_name:nmq[0],source:'admin',status:'validated'});}
-  const E=[{name:'Bakary Traoré',matricule:'FKS-001',position:'Torréfacteur',base_salary:150000,transport:10000,housing:0},{name:'Mariam Diallo',matricule:'FKS-002',position:'Conditionnement',base_salary:110000,transport:5000,housing:0},{name:'Jean Kouassi',matricule:'FKS-003',position:'Magasinier',base_salary:130000,transport:10000,housing:0},{name:'Awa Koné',matricule:'FKS-004',position:'Commerciale',base_salary:120000,transport:15000,housing:0},{name:'Fatou Bamba',matricule:'FKS-005',position:'Commerciale',base_salary:120000,transport:15000,housing:0}];
+  const E=[{name:'Bakary Traoré',matricule:'FKS-001',cnps:'188021640501',sexe:'M',position:'Torréfacteur',base_salary:150000,transport:10000,housing:0},{name:'Mariam Diallo',matricule:'FKS-002',cnps:'188021640502',sexe:'F',position:'Conditionnement',base_salary:110000,transport:5000,housing:0},{name:'Jean Kouassi',matricule:'FKS-003',cnps:'188021640503',sexe:'M',position:'Magasinier',base_salary:130000,transport:10000,housing:0},{name:'Awa Koné',matricule:'FKS-004',cnps:'188021640504',sexe:'F',position:'Commerciale',base_salary:120000,transport:15000,housing:0},{name:'Fatou Bamba',matricule:'FKS-005',cnps:'188021640505',sexe:'F',position:'Commerciale',base_salary:120000,transport:15000,housing:0}];
   for(const e of E)await Local.insert('employees',Object.assign({phone:'',hire_date:D(300),salary_type:'monthly',active:true},e));
   await Local.insert('advances',{employee_name:'Bakary Traoré',date:D(9),amount:25000,note:'Avance urgence familiale',run_id:null});
   await Local.insert('assets',{name:'Torréfacteur industriel',category:'Matériel de production',acq_date:D(400),cost:4500000,salvage:500000,life_years:8,active:true,note:''});
@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.54';
+const APP_VER='35.55';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -1789,18 +1789,18 @@ App.achatDel=id=>confirmBox('Supprimer cet achat ?','Le stock de café vert sera
 App.achatForm=async id=>{let p=null;
   if(id)p=(await DB.list('purchases',{eq:{id:id}}))[0]||null;
   modal(id?'Modifier l\'achat':'Nouvel achat de café vert',
-    '<div class="row">'+fld('Date','<input id="aD" type="date" value="'+(p?p.date:todayISO())+'">')+fld('Fournisseur','<input id="aS" value="'+(p?esc(p.supplier||''):'')+'" placeholder="ex : Coopérative de Man">')+'</div>'
+    '<div class="row">'+fld('Date','<input id="aD" type="date" value="'+(p?p.date:todayISO())+'">')+fld('Fournisseur','<input id="aS" value="'+(p?esc(p.supplier||''):'')+'" placeholder="ex : Coopérative de Man">')+fld('NCC fournisseur (XML TVA)','<input id="aNc" value="'+(p?esc(p.ncc_suppl||''):'')+'" placeholder="facultatif — ex : 0175265N">')+'</div>'
     +'<div class="row">'+fld('Quantité (kg)','<input id="aQ" type="number" step="0.1" inputmode="decimal" value="'+(p?Number(p.qty_kg)||'':'')+'">')+fld('Prix au kg (FCFA)','<input id="aP" type="number" inputmode="numeric" oninput="App.achatTot()" value="'+(p?Number(p.price_per_kg)||'':'')+'">')+'</div>'
     +fld('Montant (FCFA)','<input id="aT" type="number" inputmode="numeric" oninput="$(\'#aAuto\').value=\'\'" value="'+(p?Number(p.amount)||'':'')+'">')
     +'<input type="hidden" id="aAuto" value="1">'
     +fld('Moyen de paiement','<select id="aM"><option value="cash">Espèces</option><option value="momo">Mobile Money</option><option value="bank">🏦 Banque (à part)</option><option value="later">À payer plus tard</option></select>')
     +fld('Note','<input id="aN" value="'+(p?esc(p.note||''):'')+'" placeholder="qualité, lot… (facultatif)">'),
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.achatSave('+(id?"'"+id+"'":'')+')">Enregistrer</button>');
-  if(p){$('#aD').value=p.date||todayISO();$('#aS').value=p.supplier||'';$('#aQ').value=Number(p.qty_kg)||'';$('#aP').value=Number(p.price_per_kg)||'';$('#aT').value=Number(p.amount)||'';$('#aN').value=p.note||'';$('#aM').value=p.pay_method||'cash';}};
+  if(p){$('#aD').value=p.date||todayISO();$('#aS').value=p.supplier||'';$('#aQ').value=Number(p.qty_kg)||'';$('#aP').value=Number(p.price_per_kg)||'';$('#aT').value=Number(p.amount)||'';$('#aN').value=p.note||'';$('#aM').value=p.pay_method||'cash';$('#aNc').value=p.ncc_suppl||'';}};
 App.achatTot=()=>{const q=Number($('#aQ').value)||0,p=Number($('#aP').value)||0;$('#aT').value=q?p*q:0;};
 App.achatSave=async id=>{const q=Number($('#aQ').value)||0;const t=Number($('#aT').value)||q*(Number($('#aP').value)||0);
   if(!q||!t)return toast('Quantité et montant obligatoires','bad');
-  const rec={date:$('#aD').value||todayISO(),supplier:$('#aS').value.trim()||'Fournisseur',qty_kg:q,price_per_kg:Number($('#aP').value)||Math.round(t/q),amount:t,pay_method:$('#aM').value,note:$('#aN').value};
+  const rec={date:$('#aD').value||todayISO(),supplier:$('#aS').value.trim()||'Fournisseur',qty_kg:q,price_per_kg:Number($('#aP').value)||Math.round(t/q),amount:t,pay_method:$('#aM').value,note:$('#aN').value,ncc_suppl:($('#aNc')||{value:''}).value.trim()};
   const isBk=rec.pay_method==='bank';const acc=isBk?'bank':(rec.pay_method==='momo'?'momo':'cash');
   if(rec.pay_method!=='later'&&!isBk){const bal=await accBalance(acc,id);if(t>bal+0.005)return toast('Achat refusé : solde '+(acc==='momo'?'Mobile Money':'espèces')+' insuffisant ('+money(bal)+' F) — enregistrez d abord la rentrée d argent','bad');}
   if(id){await DB.update('purchases',id,rec);
@@ -2581,13 +2581,15 @@ App.empForm=async id=>{let e={name:'',position:'',phone:'',hire_date:todayISO(),
     +'<div class="row">'+fld('Type de salaire','<select id="eS"><option value="monthly"'+(e.salary_type!=='daily'?' selected':'')+'>Mensuel</option><option value="daily"'+(e.salary_type==='daily'?' selected':'')+'>Journalier (par jour)</option></select>')
     +fld('Salaire de base (FCFA)','<input id="eB" type="number" inputmode="numeric" value="'+(e.base_salary||0)+'">')+'</div>'
     +'<div class="row">'+fld('Prime transport (FCFA/mois)','<input id="eTr" type="number" inputmode="numeric" value="'+(e.transport||0)+'">')+fld('Prime logement (FCFA/mois)','<input id="eHo" type="number" inputmode="numeric" value="'+(e.housing||0)+'">')+'</div>'
+    +'<div class="row">'+fld('N° CNPS (État 301)','<input id="eCnps" value="'+esc(e.cnps||'')+'" placeholder="ex : 188021640539 — pour le XML e-Impôts">')+fld('Sexe','<select id="eSexe"><option value="M"'+((e.sexe||'M')==='M'?' selected':'')+'>Masculin</option><option value="F"'+(e.sexe==='F'?' selected':'')+'>Féminin</option></select>')+fld('Nationalité','<select id="eNat">'+[['I','Ivoirien'],['AA','Autre Africain'],['F','Français'],['SL','Syrien ou Libanais'],['A','Autre']].map(x=>'<option value="'+x[0]+'"'+((e.nationalite||'I')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select>')+'</div>'
+    +'<div class="row">'+fld('Local / Expatrié','<select id="eLoc">'+[['L','Local'],['E','Expatrié']].map(x=>'<option value="'+x[0]+'"'+((e.loc_exp||'L')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select>')+fld('Situation de famille','<select id="eSit">'+[['C','Célibataire'],['M','Marié'],['D','Divorcé'],['V','Veuf']].map(x=>'<option value="'+x[0]+'"'+((e.situation||'C')===x[0]?' selected':'')+'>'+x[1]+'</option>').join('')+'</select>')+fld('Enfants à charge','<input id="eEnf" type="number" min="0" inputmode="numeric" value="'+(Number(e.enfants)||0)+'">')+fld('Code emploi (État 301)','<select id="eCE">'+[['DR','Directeur'],['CS','Cadre supérieur'],['AM','Agent de maîtrise'],['CM','Cadre moyen'],['EQ','Employé qualifié'],['EN','Employé non qualifié'],['OQ','Ouvrier qualifié'],['ON','Ouvrier non qualifié'],['A','Autre']].map(x=>'<option value="'+x[0]+'"'+((e.code_emploi||'EQ')===x[0]?' selected':'')+'>'+x[0]+' — '+x[1]+'</option>').join('')+'</select>')+'</div>'
     +'<div class="row">'+(function(){const PR=SETS.payroll.primes||[];if(!PR.length)return '';return '<div class="field"><span>Rubriques attribuées à cet employé</span><div style="display:grid;grid-template-columns:1fr;gap:2px">'+PR.map(p=>'<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:2px 0"><input type="checkbox" id="ePr_'+p.id+'"'+(((e.primes||[]).indexOf(p.id)>=0)?' checked':'')+' style="width:auto"> '+esc(p.name)+' <span class="mut">('+(p.net?'au net · ':'')+(p.taxable!==false?'taxable':'non taxable')+')</span></label>').join('')+'</div><div class="help">Cochez seulement les rubriques de cet employé — elles se rempliront automatiquement à chaque paie (montant modifiable). Sans coche héritée : toutes.</div>';})()+fld('Zone (exonération transport)','<select id="eZ">'
     +'<option value="abidjan"'+(e.zone==='abidjan'||!e.zone?' selected':'')+'>Abidjan — exo jusqu à 30 000 F</option>'
     +'<option value="bouake"'+(e.zone==='bouake'?' selected':'')+'>Bouaké — exo jusqu à 24 000 F</option>'
     +'<option value="autres"'+(e.zone==='autres'?' selected':'')+'>Autres villes — exo jusqu à 20 000 F</option></select>')
     +fld('Parts fiscales (barème RICF officiel)',(function(){const rpp=Number(SETS.payroll.ricf_par_demi_part)||5500;const cur=Math.min(5,Math.max(1,Number(e.tax_shares!=null?e.tax_shares:2)||2));return '<select id="eSh">'+[1,1.5,2,2.5,3,3.5,4,4.5,5].map(v=>'<option value="'+v+'"'+(Math.abs(cur-v)<0.01?' selected':'')+'>'+String(v).replace('.',',')+(v===1?' part':(v===5?' parts (maximum)':' parts'))+' — RICF '+money(Math.round(rpp*Math.max(0,(v-1)*2)))+' F/mois</option>').join('')+'</select>';})())+'</div>',
     '<button class="btn sec" onclick="closeModal()">Annuler</button><button class="btn" onclick="App.empSave(\''+(id||'')+'\')">Enregistrer</button>');};
-App.empSave=async id=>{const rec={name:$('#eN').value.trim(),position:$('#eP').value.trim(),phone:$('#eT').value.trim(),matricule:($('#eM')||{value:''}).value.trim(),hire_date:$('#eH').value,salary_type:$('#eS').value,base_salary:Number($('#eB').value)||0,transport:Number($('#eTr').value)||0,housing:Number($('#eHo').value)||0,tax_shares:Number($('#eSh').value)||2,zone:$('#eZ').value||'abidjan',primes:(SETS.payroll.primes||[]).filter(p=>($('#ePr_'+p.id)||{}).checked).map(p=>p.id)};
+App.empSave=async id=>{const rec={name:$('#eN').value.trim(),position:$('#eP').value.trim(),phone:$('#eT').value.trim(),matricule:($('#eM')||{value:''}).value.trim(),hire_date:$('#eH').value,salary_type:$('#eS').value,base_salary:Number($('#eB').value)||0,transport:Number($('#eTr').value)||0,housing:Number($('#eHo').value)||0,tax_shares:Number($('#eSh').value)||2,zone:$('#eZ').value||'abidjan',primes:(SETS.payroll.primes||[]).filter(p=>($('#ePr_'+p.id)||{}).checked).map(p=>p.id),cnps:($('#eCnps')||{value:''}).value.trim(),sexe:($('#eSexe')||{value:'M'}).value||'M',nationalite:($('#eNat')||{value:'I'}).value||'I',loc_exp:($('#eLoc')||{value:'L'}).value||'L',situation:($('#eSit')||{value:'C'}).value||'C',enfants:Number(($('#eEnf')||{value:'0'}).value)||0,code_emploi:($('#eCE')||{value:'EQ'}).value||'EQ'};
   if(!rec.name)return toast('Nom obligatoire','bad');
   if(rec.matricule){const dup=(await DB.list('employees')).filter(x=>x.matricule===rec.matricule&&x.id!==id&&x.active!==false);if(dup.length)return toast('Matricule déjà utilisé par '+dup[0].name,'bad');}
   /* v35.54 : matricule automatique à l'embauche si laisser vide (comme annoncé par le champ) */
@@ -3134,7 +3136,7 @@ async function scExports(){
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.ediITSXml()">📋 XML e-Impôts — État 301 (EDI)</button> <button class="btn sec" onclick="App.ediTVAXml()">📋 XML e-Impôts — Annexe TVA (EDI)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
   +((SETS.sage_rows||[]).length?'<div class="card"><h3>📥 Historique Sage importé</h3><div class="help" style="margin-bottom:8px">'+(SETS.sage_rows.length)+' écritures — <b>consultation seule</b> (sans incidence sur la caisse ni l\'exploitation)</div><button class="btn sec sm" onclick="App.sageImpXl()">📗 Exporter l\'historique</button> <button class="btn sm danger" onclick="App.sageImpDel()">✕ Supprimer</button></div>':'')
   +'</div>';
 }
@@ -3519,6 +3521,44 @@ App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
     ['À téléverser sur e-impots.gouv.ci en annexe de la déclaration mensuelle — formats acceptés : PDF, XLS, XLSX (2 Mo max).']);
   makeXlsx([{name:'Annexe ITS',rows:rows,widths:[5,14,30,16,14,12,10,18]}],'Annexe_ITS_DGI_'+period+'.xlsx');
   toast('📄 Annexe ITS '+monthLabel(period)+' (Excel) — '+slips.length+' employés, ITS net total '+money(tn)+' F — à téléverser sur e-impots.gouv.ci','ok');};
+/* ==== v35.55 : FICHIERS EDI XML e-Impôts — syntaxe officielle DGI (générateurs État 301 & annexe TVA).
+   La DGI autorise explicitement la génération par un autre moyen respectant la syntaxe EDI XML
+   e-Impôts (notice officielle des fichiers edi-annexe) : fichiers à importer sur e-Impôts,
+   étape 3, « Transmission des annexes détaillées par EDI ». ==== */
+const EDI_CH=(k,v)=>'<champ><code>'+k+'</code><valeur>'+String(v==null?'':v).replace(/[<>&]/g,'')+'</valeur></champ>';
+const EDI_LIGNE=f=>'<ligne>'+f.map(x=>EDI_CH(x[0],x[1])).join('')+'</ligne>';
+const EDI_NFR=v=>{v=Math.round(Number(v||0)*100)/100;return String(v).replace('.',',');};
+const ediXmlHead=(typ,ncc,taxe,mois,ex)=>'<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>'+typ+'</type><ncc>'+esc(ncc)+'</ncc><codeTaxe>'+taxe+'</codeTaxe><mois>'+Number(mois)+'</mois><exercice>'+ex+'</exercice></informations><tableaux><tableau><donnees>';
+const EDI_FOOT='</donnees></tableau></tableaux></EDI>';
+const EDI_CE={'Directeur':'DR','Cadre supérieur':'CS','Agent de maîtrise':'AM','Cadre moyen':'CM','Employé qualifié':'EQ','Employé non qualifié':'EN','Ouvrier qualifié':'OQ','Ouvrier non qualifié':'ON'};
+App.ediITSXml=async period=>{period=period||S.payPeriod||monthISO();
+  const F=SETS.fiscal||{};
+  if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire pour le fichier e-Impôts','bad');
+  const runs=await DB.list('pay_runs',{eq:{period:period}});
+  const run=runs.filter(r=>r.status==='closed')[0];
+  if(!run)return toast('Aucune paie clôturée pour '+monthLabel(period)+' — générez puis clôturez la paie d\'abord','bad');
+  const slips=await DB.list('pay_slips',{eq:{run_id:run.id}});
+  if(!slips.length)return toast('Aucun bulletin pour cette période','bad');
+  const emps=await DB.list('employees');
+  const empOf=id=>emps.filter(x=>x.id===id)[0]||{};
+  const [yy,mm]=period.split('-');
+  const lignes=slips.map(s=>{const e=empOf(s.employee_id);
+    return EDI_LIGNE([['numero_cnps',e.cnps||''],['identite',s.employee_name],['emploi_qualite',s.position||e.position||''],['code_emploi',e.code_emploi||EDI_CE[e.position]||'EQ'],['regime_general',e.regime||'G'],['sexe',e.sexe||'M'],['nationalite',e.nationalite||'I'],['loc_exp',e.loc_exp||'L'],['situation_famille',e.situation||'C'],['nbre_enfants_charge_nat_cas',Number(e.enfants)||0],['nbre_parts_igr',Number(e.tax_shares!=null?e.tax_shares:2)||2],['nbre_jours_app_paiements',30],['mnt_sala_remune_acs',EDI_NFR(s.brut_ap)],['mnt_avtgs_nat_reglm','0'],['mnt_avtgs_nat_reele',EDI_NFR(s.housing||0)],['sal_ttl_brut',EDI_NFR(Number(s.brut_ap||0)+Number(s.housing||0))],['rev_non_imposable',EDI_NFR(s.transport_exo||0)],['rev_brut_imposable',EDI_NFR(s.taxable)],['ricf',EDI_NFR(s.ricf||0)],['its_sal_brut',EDI_NFR(s.its_gross||0)],['its_sal_net',EDI_NFR(s.its||0)],['mnt_indemnites',EDI_NFR(s.transport_exo||0)],['designation_indemnites',s.transport_exo?'TRANSPORT':'']]);}).join('');
+  const xml=ediXmlHead('etat_301_mensuel',F.ncc,'ITS',mm,yy)+lignes+EDI_FOOT;
+  download('Edi_Etat301_ITS_'+period+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
+  toast('📋 XML e-Impôts État 301 '+monthLabel(period)+' — '+slips.length+' salariés — à importer sur e-Impôts (annexes détaillées EDI)','ok');};
+App.ediTVAXml=async period=>{period=period||S.expPeriod||monthISO();
+  const F=SETS.fiscal||{};
+  if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire pour le fichier e-Impôts','bad');
+  const achats=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===period).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const [yy,mm]=period.split('-');
+  const lignes=achats.map(a=>{
+    let ht=EDI_NFR(a.amount),tva='';
+    if(F.tva){const h=Math.round(Number(a.amount)/1.18);ht=EDI_NFR(h);tva=EDI_NFR(Math.round(Number(a.amount))-h);}
+    return EDI_LIGNE([['type_operation_odr','Achats_locaux'],['specification','Achats de marchandises et matières prémières locales'],['date_facture',(a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7)+'/'+(a.date||'').slice(0,4)],['raison_sociale_fournisseur',a.supplier||''],['ncc_fournisseur',a.ncc_suppl||''],['pays_fournisseur',''],['ref_facture',String(a.id||'').slice(-6).toUpperCase()],['nature_bien_odr',a.note||''],['date_reglement',(a.pay_method&&a.pay_method!=='later')?(a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7)+'/'+(a.date||'').slice(0,4):''],['montant_ht',ht],['montant_val_douane',''],['montant_tva',tva],['type_redevable','REDEVABLE TOTAL'],['prorata_deduction','1'],['montant_taxe_deductible',tva]]);}).join('');
+  const xml=ediXmlHead('TVA',F.ncc,'TVA',mm,yy)+lignes+EDI_FOOT;
+  download('Edi_Annexe_TVA_'+period+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
+  toast('📋 XML e-Impôts Annexe TVA '+monthLabel(period)+' — '+achats.length+' opération(s) ouvrant droit à réduction — à importer sur e-Impôts (annexes détaillées EDI)','ok');};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
@@ -3653,7 +3693,8 @@ async function scParametres(){
   +'<div class="row">'
   +fld('TVA applicable','<select id="fiTva"><option value="1"'+(F.tva?' selected':'')+'>Oui — répercussion et déclaration mensuelle</option><option value="0"'+(F.tva?'':' selected')+'>Non (par défaut)</option></select>')
   +fld('Taux TVA (%)','<input id="fiTvaR" type="number" step="0.1" inputmode="numeric" value="'+(F.tva_rate!=null?F.tva_rate:18)+'">')
-  +fld('N° Identifiant Fiscal (NIF) — fichiers EDI DGI','<input id="fiNif" value="'+esc(F.nif||'')+'" placeholder="ex. 1943xxxX">')+'</div>'
+  +fld('N° Identifiant Fiscal (NIF) — fichiers EDI DGI','<input id="fiNif" value="'+esc(F.nif||'')+'" placeholder="ex. 1943xxxX">')
+  +fld('N° de Compte Contribuable (NCC) — fichiers XML e-Impôts (EDI)','<input id="fiNcc" value="'+esc(F.ncc||'')+'" placeholder="ex : 1213017L — obligatoire pour l État 301 et l annexe TVA XML">')+'</div>'
   +'<div class="help" style="margin:6px 0 10px"><b>BIC</b> (bénéfice industriel et commercial) ou <b>TEE</b> (taxe forfaitaire d\'activité) : appliqué au compte d\'exploitation. La <b>TVA</b>, si applicable, calcule la déclaration mensuelle (collectée − déductible) et génère le fichier EDI <b>Annexe TVA</b> de la DGI (écran Exploitation). L\'EDI <b>Annexe ITS</b> (paie) se génère depuis l\'écran Paie.</div>'
   +'<button class="btn sm" onclick="App.saveFiscal()">Enregistrer la fiscalité</button>'
   +'<div class="hr"></div><h3>🔒 Accès</h3>'
@@ -3693,7 +3734,7 @@ App.fiModeChange=()=>{const m=$('#fiMode').value||'';const prev=SETS.fiscal||{};
   else{lbl.textContent='Taux BIC (%) — % du résultat';inp.value=(prev.bic!=null?prev.bic:25);}};
 App.saveFiscal=async()=>{const m=$('#fiMode').value||'';if(!m)return toast('Choisissez le régime : TEE ou BIC','bad');const rate=Number($('#fiRate').value)||0;const prev=SETS.fiscal||{};
   if(rate<=0)return toast('Indiquez le taux ('+(m==='TEE'?'TEE':'BIC')+' en %)','bad');
-  const rec={mode:m,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||''};
+  const rec={mode:m,tva:$('#fiTva').value==='1',tva_rate:Number($('#fiTvaR').value)||18,nif:$('#fiNif').value||'',ncc:($('#fiNcc')||{value:''}).value||''};
   if(m==='TEE'){rec.tee=rate;rec.bic=prev.bic!=null?prev.bic:25;}else{rec.bic=rate;rec.tee=prev.tee!=null?prev.tee:5;}
   await setSetting('fiscal',rec);toast('Fiscalité enregistrée ✅ — '+(m==='TEE'?'TEE '+rate+' % du chiffre d\'affaires':'BIC '+rate+' % du résultat'),'ok');render();};
 App.setCo=async()=>{await setSetting('company',{name:$('#stCo').value||'FKS Industrie',logo:(SETS.company||{}).logo||''});const jrn={};['VE','AC','CA','BQ','PA','OD'].forEach(k=>{jrn[k]=($('#jrn_'+k)?$('#jrn_'+k).value:k)||k;});await setSetting('journals',jrn);toast('Enregistré','ok');render();};
