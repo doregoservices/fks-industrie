@@ -94,6 +94,58 @@ const h=$('#main').innerHTML;
 if(h.indexOf('XML e-Impôts — État 301 (EDI)')<0||h.indexOf('XML e-Impôts — Annexe TVA (EDI)')<0)throw new Error('boutons XML e-Impôts absents');
 console.log('✓ Écran Exports : boutons 📋 XML e-Impôts présents');
 
+/* 7 · feuille SAISIE DGI — réplique conforme à coller dans le classeur officiel (État 301) */
+const _mk2=makeXlsx;let capD=null;makeXlsx=(sheets,fname)=>{capD={sheets,fname};};
+await App.ediITSDgiSheet(per);
+if(!capD||capD.fname!=='DGI_Saisie_Etat301_'+per+'.xlsx')throw new Error('nom fichier SAISIE DGI: '+(capD&&capD.fname));
+const SI=capD.sheets[0];
+if(SI.name!=='SAISIE')throw new Error('la feuille doit s appeler SAISIE comme le fichier DGI');
+if(!capD.sheets[1]||capD.sheets[1].name.indexOf('MODE D')<0)throw new Error('feuille MODE D EMPLOI absente');
+const c=(r,i)=>(SI.rows[r-1]||[])[i];
+if(c(4,6)!=='ITS'||c(8,7)!=='1900000X'||String(c(10,7))!==yy||c(12,7)!=='Septembre')throw new Error('tête DGI (code impôt/NCC/exercice/mois) incorrecte');
+if(c(14,1)!=='#'||c(14,2)!=='N° CNPS'||c(14,3)!=='Nom et prénoms'||c(14,22)!=='ITS Salariés')throw new Error('en-têtes ligne 14 non conformes au DGI');
+if(c(15,11)!=='Etat civil'||c(15,22)!=='Brut'||c(15,23)!=='Net'||c(15,25)!=='Désignation')throw new Error('sous-en-têtes ligne 15 non conformes au DGI');
+const l16=SI.rows[15];
+if(l16[1]!==1||l16[2]!=='188021640501'||l16[3]!=='BAKARY TRAORE'||l16[4]!=='Salarié'||l16[5]!=='TORREFACTEUR'||l16[6]!=='EQ')throw new Error('ligne 16 (Bakary) incorrecte : '+JSON.stringify(l16.slice(0,8)));
+if(l16[14]!==30||l16[15]!==150000||l16[20]!==150000||l16[21]!==11000||l16[22]!==12000||l16[23]!==1000||l16[24]!==10000||l16[25]!=='TRANSPORT')throw new Error('montants ligne 16 incorrects : '+JSON.stringify(l16.slice(14)));
+if(SI.rows.length!==20)throw new Error('attendu 5 salariés (lignes 16-20), obtenu '+(SI.rows.length-15));
+console.log('✓ Saisie DGI État 301 : feuille SAISIE réplique conforme (tête NCC/exercice/mois, en-têtes lignes 14-15, données dès ligne 16, montants P/V/W/X/Y/Z) + MODE D\'EMPLOI de collage');
+
+/* 8 · feuille DETAIL_TVA_S DGI (à coller) */
+capD=null;
+await App.ediTVADgiSheet(per);
+if(!capD||capD.fname!=='DGI_Detail_TVA_'+per+'.xlsx')throw new Error('nom fichier TVA DGI: '+(capD&&capD.fname));
+const ST=capD.sheets[0];
+if(ST.name!=='DETAIL_TVA_S')throw new Error('la feuille doit s appeler DETAIL_TVA_S comme le fichier DGI');
+const t=(r,i)=>(ST.rows[r-1]||[])[i];
+if(t(6,4)!=='TVA'||t(10,4)!=='1900000X'||String(t(12,4))!==yy||t(14,4)!=='Septembre')throw new Error('tête DGI TVA incorrecte');
+if(String(t(17,1)).indexOf('TYPE D')<0||t(18,4)!=='RAISON SOCIALE'||t(18,10)!=='MONTANT HT')throw new Error('en-têtes TVA lignes 17-18 non conformes au DGI');
+const achatsPer=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===per&&a.amount).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+if(ST.rows.length!==19+achatsPer.length)throw new Error('lignes TVA: attendu '+achatsPer.length+' opérations dès la ligne 20, obtenu '+(ST.rows.length-19));
+const l20=ST.rows[19];
+if(l20[1]!=='Achats_locaux'||l20[2]!=='Achats de marchandises et matières prémières locales')throw new Error('type/spécification officiels attendus');
+if(l20[3]!==EDI_XLDATE(achatsPer[0].date))throw new Error('date facture attendue en série Excel ('+EDI_XLDATE(achatsPer[0].date)+'), obtenu '+l20[3]);
+if(l20[4]!==achatsPer[0].supplier)throw new Error('fournisseur attendu: '+achatsPer[0].supplier);
+if(l20[13]!=='REDEVABLE TOTAL'||l20[14]!==1)throw new Error('redevable/prorata officiels attendus');
+const ligCC=ST.rows.filter(r=>r&&r[4]==='Café & Co (Abidjan)')[0];
+if(!ligCC||ligCC[5]!=='0175265N')throw new Error('achat Café & Co avec NCC fournisseur attendu dans la feuille — lignes: '+JSON.stringify(ST.rows.slice(19).map(r=>r&&r.slice(0,6))));
+if(ligCC[2]!=='Achats de marchandises et matières prémières locales'||ligCC[3]!==EDI_XLDATE(todayISO()))throw new Error('spécification/date de l achat incorrectes');
+console.log('✓ Saisie DGI Annexe TVA : feuille DETAIL_TVA_S réplique conforme (tête, en-têtes 17-18, données dès ligne 20, dates en série Excel, référentiels)');
+
+/* 9 · boutons */
+if(h.indexOf('Saisie DGI — État 301 (à coller)')<0||h.indexOf('Saisie DGI — Annexe TVA (à coller)')<0)throw new Error('boutons Saisie DGI absents de l écran Exports');
+makeXlsx=_mk2;
+
+/* 10 · fiche employé : nouveaux champs DGI (CNPS, sexe, nationalité, loc/exp, situation, enfants, code emploi) */
+$('#eN').value='TEST DGI';$('#eP').value='Comptable';$('#eM').value='';$('#eH').value=todayISO();$('#eS').value='monthly';$('#eB').value='200000';$('#eTr').value='0';$('#eHo').value='0';$('#eSh').value='3';$('#eZ').value='abidjan';
+$('#eCnps').value='199912345678';$('#eSexe').value='F';$('#eNat').value='AA';$('#eLoc').value='E';$('#eSit').value='M';$('#eEnf').value='2';$('#eCE').value='CM';
+await App.empSave();
+const eDgi=(await DB.list('employees')).filter(x=>x.name==='TEST DGI')[0];
+if(!eDgi)throw new Error('employé non créé');
+if(eDgi.cnps!=='199912345678'||eDgi.sexe!=='F'||eDgi.nationalite!=='AA'||eDgi.loc_exp!=='E'||eDgi.situation!=='M'||Number(eDgi.enfants)!==2||eDgi.code_emploi!=='CM')throw new Error('champs DGI non sauvegardés: '+JSON.stringify({cnps:eDgi.cnps,sexe:eDgi.sexe,nat:eDgi.nationalite,loc:eDgi.loc_exp,sit:eDgi.situation,enf:eDgi.enfants,ce:eDgi.code_emploi}));
+console.log('✓ Fiche employé : N° CNPS, sexe, nationalité, local/expatrié, situation, enfants, code emploi enregistrés');
+
 download=_dl;toast=_t;
-console.log('TEDI: TOUT PASSE — conformité stricte au générateur officiel DGI');
+console.log('✓ Écran Exports : boutons « 📄 Saisie DGI (à coller) » aux côtés des XML directs');
+console.log('TEDI: TOUT PASSE — conformité stricte au générateur officiel DGI + feuilles à coller');
 })().catch(e=>{console.log('ECHEC TEDI:',e.message);process.exit(1);});

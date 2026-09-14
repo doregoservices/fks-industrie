@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.56';
+const APP_VER='35.57';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3136,7 +3136,7 @@ async function scExports(){
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.ediITSXml()">📋 XML e-Impôts — État 301 (EDI)</button> <button class="btn sec" onclick="App.ediTVAXml()">📋 XML e-Impôts — Annexe TVA (EDI)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.ediITSXml()">📋 XML e-Impôts — État 301 (EDI)</button> <button class="btn sec" onclick="App.ediTVAXml()">📋 XML e-Impôts — Annexe TVA (EDI)</button> <button class="btn sec" onclick="App.ediITSDgiSheet()">📄 Saisie DGI — État 301 (à coller)</button> <button class="btn sec" onclick="App.ediTVADgiSheet()">📄 Saisie DGI — Annexe TVA (à coller)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
   +((SETS.sage_rows||[]).length?'<div class="card"><h3>📥 Historique Sage importé</h3><div class="help" style="margin-bottom:8px">'+(SETS.sage_rows.length)+' écritures — <b>consultation seule</b> (sans incidence sur la caisse ni l\'exploitation)</div><button class="btn sec sm" onclick="App.sageImpXl()">📗 Exporter l\'historique</button> <button class="btn sm danger" onclick="App.sageImpDel()">✕ Supprimer</button></div>':'')
   +'</div>';
 }
@@ -3580,6 +3580,67 @@ App.ediTVAXml=async period=>{period=period||S.expPeriod||monthISO();
   const xml=ediXmlFile([ediXmlHead('TVA',F.ncc,'TVA',mm,yy)].concat(lignes,[EDI_FOOT]));
   download(F.ncc+'-EDI-TVA-'+ediStamp()+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
   toast('📋 XML e-Impôts Annexe TVA '+monthLabel(period)+' — '+lignes.length+' opération(s) ouvrant droit à réduction — conforme au générateur DGI, à importer sur e-Impôts (annexes détaillées EDI)','ok');};
+/* ==== v35.57 : FEUILLES DE SAISIE DGI — répliques CONFORMES des feuilles SAISIE (État 301)
+       et DETAIL_TVA_S (annexe TVA) des classeurs edi-annexe officiels, à coller dans le
+       fichier DGI (usage prévu par la notice officielle : « copier/coller depuis un autre
+       fichier Excel exporté de votre système d'information »). Le fichier transmissible est
+       ensuite produit par LE bouton officiel de la macro DGI (« Génération du XML ») :
+       conformité totale, la macro officielle fait le travail. ==== */
+const EDI_DEACC=s=>EDI_SCH(String(s==null?'':s)).toUpperCase();
+const EDI_XLDATE=iso=>{if(!iso)return '';const y=Number(iso.slice(0,4)),m=Number(iso.slice(5,7)),d=Number(iso.slice(8,10));return Math.floor((Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000);};
+const EDI_MOIS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const EDI_MODE_EMPLOI=[
+ ['MODE D\u2019EMPLOI — coller ces données dans le fichier officiel DGI (edi-annexe)'],
+ [''],
+ ['1. Ouvrez le fichier Excel officiel de la DGI (edi-annexe ITS ou TVA, téléchargé depuis e-Impôts) et activez les macros.'],
+ ['2. Dans sa feuille SAISIE (État 301) ou DETAIL_TVA_S (TVA), renseignez : votre NCC, l\u2019exercice/année et le mois d\u2019imposition — mêmes valeurs que celles rappelées en tête de la feuille de ce fichier.'],
+ ['3. Sélectionnez ici les lignes de données (à partir de la ligne 16 pour l\u2019État 301, de la ligne 20 pour la TVA) et copiez (Ctrl+C).'],
+ ['4. Dans le fichier DGI, cliquez la première cellule de saisie (B16 pour l\u2019État 301 ; B20 pour la TVA) puis Collage spécial \u2192 Valeurs (Ctrl+Alt+V puis V).'],
+ ['5. Vérifiez les contrôles de la DGI (erreurs en rouge) puis cliquez le bouton orange « Génération du XML ».'],
+ ['6. Le fichier NCC-EDI-\u2026.xml est créé dans vos Documents : importez-le sur e-Impôts, étape 3 de la déclaration, « Transmission des annexes détaillées par EDI ».'],
+ [''],
+ ['NB : la notice officielle du fichier DGI prévoit explicitement le remplissage « par copier/coller depuis un autre fichier Excel (éventuellement exporté de votre système d\u2019information) ».']];
+App.ediITSDgiSheet=async period=>{period=period||S.payPeriod||monthISO();
+  const F=SETS.fiscal||{};
+  if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire','bad');
+  const runs=await DB.list('pay_runs',{eq:{period:period}});
+  const run=runs.filter(r=>r.status==='closed')[0];
+  if(!run)return toast('Aucune paie clôturée pour '+monthLabel(period)+' — générez puis clôturez la paie d\'abord','bad');
+  const slips=await DB.list('pay_slips',{eq:{run_id:run.id}});
+  if(!slips.length)return toast('Aucun bulletin pour cette période','bad');
+  const emps=await DB.list('employees');
+  const empOf=id=>emps.filter(x=>x.id===id)[0]||{};
+  const [yy,mm]=period.split('-');
+  const R=[];R[3]=['','','','','','','ITS'];R[5]=['','','','','','','Impôts sur les traitements et salaires - secteur privé'];
+  R[7]=['','','','NCC :','','','',F.ncc];R[9]=['','','','Exercice :','','','',Number(yy)];
+  R[11]=['','','',"Mois d'imposition :",'','','',EDI_MOIS[Number(mm)-1]];
+  R[13]=['','#','N° CNPS','Nom et prénoms','Type de travailleur','Emploi ou Qualité','Code Emploi','Régime Général G ou Agricole A','Sexe','Nationalité','Local/Expatrié','Situation de famille la plus favorable (au 1er janvier ou au 31 décembre)','','Nombre de parts',"Nombre de jours d'application des paiements",'Montant des salaires et rémunérations accessoires','Montant des avantages en nature suivant barème réglementaire','Montant des avantages en nature selon valeur réelle','Rémuneration total brut','Révenus non imposables','Rémunération brut imposable',"Réduction d'impôt pour charges de famille (RICF)",'ITS Salariés','',"Indemnités pour frais d'emploi considérées comme exonérées",''];
+  R[14]=['','','','','','','','','','','','Etat civil',"Nombre d'enfants à charge",'','','','','','','','','','Brut','Net','Montant','Désignation'];
+  let n=0,sansCnps=0;
+  slips.forEach(s=>{const e=empOf(s.employee_id);
+    if(!e.cnps){sansCnps++;return;}
+    n++;R[14+n]=['',n,String(e.cnps),EDI_DEACC(s.employee_name),'Salarié',EDI_DEACC(s.position||e.position),e.code_emploi||EDI_CE[e.position]||'EQ',e.regime||'G',e.sexe||'M',e.nationalite||'I',e.loc_exp||'L',e.situation||'C',Number(e.enfants)||0,Number(e.tax_shares!=null?e.tax_shares:2)||2,30,Math.round(Number(s.brut_ap||0)),0,Math.round(Number(s.housing||0)),Math.round(Number(s.brut_ap||0)+Number(s.housing||0)),Math.round(Number(s.transport_exo||0)),Math.round(Number(s.taxable||0)),Math.round(Number(s.ricf||0)),Math.round(Number(s.its_gross||0)),Math.round(Number(s.its||0)),Math.round(Number(s.transport_exo||0)),s.transport_exo?'TRANSPORT':''];});
+  if(!n)return toast('Aucun salarié avec n° CNPS renseigné — complétez les fiches employés (champ N° CNPS)','bad');
+  for(let i=0;i<=14+n;i++)if(!R[i])R[i]=[];
+  makeXlsx([{name:'SAISIE',rows:R,widths:[4,14,32,14,24,10,12,6,12,12,10,10,8,12,16,18,18,16,14,16,14,12,12,12,14]},
+    {name:"MODE D'EMPLOI",rows:EDI_MODE_EMPLOI,widths:[110]}],'DGI_Saisie_Etat301_'+period+'.xlsx');
+  toast('📄 Feuille SAISIE État 301 ('+n+' salariés'+(sansCnps?' · ⚠ '+sansCnps+' sans n° CNPS ignoré(s)':'')+') — collez-la dans votre fichier DGI officiel dès la ligne 16, puis bouton « Génération du XML »','ok');};
+App.ediTVADgiSheet=async period=>{period=period||S.expPeriod||monthISO();
+  const F=SETS.fiscal||{};
+  if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire','bad');
+  const achats=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===period&&a.amount).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const [yy,mm]=period.split('-');
+  const R=[];R[5]=['','','','Code Impôt :','TVA'];R[7]=['','','','Libellé impôt :','Taxe sur la valeur ajoutée (hors CME/DGE)'];
+  R[9]=['','','','NCC :',F.ncc];R[11]=['','','',"Année d'imposition :",Number(yy)];R[13]=['','','',"Mois d'imposition :",EDI_MOIS[Number(mm)-1]];
+  R[16]=['',"TYPE D'OPERATION (OUVRANT DROIT A REDUCTION)",'SPECIFICATION',"DATE DE LA FACTURE OU DE L'IMPORTATION",'FOURNISSEUR','','',"REFERENCE DE LA FACTURE NORMALISEE OU N° DE LA DECLARATION",'NATURE DES BIENS OU SERVICES (OUVRANT DROIT A REDUCTION)','DATE DE REGLEMENT','MONTANT','','MONTANT DE LA TVA','TYPE DE REDEVABLE','PRORATA DE DEDUCTION','MONTANT DE LA TAXE DEDUCTIBLE'];
+  R[17]=['','','','','RAISON SOCIALE','NCC ',"PAYS D'ORIGINE",'','','','MONTANT HT','VALEUR EN DOUANE (4)'];
+  achats.forEach((a,i)=>{let ht=Math.round(Number(a.amount)),tva=0;
+    if(F.tva){ht=Math.round(Number(a.amount)/1.18);tva=Math.round(Number(a.amount))-ht;}
+    R[19+i]=['','Achats_locaux','Achats de marchandises et matières prémières locales',EDI_XLDATE(a.date),a.supplier||'',a.ncc_suppl||'','',String(a.id||'').slice(-6),a.note||'',(a.pay_method&&a.pay_method!=='later')?EDI_XLDATE(a.date):'',ht,'',tva,'REDEVABLE TOTAL',1,tva];});
+  for(let i=0;i<19+achats.length;i++)if(!R[i])R[i]=[];
+  makeXlsx([{name:'DETAIL_TVA_S',rows:R,widths:[4,26,38,14,30,14,12,22,34,12,14,14,14,16,12,16]},
+    {name:"MODE D'EMPLOI",rows:EDI_MODE_EMPLOI,widths:[110]}],'DGI_Detail_TVA_'+period+'.xlsx');
+  toast('📄 Feuille DETAIL_TVA_S ('+achats.length+' opération(s)) — collez-la dans votre fichier DGI officiel dès la ligne 20, puis bouton « Génération du XML »','ok');};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
