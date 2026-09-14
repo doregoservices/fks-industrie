@@ -52,6 +52,17 @@ if(!sql.includes('create table if not exists form_tokens'))throw new Error('SQL 
 if(!sql.includes('add column if not exists type_lines jsonb'))throw new Error('SQL productions : type_lines absent');
 if(!mod.b.includes('type_id')||!mod.b.includes('form_tokens')||!mod.b.includes('products'))throw new Error('résumé incomplet');
 console.log('✓ Formats réels couverts : PostgreSQL « column x.y does not exist » + PostgREST multi-colonnes → ALTER complets générés');
+/* 4bis. base SANS les colonnes DGI v35.55+ (employees.cnps… / purchases.ncc_suppl) → réparation générée */
+const OLD2=JSON.parse(JSON.stringify(FULL));
+OLD2.employees=OLD2.employees.filter(c=>!['cnps','sexe','nationalite','loc_exp','situation','enfants','code_emploi'].includes(c));
+OLD2.purchases=OLD2.purchases.filter(c=>c!=='ncc_suppl');
+global.fetch=mk(OLD2);
+await App.dbCheck();
+const sql2=(mod.b.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)||[])[1]||'';
+['cnps text','sexe text','nationalite text','loc_exp text','situation text','enfants numeric','code_emploi text'].forEach(f=>{if(!sql2.includes('alter table employees add column if not exists '+f))throw new Error('SQL employees : '+f+' absent → '+sql2.slice(0,140));});
+if(!sql2.includes('alter table purchases add column if not exists ncc_suppl text'))throw new Error('SQL purchases : ncc_suppl absent');
+if(!mod.b.includes('cnps'))throw new Error('résumé cnps absent du diagnostic');
+console.log('✓ Champs DGI (v35.55+) : base ancienne → ALTER employees (cnps, sexe, nationalité, loc/exp, situation, enfants, code emploi) + purchases.ncc_suppl générés automatiquement');
 /* 5. injoignable / pause */
 global.fetch=async()=>{throw new Error('network');};
 await App.dbCheck();
