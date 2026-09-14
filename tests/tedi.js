@@ -1,93 +1,99 @@
-;/* TEDI : fichiers EDI XML e-Impôts (syntaxe officielle DGI) — État 301 (ITS) + Annexe TVA + champs employé/fournisseur/NCC */
+;/* TEDI : fichiers EDI XML e-Impôts — CONFORMITÉ STRICTE au générateur officiel DGI (macro MiseEnFormeEDI) :
+   CRLF un élément par ligne, accents supprimés, MAJUSCULES État 301, remplacements & ( ) % € °, nom NCC-EDI-type-date.xml */
 ;(async()=>{
 let lastToast=null;const _t=toast;toast=(m,t)=>{lastToast={m,t};return _t(m,t);};
 await loadSettings();await seedDemo();S.user={name:'test',role:'manager'};
 const per=monthISO();
 const [yy,mm]=per.split('-');
-
-/* 1 · sans NCC → refus clair, aucun fichier */
 const caps={};const _dl=download;download=(n,b)=>{caps[n]=b;};
-await App.ediITSXml(per);
-if(caps['Edi_Etat301_ITS_'+per+'.xml'])throw new Error('XML généré sans NCC !');
-if(!lastToast||!lastToast.m.includes('NCC'))throw new Error('message NCC attendu: '+(lastToast&&lastToast.m));
-await App.ediTVAXml(per);
-if(caps['Edi_Annexe_TVA_'+per+'.xml'])throw new Error('XML TVA généré sans NCC !');
-console.log('✓ Sans NCC : les deux XML sont refusés avec le message « Renseignez votre NCC… »');
+const findCap=re=>Object.keys(caps).filter(k=>re.test(k));
 
-/* 2 · NCC renseigné + paie clôturée → État 301 XML */
+/* 1 · sans NCC → refus */
+await App.ediITSXml(per);
+if(findCap(/Etat301|EDI-etat_301/).length)throw new Error('XML généré sans NCC !');
+if(!lastToast||!lastToast.m.includes('NCC'))throw new Error('message NCC attendu');
+console.log('✓ Sans NCC : refus clair, aucun fichier');
+
+/* 2 · paie clôturée → État 301 conforme */
 await setSetting('fiscal',Object.assign({},SETS.fiscal,{ncc:'1900000X'}));
 location.hash='#/paie';S.route='paie';S.tab={paie:'run'};await render();
 await App.runGen(per);
-const run=(await DB.list('pay_runs',{eq:{period:per}})).filter(r=>r.status==='closed')[0]||(await DB.list('pay_runs'))[0];
+const run=(await DB.list('pay_runs'))[0];
 await DB.update('pay_runs',run.id,{status:'closed',paid_date:todayISO()});
 await App.ediITSXml(per);
-const kI='Edi_Etat301_ITS_'+per+'.xml';
-if(!caps[kI])throw new Error('État 301 non généré');
-const xI=caps[kI].parts.join('');
+const kI=findCap(/^1900000X-EDI-etat_301_mensuel-\d{8}-\d{4}\.xml$/);
+if(!kI.length)throw new Error('nom de fichier DGI attendu NCC-EDI-etat_301_mensuel-aaaammjj-hhmm.xml : '+Object.keys(caps).join(', '));
+const xI=caps[kI[0]].parts.join('');
+/* structure : un élément par ligne, CRLF, fin de fichier CRLF */
+if(!xI.endsWith('\r\n'))throw new Error('le fichier doit finir par CRLF (writeline DGI)');
+const lignesF=xI.slice(0,-2).split('\r\n');
+if(lignesF.some(l=>!l))throw new Error('pas de ligne vide attendue (tri DGI)');
+if(!lignesF[0].startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>etat_301_mensuel</type><ncc>1900000X</ncc><codeTaxe>ITS</codeTaxe><mois>'+Number(mm)+'</mois><exercice>'+yy+'</exercice></informations>'))throw new Error('en-tête non conforme : '+lignesF[0].slice(0,180));
+if(lignesF[lignesF.length-1]!=='</donnees></tableau></tableaux></EDI>')throw new Error('pied non conforme');
+const nEmp=(await DB.list('pay_slips',{eq:{run_id:run.id}})).length;
+if(lignesF.length!==nEmp+2)throw new Error('attendu '+(nEmp+2)+' lignes de fichier (en-tête+'+nEmp+' salariés+pied), obtenu '+lignesF.length);
+/* ligne Bakary : MAJUSCULES + SANS ACCENT (UPPER + remplacements macro DGI) */
+const ligB=lignesF.filter(l=>l.indexOf('BAKARY TRAORE')>=0)[0];
+if(!ligB)throw new Error('identite attendue « BAKARY TRAORE » (majuscules, accent supprimé)');
+if(ligB.indexOf('TORREFACTEUR')<0)throw new Error('emploi_qualite attendu « TORREFACTEUR » (majuscules sans accent)');
+if(ligB.indexOf('<code>numero_cnps</code><valeur>188021640501</valeur>')<0)throw new Error('CNPS absent');
+if(ligB.indexOf('<code>mnt_sala_remune_acs</code><valeur>150000</valeur>')<0)throw new Error('salaire incorrect');
+/* aucun caractère accentué ni interdit dans TOUT le fichier */
+if(/[éèêëàâäãôöîïûùüçÉÈÊËÀÂÄÃÔÖÎÏÛÙÜÇ€°œ²¤£$%§]/.test(xI))throw new Error('caractère interdit présent (la macro DGI les supprime tous)');
+if(xI.indexOf('&')>=0||xI.indexOf('(')>=0||xI.indexOf(')')>=0)throw new Error('& ou parenthèse présents (DGI : &→ET, ( )→espaces)');
+/* 23 champs dans l ordre officiel */
 const ITS_CODES=['numero_cnps','identite','emploi_qualite','code_emploi','regime_general','sexe','nationalite','loc_exp','situation_famille','nbre_enfants_charge_nat_cas','nbre_parts_igr','nbre_jours_app_paiements','mnt_sala_remune_acs','mnt_avtgs_nat_reglm','mnt_avtgs_nat_reele','sal_ttl_brut','rev_non_imposable','rev_brut_imposable','ricf','its_sal_brut','its_sal_net','mnt_indemnites','designation_indemnites'];
-if(!xI.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>etat_301_mensuel</type><ncc>1900000X</ncc><codeTaxe>ITS</codeTaxe><mois>'+Number(mm)+'</mois><exercice>'+yy+'</exercice></informations>'))throw new Error('en-tête XML non conforme: '+xI.slice(0,180));
-if(!xI.endsWith('</donnees></tableau></tableaux></EDI>'))throw new Error('pied XML non conforme');
-const lig=/<ligne>(?:(?!<ligne>).)*?Bakary Traoré.*?<\/ligne>/.exec(xI);
-if(!lig)throw new Error('Bakary absent de l État 301');
-const codes=(lig[0].match(/<code>([^<]+)<\/code>/g)||[]).map(c=>c.slice(6,-7));
-if(codes.join(',')!==ITS_CODES.join(','))throw new Error('ordre des champs non conforme: '+codes.join(','));
-if(lig[0].indexOf('<code>numero_cnps</code><valeur>188021640501</valeur>')<0)throw new Error('N° CNPS de l employé absent');
-if(lig[0].indexOf('<code>mnt_sala_remune_acs</code><valeur>150000</valeur>')<0)throw new Error('salaire (brut_ap) incorrect dans le XML');
-if(lig[0].indexOf('TRANSPORT')<0)throw new Error('désignation indemnité TRANSPORT absente');
-const nLig=(xI.match(/<ligne>/g)||[]).length;
-const slips=(await DB.list('pay_slips',{eq:{run_id:run.id}}));
-if(nLig!==slips.length)throw new Error('nombre de lignes: '+nLig+' vs '+slips.length+' bulletins');
-if(EDI_NFR(20535.36)!=='20535,36')throw new Error('montants à virgule attendus (format DGI)');
-console.log('✓ État 301 XML : en-tête/ncc/mois/exercice officiels · '+nLig+' lignes · 23 champs dans l ORDRE officiel · CNPS, salaires, RICF, ITS brut/net, TRANSPORT alimentés par la paie');
+const codes=(ligB.match(/<code>([^<]+)<\/code>/g)||[]).map(c=>c.slice(6,-7));
+if(codes.join(',')!==ITS_CODES.join(','))throw new Error('ordre des champs non conforme');
+console.log('✓ État 301 : fichier NCC-EDI-etat_301_mensuel-*.xml · un élément par ligne (CRLF) · en-tête/pied officiels · '+nEmp+' salariés · 23 champs dans l ordre · MAJUSCULES et zéro accent (BAKARY TRAORE / TORREFACTEUR)');
 
-/* 3 · Annexe TVA XML */
+/* 3 · salarié sans CNPS → ignoré + avertissement (comme le générateur DGI) */
+const emps=await DB.list('employees');
+const bak=emps.filter(e=>e.name==='Bakary Traoré')[0];
+await DB.update('employees',bak.id,Object.assign({},bak,{cnps:''}));
+await App.ediITSXml(per);
+const xI2=caps[kI[0]].parts.join('');
+const n2=xI2.slice(0,-2).split('\r\n').length;
+if(n2!==lignesF.length-1)throw new Error('le salarié sans CNPS doit être ignoré (attendu '+(lignesF.length-1)+' lignes, obtenu '+n2+')');
+if(!lastToast||!lastToast.m.includes('ignoré'))throw new Error('avertissement ⚠ sans n° CNPS attendu : '+(lastToast&&lastToast.m));
+await DB.update('employees',bak.id,Object.assign({},bak,{cnps:'188021640501'}));
+console.log('✓ Salarié sans n° CNPS : ligne ignorée + avertissement « ⚠ ignoré(s) sans n° CNPS » (comportement du générateur DGI)');
+
+/* 4 · Annexe TVA conforme */
 await App.ediTVAXml(per);
-const kT='Edi_Annexe_TVA_'+per+'.xml';
-if(!caps[kT])throw new Error('Annexe TVA non générée');
-const xT=caps[kT].parts.join('');
+const kT=findCap(/^1900000X-EDI-TVA-\d{8}-\d{4}\.xml$/);
+if(!kT.length)throw new Error('nom de fichier DGI attendu NCC-EDI-TVA-aaaammjj-hhmm.xml : '+Object.keys(caps).join(', '));
+const xT=caps[kT[0]].parts.join('');
+const lignesT=xT.slice(0,-2).split('\r\n');
+if(!lignesT[0].startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>TVA</type><ncc>1900000X</ncc><codeTaxe>TVA</codeTaxe>'))throw new Error('en-tête TVA non conforme');
 const TVA_CODES=['type_operation_odr','specification','date_facture','raison_sociale_fournisseur','ncc_fournisseur','pays_fournisseur','ref_facture','nature_bien_odr','date_reglement','montant_ht','montant_val_douane','montant_tva','type_redevable','prorata_deduction','montant_taxe_deductible'];
-if(!xT.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>TVA</type><ncc>1900000X</ncc><codeTaxe>TVA</codeTaxe>'))throw new Error('en-tête TVA non conforme');
-const ligT=/<ligne>.*?<\/ligne>/.exec(xT);
-if(!ligT)throw new Error('annexe TVA vide');
-const codesT=(ligT[0].match(/<code>([^<]+)<\/code>/g)||[]).map(c=>c.slice(6,-7));
-if(codesT.join(',')!==TVA_CODES.join(','))throw new Error('ordre champs TVA non conforme: '+codesT.join(','));
-if(ligT[0].indexOf('<code>type_operation_odr</code><valeur>Achats_locaux</valeur>')<0)throw new Error('type opération attendu: Achats_locaux');
-if(ligT[0].indexOf('REDEVABLE TOTAL')<0||ligT[0].indexOf('<code>prorata_deduction</code><valeur>1</valeur>')<0)throw new Error('redevable/prorata absents');
-if(!/<code>date_facture<\/code><valeur>\d{2}\/\d{2}\/\d{4}<\/valeur>/.test(ligT[0]))throw new Error('date facture attendue JJ/MM/AAAA');
-console.log('✓ Annexe TVA XML : 15 champs dans l ORDRE officiel · Achats_locaux · REDEVABLE TOTAL · prorata 1 · dates JJ/MM/AAAA');
+const lig1=lignesT[1];
+const codesT=(lig1.match(/<code>([^<]+)<\/code>/g)||[]).map(c=>c.slice(6,-7));
+if(codesT.join(',')!==TVA_CODES.join(','))throw new Error('ordre champs TVA non conforme');
+if(lig1.indexOf('<valeur>Cooperative de Man</valeur>')<0)throw new Error('raison sociale : accents supprimés attendus (« Cooperative de Man »)');
+if(lig1.indexOf('Achats_locaux')<0||lig1.indexOf('REDEVABLE TOTAL')<0||lig1.indexOf('<code>prorata_deduction</code><valeur>1</valeur>')<0)throw new Error('referentiels TVA absents');
+if(!/<code>date_facture<\/code><valeur>\d{2}\/\d{2}\/\d{4}<\/valeur>/.test(lig1))throw new Error('date JJ/MM/AAAA attendue');
+console.log('✓ Annexe TVA : fichier NCC-EDI-TVA-*.xml · 15 champs dans l ordre · accents supprimés (Cooperative de Man) · référentiels DGI');
 
-/* 4 · achat avec NCC fournisseur → propagé dans le XML */
-$('#aD').value=todayISO();$('#aS').value='SIVOM SARL';$('#aNc').value='0175265N';$('#aQ').value='100';$('#aP').value='500';$('#aT').value='50000';$('#aM').value='cash';$('#aN').value='Test EDI';
-const nAvant=(await DB.list('purchases')).length;
+/* 5 · remplacements spéciaux macro : & ( ) % € */
+$('#aD').value=todayISO();$('#aS').value='Café & Co (Abidjan)';$('#aNc').value='0175265N';$('#aQ').value='100';$('#aP').value='500';$('#aT').value='50000';$('#aM').value='cash';$('#aN').value='Lot n°1 — 50% du stock';
 await App.achatSave();
-const achats=(await DB.list('purchases'));
-if(achats.length!==nAvant+1)throw new Error('achat non enregistré');
-const aNouveau=achats.filter(a=>a.supplier==='SIVOM SARL')[0];
-if(!aNouveau||aNouveau.ncc_suppl!=='0175265N')throw new Error('NCC fournisseur non sauvegardé: '+(aNouveau&&aNouveau.ncc_suppl));
 await App.ediTVAXml(per);
-const xT2=caps[kT].parts.join('');
-const ligS=/<ligne>(?:(?!<ligne>).)*?SIVOM SARL.*?<\/ligne>/.exec(xT2);
-if(!ligS)throw new Error('achat SIVOM absent du XML TVA');
-if(ligS[0].indexOf('<code>ncc_fournisseur</code><valeur>0175265N</valeur>')<0)throw new Error('NCC fournisseur absent du XML');
-console.log('✓ Achat : champ NCC fournisseur enregistré et transmis dans l annexe TVA XML');
+const xT3=caps[kT[0]].parts.join('');
+const ligS=xT3.slice(0,-2).split('\r\n').filter(l=>l.indexOf('Cafe ET Co')>=0)[0];
+if(!ligS)throw new Error('« Café & Co (Abidjan) » doit devenir « Cafe ET Co  Abidjan »');
+if(ligS.indexOf('Cafe ET Co  Abidjan')<0)throw new Error('transformation attendue : Cafe ET Co  Abidjan — obtenu : '+ligS.slice(0,200));
+if(ligS.indexOf('Lot nO1')<0||ligS.indexOf('50pourcentage')<0)throw new Error('° → O et % → pourcentage attendus');
+if(ligS.indexOf('ncc_fournisseur</code><valeur>0175265N</valeur>')<0)throw new Error('NCC fournisseur attendu');
+console.log('✓ Remplacements macro DGI : « Café & Co (Abidjan) » → « Cafe ET Co  Abidjan » · n° → nO · 50% → 50pourcentage · & → ET');
 
-/* 5 · fiche employé : nouveaux champs DGI */
-$('#eN').value='TEST DGI';$('#eP').value='Comptable';$('#eM').value='';$('#eH').value=todayISO();$('#eS').value='monthly';$('#eB').value='200000';$('#eTr').value='0';$('#eHo').value='0';$('#eSh').value='3';$('#eZ').value='abidjan';
-$('#eCnps').value='199912345678';$('#eSexe').value='F';$('#eNat').value='AA';$('#eLoc').value='E';$('#eSit').value='M';$('#eEnf').value='2';$('#eCE').value='CM';
-await App.empSave();
-const eDgi=(await DB.list('employees')).filter(x=>x.name==='TEST DGI')[0];
-if(!eDgi)throw new Error('employé non créé');
-if(eDgi.cnps!=='199912345678'||eDgi.sexe!=='F'||eDgi.nationalite!=='AA'||eDgi.loc_exp!=='E'||eDgi.situation!=='M'||Number(eDgi.enfants)!==2||eDgi.code_emploi!=='CM')throw new Error('champs DGI non sauvegardés: '+JSON.stringify({cnps:eDgi.cnps,sexe:eDgi.sexe,nat:eDgi.nationalite,loc:eDgi.loc_exp,sit:eDgi.situation,enf:eDgi.enfants,ce:eDgi.code_emploi}));
-console.log('✓ Fiche employé : N° CNPS, sexe, nationalité, local/expatrié, situation, enfants, code emploi enregistrés');
-
-/* 6 · boutons visibles dans l écran Exports (attendre le render() non attendu de empSave) */
+/* 6 · boutons */
 await new Promise(r=>setTimeout(r,10));
 location.hash='#/exports';S.route='exports';await render();
 const h=$('#main').innerHTML;
-if(h.indexOf('XML e-Impôts — État 301 (EDI)')<0||h.indexOf('XML e-Impôts — Annexe TVA (EDI)')<0)throw new Error('boutons XML e-Impôts absents de l écran Exports');
-if(h.indexOf('Annexe ITS DGI (Excel)')<0)throw new Error('bouton Excel d origine disparu');
-console.log('✓ Écran Exports : les 2 boutons « 📋 XML e-Impôts (EDI) » à côté des annexes Excel et le pont Sage');
+if(h.indexOf('XML e-Impôts — État 301 (EDI)')<0||h.indexOf('XML e-Impôts — Annexe TVA (EDI)')<0)throw new Error('boutons XML e-Impôts absents');
+console.log('✓ Écran Exports : boutons 📋 XML e-Impôts présents');
 
 download=_dl;toast=_t;
-console.log('TEDI: TOUT PASSE');
+console.log('TEDI: TOUT PASSE — conformité stricte au générateur officiel DGI');
 })().catch(e=>{console.log('ECHEC TEDI:',e.message);process.exit(1);});

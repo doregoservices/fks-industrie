@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.55';
+const APP_VER='35.56';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3525,11 +3525,28 @@ App.ediITS=async period=>{period=period||S.payPeriod||monthISO();
    La DGI autorise explicitement la génération par un autre moyen respectant la syntaxe EDI XML
    e-Impôts (notice officielle des fichiers edi-annexe) : fichiers à importer sur e-Impôts,
    étape 3, « Transmission des annexes détaillées par EDI ». ==== */
-const EDI_CH=(k,v)=>'<champ><code>'+k+'</code><valeur>'+String(v==null?'':v).replace(/[<>&]/g,'')+'</valeur></champ>';
+/* ==== v35.56 : FICHIERS EDI XML e-Impôts — CONFORMITÉ STRICTE au générateur officiel DGI
+       (macro « MiseEnFormeEDI » des fichiers edi-annexe DGI, extraite et répliquée) :
+       un élément par ligne (CRLF), suppressions d'accents et remplacements de caractères
+       identiques, MAJUSCULES sur identité/emploi/désignation (État 301), nom de fichier
+       NCC-EDI-<type>-aaaammjj-hhmm.xml. La DGI autorise la génération par un autre moyen
+       respectant la syntaxe (notice officielle). Import sur e-Impôts, étape 3 :
+       « Transmission des annexes détaillées par EDI ». ==== */
+const EDI_SCH=v=>String(v==null?'':v)
+  .replace(/[éèêë]/g,'e').replace(/[àâäã]/g,'a').replace(/[ôö]/g,'o').replace(/[îï]/g,'i').replace(/[ûùü]/g,'u').replace(/ç/g,'c')
+  .replace(/É/g,'E').replace(/È/g,'E').replace(/Ê/g,'E').replace(/Ë/g,'E').replace(/À/g,'A').replace(/Â/g,'A').replace(/Ä/g,'A').replace(/Ã/g,'A')
+  .replace(/Ô/g,'O').replace(/Ö/g,'O').replace(/Î/g,'I').replace(/Ï/g,'I').replace(/Û/g,'U').replace(/Ù/g,'U').replace(/Ü/g,'U').replace(/Ç/g,'C')
+  .replace(/€/g,'EUR').replace(/&/g,'ET').replace(/°/g,'O').replace(/œ/g,'OE').replace(/æ/g,'AE').replace(/…/g,'...')
+  .replace(/©/g,'(c)').replace(/´/g,"'").replace(/\u00a0/g,' ').replace(/’/g,"'").replace(/¨/g,' ')
+  .replace(/\(/g,' ').replace(/\)/g,' ').replace(/#/g,' ').replace(/²/g,'carré').replace(/¤/g,' ').replace(/\]/g,' ').replace(/£/g,'Pounds')
+  .replace(/\$/g,'S').replace(/%/g,'pourcentage').replace(/§/g,'S').replace(/[<>]/g,'');
+const EDI_CH=(k,v)=>'<champ><code>'+k+'</code><valeur>'+EDI_SCH(v)+'</valeur></champ>';
 const EDI_LIGNE=f=>'<ligne>'+f.map(x=>EDI_CH(x[0],x[1])).join('')+'</ligne>';
 const EDI_NFR=v=>{v=Math.round(Number(v||0)*100)/100;return String(v).replace('.',',');};
-const ediXmlHead=(typ,ncc,taxe,mois,ex)=>'<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>'+typ+'</type><ncc>'+esc(ncc)+'</ncc><codeTaxe>'+taxe+'</codeTaxe><mois>'+Number(mois)+'</mois><exercice>'+ex+'</exercice></informations><tableaux><tableau><donnees>';
+const ediStamp=()=>{const d=new Date();const p2=n=>String(n).padStart(2,'0');return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes());};
+const ediXmlHead=(typ,ncc,taxe,mois,ex)=>'<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>'+EDI_SCH(typ)+'</type><ncc>'+EDI_SCH(ncc)+'</ncc><codeTaxe>'+EDI_SCH(taxe)+'</codeTaxe><mois>'+Number(mois)+'</mois><exercice>'+ex+'</exercice></informations><tableaux><tableau><donnees>';
 const EDI_FOOT='</donnees></tableau></tableaux></EDI>';
+const ediXmlFile=lines=>lines.join('\r\n')+'\r\n';
 const EDI_CE={'Directeur':'DR','Cadre supérieur':'CS','Agent de maîtrise':'AM','Cadre moyen':'CM','Employé qualifié':'EQ','Employé non qualifié':'EN','Ouvrier qualifié':'OQ','Ouvrier non qualifié':'ON'};
 App.ediITSXml=async period=>{period=period||S.payPeriod||monthISO();
   const F=SETS.fiscal||{};
@@ -3542,23 +3559,27 @@ App.ediITSXml=async period=>{period=period||S.payPeriod||monthISO();
   const emps=await DB.list('employees');
   const empOf=id=>emps.filter(x=>x.id===id)[0]||{};
   const [yy,mm]=period.split('-');
-  const lignes=slips.map(s=>{const e=empOf(s.employee_id);
-    return EDI_LIGNE([['numero_cnps',e.cnps||''],['identite',s.employee_name],['emploi_qualite',s.position||e.position||''],['code_emploi',e.code_emploi||EDI_CE[e.position]||'EQ'],['regime_general',e.regime||'G'],['sexe',e.sexe||'M'],['nationalite',e.nationalite||'I'],['loc_exp',e.loc_exp||'L'],['situation_famille',e.situation||'C'],['nbre_enfants_charge_nat_cas',Number(e.enfants)||0],['nbre_parts_igr',Number(e.tax_shares!=null?e.tax_shares:2)||2],['nbre_jours_app_paiements',30],['mnt_sala_remune_acs',EDI_NFR(s.brut_ap)],['mnt_avtgs_nat_reglm','0'],['mnt_avtgs_nat_reele',EDI_NFR(s.housing||0)],['sal_ttl_brut',EDI_NFR(Number(s.brut_ap||0)+Number(s.housing||0))],['rev_non_imposable',EDI_NFR(s.transport_exo||0)],['rev_brut_imposable',EDI_NFR(s.taxable)],['ricf',EDI_NFR(s.ricf||0)],['its_sal_brut',EDI_NFR(s.its_gross||0)],['its_sal_net',EDI_NFR(s.its||0)],['mnt_indemnites',EDI_NFR(s.transport_exo||0)],['designation_indemnites',s.transport_exo?'TRANSPORT':'']]);}).join('');
-  const xml=ediXmlHead('etat_301_mensuel',F.ncc,'ITS',mm,yy)+lignes+EDI_FOOT;
-  download('Edi_Etat301_ITS_'+period+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
-  toast('📋 XML e-Impôts État 301 '+monthLabel(period)+' — '+slips.length+' salariés — à importer sur e-Impôts (annexes détaillées EDI)','ok');};
+  const lignes=[];let sansCnps=0;
+  slips.forEach(s=>{const e=empOf(s.employee_id);
+    if(!e.cnps){sansCnps++;return;}/* ligne ignorée : n° CNPS requis, comme le générateur DGI */
+    lignes.push(EDI_LIGNE([['numero_cnps',String(e.cnps||'').toUpperCase()],['identite',String(s.employee_name||'').toUpperCase()],['emploi_qualite',String(s.position||e.position||'').toUpperCase()],['code_emploi',e.code_emploi||EDI_CE[e.position]||'EQ'],['regime_general',e.regime||'G'],['sexe',e.sexe||'M'],['nationalite',e.nationalite||'I'],['loc_exp',e.loc_exp||'L'],['situation_famille',e.situation||'C'],['nbre_enfants_charge_nat_cas',Number(e.enfants)||0],['nbre_parts_igr',Number(e.tax_shares!=null?e.tax_shares:2)||2],['nbre_jours_app_paiements',30],['mnt_sala_remune_acs',EDI_NFR(s.brut_ap)],['mnt_avtgs_nat_reglm','0'],['mnt_avtgs_nat_reele',EDI_NFR(s.housing||0)],['sal_ttl_brut',EDI_NFR(Number(s.brut_ap||0)+Number(s.housing||0))],['rev_non_imposable',EDI_NFR(s.transport_exo||0)],['rev_brut_imposable',EDI_NFR(s.taxable)],['ricf',EDI_NFR(s.ricf||0)],['its_sal_brut',EDI_NFR(s.its_gross||0)],['its_sal_net',EDI_NFR(s.its||0)],['mnt_indemnites',EDI_NFR(s.transport_exo||0)],['designation_indemnites',s.transport_exo?'TRANSPORT':'']]));});
+  if(!lignes.length)return toast('Aucun salarié avec n° CNPS renseigné — complétez les fiches employés (champ N° CNPS, onglet Employés)','bad');
+  const xml=ediXmlFile([ediXmlHead('etat_301_mensuel',F.ncc,'ITS',mm,yy)].concat(lignes,[EDI_FOOT]));
+  download(F.ncc+'-EDI-etat_301_mensuel-'+ediStamp()+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
+  toast('📋 XML e-Impôts État 301 '+monthLabel(period)+' — '+lignes.length+' salarié(s)'+(sansCnps?' · ⚠ '+sansCnps+' ignoré(s) sans n° CNPS':'')+' — conforme au générateur DGI, à importer sur e-Impôts (annexes détaillées EDI)','ok');};
 App.ediTVAXml=async period=>{period=period||S.expPeriod||monthISO();
   const F=SETS.fiscal||{};
   if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire pour le fichier e-Impôts','bad');
-  const achats=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===period).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const achats=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===period&&a.amount).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const [yy,mm]=period.split('-');
   const lignes=achats.map(a=>{
     let ht=EDI_NFR(a.amount),tva='';
     if(F.tva){const h=Math.round(Number(a.amount)/1.18);ht=EDI_NFR(h);tva=EDI_NFR(Math.round(Number(a.amount))-h);}
-    return EDI_LIGNE([['type_operation_odr','Achats_locaux'],['specification','Achats de marchandises et matières prémières locales'],['date_facture',(a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7)+'/'+(a.date||'').slice(0,4)],['raison_sociale_fournisseur',a.supplier||''],['ncc_fournisseur',a.ncc_suppl||''],['pays_fournisseur',''],['ref_facture',String(a.id||'').slice(-6).toUpperCase()],['nature_bien_odr',a.note||''],['date_reglement',(a.pay_method&&a.pay_method!=='later')?(a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7)+'/'+(a.date||'').slice(0,4):''],['montant_ht',ht],['montant_val_douane',''],['montant_tva',tva],['type_redevable','REDEVABLE TOTAL'],['prorata_deduction','1'],['montant_taxe_deductible',tva]]);}).join('');
-  const xml=ediXmlHead('TVA',F.ncc,'TVA',mm,yy)+lignes+EDI_FOOT;
-  download('Edi_Annexe_TVA_'+period+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
-  toast('📋 XML e-Impôts Annexe TVA '+monthLabel(period)+' — '+achats.length+' opération(s) ouvrant droit à réduction — à importer sur e-Impôts (annexes détaillées EDI)','ok');};
+    const dj=(a.date||'').slice(8,10)+'/'+(a.date||'').slice(5,7)+'/'+(a.date||'').slice(0,4);
+    return EDI_LIGNE([['type_operation_odr','Achats_locaux'],['specification','Achats de marchandises et matières prémières locales'],['date_facture',dj],['raison_sociale_fournisseur',a.supplier||''],['ncc_fournisseur',a.ncc_suppl||''],['pays_fournisseur',''],['ref_facture',String(a.id||'').slice(-6)],['nature_bien_odr',a.note||''],['date_reglement',(a.pay_method&&a.pay_method!=='later')?dj:''],['montant_ht',ht],['montant_val_douane',''],['montant_tva',tva],['type_redevable','REDEVABLE TOTAL'],['prorata_deduction','1'],['montant_taxe_deductible',tva]]);});
+  const xml=ediXmlFile([ediXmlHead('TVA',F.ncc,'TVA',mm,yy)].concat(lignes,[EDI_FOOT]));
+  download(F.ncc+'-EDI-TVA-'+ediStamp()+'.xml',new Blob([xml],{type:'application/xml;charset=utf-8'}));
+  toast('📋 XML e-Impôts Annexe TVA '+monthLabel(period)+' — '+lignes.length+' opération(s) ouvrant droit à réduction — conforme au générateur DGI, à importer sur e-Impôts (annexes détaillées EDI)','ok');};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
