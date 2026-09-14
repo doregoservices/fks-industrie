@@ -17,7 +17,12 @@ global.sessionStorage={_d:{},getItem(){return null},setItem(){},removeItem(){}};
 global.history={replaceState(){},pushState(){}};
 global.alert=()=>{};global.confirm=()=>true;global.prompt=()=>null;
 global.matchMedia=()=>({matches:false,addEventListener(){}});
-global.Blob=class{constructor(parts,opts){this.parts=parts;this.opts=opts;this.size=(parts||[]).join('').length;}arrayBuffer(){return Promise.resolve(Buffer.from((this.parts||[]).join(''),'binary'));}};
+global.Blob=class{constructor(parts,opts){this.parts=parts;this.opts=opts;this.size=(parts||[]).reduce((a,p)=>a+(p&&p.length||String(p).length),0);}
+  arrayBuffer(){const ch=(this.parts||[]).map(p=>{
+    if(typeof p==='string')return Buffer.from(p,'binary');
+    if(p&&p.byteLength!=null)return Buffer.from(p.buffer||p,p.byteOffset||0,p.byteLength);
+    return Buffer.from(String(p),'binary');});
+    const b=Buffer.concat(ch);return Promise.resolve(b.buffer.slice(b.byteOffset,b.byteOffset+b.byteLength));}};
 global.FileReader=class{readAsDataURL(){setTimeout(()=>{if(this.onload)this.onload({target:{result:''}})},0)}readAsText(){}};
 global.URL={createObjectURL(){return 'blob:x'},revokeObjectURL(){}};
 global.fetch=(u,o)=>Promise.resolve({ok:false,status:0,json:()=>Promise.resolve({}),text:()=>Promise.resolve('')});

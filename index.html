@@ -1361,7 +1361,7 @@ async function render(){
   const nb=$('#navPending');if(nb)nb.innerHTML=badge>0?'<span class="bdg">'+badge+'</span>':'';
 }
 async function pendingCount(){try{const a=await DB.list('pending_entries',{eq:{status:'pending'}});return a.length;}catch(e){return 0;}}
-const APP_VER='35.58';
+const APP_VER='35.59';
 const NAV_ITEMS=[['dashboard','📊 Accueil'],['guide','🧭 Assistant'],['validation','📥 À valider','navPending'],['ventes','🛒 Ventes'],['commerciaux','👤 Commerciaux'],['production','🏭 Production'],['stocks','📦 Stocks'],['produits','🛍️ Produits'],['emballages','🏷️ Emballages'],['immobilisations','🏗️ Immobilisations'],['achats','🛁 Achats vert'],['caisse','💰 Caisse'],['banque','🏦 Banque'],['impayes','🧾 Impayés'],['paie','👥 Paie'],['exploitation','📈 Exploitation'],['exports','📗 Exports'],['parametres','⚙️ Réglages'],['apropos','🛟 Support']];
 const BTAB_IC={dashboard:['📊','Accueil'],ventes:['🛒','Ventes'],production:['🏭','Produire'],caisse:['💰','Caisse'],achats:['🛁','Achats'],commerciaux:['👤','Équipe'],impayes:['🧾','Impayés'],emballages:['🏷️','Emballages'],validation:['📥','Valider']};
 const BTAB_PRI={manager:['dashboard','ventes','production','caisse'],caissier:['dashboard','caisse','banque','impayes'],commercial:['dashboard','ventes','commerciaux','impayes'],production:['dashboard','achats','production','emballages']};
@@ -3136,7 +3136,7 @@ async function scExports(){
   +'<div class="kpi" style="cursor:pointer" onclick="App.expPaie()"><div class="t">👥 Paie du mois</div><div class="s">Journal de paie : brut, CNPS, IRPP, avances, net à payer</div></div>'
   +'</div><div style="height:14px"></div>'
   +'<div class="card"><h3>📈 Rapports mensuels &amp; envoi au boss</h3><div class="help" style="margin-bottom:10px">Compte d\'exploitation du mois, mouvements de tous les stocks (produits finis, café vert, torréfié, emballages) et envoi automatique par email.</div><button class="btn" onclick="go(\'exploitation\')">Ouvrir l\'écran Exploitation</button></div>'
-  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.ediITSXml()">📋 XML e-Impôts — État 301 (EDI)</button> <button class="btn sec" onclick="App.ediTVAXml()">📋 XML e-Impôts — Annexe TVA (EDI)</button> <button class="btn sec" onclick="App.ediITSDgiSheet()">📄 Saisie DGI — État 301 (à coller)</button> <button class="btn sec" onclick="App.ediTVADgiSheet()">📄 Saisie DGI — Annexe TVA (à coller)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
+  +'<div class="card"><h3>💾 Divers</h3><button class="btn sec" onclick="App.expBackup()">Sauvegarde complète (JSON)</button> <button class="btn sec" onclick="App.impBackupPick()">♻️ Restaurer une sauvegarde</button> <button class="btn sec" onclick="App.ediITS()">📄 Annexe ITS DGI (Excel)</button> <button class="btn sec" onclick="App.ediTVA()">📄 Annexe TVA DGI (Excel)</button> <button class="btn sec" onclick="App.ediITSXml()">📋 XML e-Impôts — État 301 (EDI)</button> <button class="btn sec" onclick="App.ediTVAXml()">📋 XML e-Impôts — Annexe TVA (EDI)</button> <button class="btn sec" onclick="App.ediITSXl()">📊 Fichier DGI — État 301 (officiel : logos · calculs · macro)</button> <button class="btn sec" onclick="App.ediTVAXl()">📊 Fichier DGI — Annexe TVA (officiel)</button> <button class="btn sec" onclick="App.sageImp()">📥 Importer un journal Sage (historique)</button> <button class="btn sec" onclick="App.sageFmt()">⚙ Format Sage (import/export)</button></div>'
   +((SETS.sage_rows||[]).length?'<div class="card"><h3>📥 Historique Sage importé</h3><div class="help" style="margin-bottom:8px">'+(SETS.sage_rows.length)+' écritures — <b>consultation seule</b> (sans incidence sur la caisse ni l\'exploitation)</div><button class="btn sec sm" onclick="App.sageImpXl()">📗 Exporter l\'historique</button> <button class="btn sm danger" onclick="App.sageImpDel()">✕ Supprimer</button></div>':'')
   +'</div>';
 }
@@ -3589,58 +3589,122 @@ App.ediTVAXml=async period=>{period=period||S.expPeriod||monthISO();
 const EDI_DEACC=s=>EDI_SCH(String(s==null?'':s)).toUpperCase();
 const EDI_XLDATE=iso=>{if(!iso)return '';const y=Number(iso.slice(0,4)),m=Number(iso.slice(5,7)),d=Number(iso.slice(8,10));return Math.floor((Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000);};
 const EDI_MOIS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-const EDI_MODE_EMPLOI=[
- ['MODE D\u2019EMPLOI — coller ces données dans le fichier officiel DGI (edi-annexe)'],
- [''],
- ['1. Ouvrez le fichier Excel officiel de la DGI (edi-annexe ITS ou TVA, téléchargé depuis e-Impôts) et activez les macros.'],
- ['2. Dans sa feuille SAISIE (État 301) ou DETAIL_TVA_S (TVA), renseignez : votre NCC, l\u2019exercice/année et le mois d\u2019imposition — mêmes valeurs que celles rappelées en tête de la feuille de ce fichier.'],
- ['3. Sélectionnez ici les lignes de données (à partir de la ligne 16 pour l\u2019État 301, de la ligne 20 pour la TVA) et copiez (Ctrl+C).'],
- ['4. Dans le fichier DGI, cliquez la première cellule de saisie (B16 pour l\u2019État 301 ; B20 pour la TVA) puis Collage spécial \u2192 Valeurs (Ctrl+Alt+V puis V).'],
- ['5. Vérifiez les contrôles de la DGI (erreurs en rouge) puis cliquez le bouton orange « Génération du XML ».'],
- ['6. Le fichier NCC-EDI-\u2026.xml est créé dans vos Documents : importez-le sur e-Impôts, étape 3 de la déclaration, « Transmission des annexes détaillées par EDI ».'],
- [''],
- ['NB : la notice officielle du fichier DGI prévoit explicitement le remplissage « par copier/coller depuis un autre fichier Excel (éventuellement exporté de votre système d\u2019information) ».']];
-App.ediITSDgiSheet=async period=>{period=period||S.payPeriod||monthISO();
+/* ═══ v35.59 · FICHIER DGI OFFICIEL — chirurgie ZIP sur le modèle embarqué (logos, formules, macro) ═══ */
+const EDI_CRCT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0}return t})();
+const ediCrc=u8=>{let c=0xFFFFFFFF;for(let i=0;i<u8.length;i++)c=EDI_CRCT[(c^u8[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+const ediCat=cs=>{let n=0;for(const c of cs)n+=c.length;const o=new Uint8Array(n);let p=0;for(const c of cs){o.set(c,p);p+=c.length}return o};
+const ediPump=async(stream,u8)=>{const w=stream.writable.getWriter();w.write(u8);w.close();const out=[];const r=stream.readable.getReader();for(;;){const{done,value}=await r.read();if(done)break;out.push(value)}return ediCat(out)};
+const ediDeflate=u8=>ediPump(new CompressionStream('deflate-raw'),u8);
+const ediInflate=u8=>ediPump(new DecompressionStream('deflate-raw'),u8);
+const ediAB=buf=>buf instanceof ArrayBuffer?buf:buf.buffer.slice(buf.byteOffset,buf.byteOffset+buf.byteLength);
+function ediZipParse(buf){buf=ediAB(buf);const dv=new DataView(buf),u8=new Uint8Array(buf);let e=-1;
+  for(let i=u8.length-22;i>=Math.max(0,u8.length-66000);i--)if(u8[i]===0x50&&u8[i+1]===0x4b&&u8[i+2]===0x05&&u8[i+3]===0x06){e=i;break}
+  if(e<0)throw new Error('modèle DGI illisible');
+  const count=dv.getUint16(e+10,true);let off=dv.getUint32(e+16,true);const es=[];
+  for(let i=0;i<count;i++){const nl=dv.getUint16(off+28,true),el=dv.getUint16(off+30,true),cl=dv.getUint16(off+32,true);
+    es.push({name:new TextDecoder().decode(u8.subarray(off+46,off+46+nl)),flags:dv.getUint16(off+8,true),method:dv.getUint16(off+10,true),crc:dv.getUint32(off+16,true),cs:dv.getUint32(off+20,true),us:dv.getUint32(off+24,true),lho:dv.getUint32(off+42,true),cdOff:off,cdEl:el,cdCl:cl,extAttrs:dv.getUint32(off+38,true),verMade:dv.getUint16(off+4,true),verNeed:dv.getUint16(off+6,true),time:dv.getUint16(off+12,true),date:dv.getUint16(off+14,true)});
+    off+=46+nl+el+cl}
+  return es}
+function ediZipLocal(u8,en){const dv=new DataView(u8.buffer,u8.byteOffset,u8.byteLength);const nl=dv.getUint16(en.lho+26,true),lel=dv.getUint16(en.lho+28,true);return{dataStart:en.lho+30+nl+lel,localExtra:u8.subarray(en.lho+30+nl,en.lho+30+nl+lel),verNeed:dv.getUint16(en.lho+4,true)}}
+async function ediZipRead(buf,entry){const es=ediZipParse(buf);const en=es.find(x=>x.name===entry);if(!en)throw new Error(entry+' introuvable dans le modèle DGI');
+  const u8=new Uint8Array(ediAB(buf));const loc=ediZipLocal(u8,en);const raw=u8.subarray(loc.dataStart,loc.dataStart+en.cs);
+  return new TextDecoder().decode(en.method===0?raw:await ediInflate(raw))}
+async function ediZipReplace(buf,entry,xmlText){const es=ediZipParse(buf);const u8=new Uint8Array(ediAB(buf));const enc=new TextEncoder();
+  const nu=enc.encode(xmlText);const nd=await ediDeflate(nu);const nc=ediCrc(nu);
+  const parts=[],cds=[];let pos=0;
+  for(const en of es){const loc=ediZipLocal(u8,en);const isT=en.name===entry;const data=isT?nd:u8.subarray(loc.dataStart,loc.dataStart+en.cs);
+    const nm=enc.encode(en.name);const lh=new Uint8Array(30+nm.length+loc.localExtra.length);const ld=new DataView(lh.buffer);
+    ld.setUint32(0,0x04034b50,true);ld.setUint16(4,loc.verNeed,true);ld.setUint16(6,en.flags&0xFFF7,true);ld.setUint16(8,isT?8:en.method,true);
+    ld.setUint16(10,en.time,true);ld.setUint16(12,en.date,true);ld.setUint32(14,isT?nc:en.crc,true);ld.setUint32(18,isT?nd.length:en.cs,true);ld.setUint32(22,isT?nu.length:en.us,true);
+    ld.setUint16(26,nm.length,true);ld.setUint16(28,loc.localExtra.length,true);
+    lh.set(nm,30);lh.set(loc.localExtra,30+nm.length);
+    const myOff=pos;parts.push(lh,data);pos+=lh.length+data.length;
+    const cr=new Uint8Array(46+nm.length+en.cdEl+en.cdCl);const cdd=new DataView(cr.buffer);
+    cdd.setUint32(0,0x02014b50,true);cdd.setUint16(4,en.verMade,true);cdd.setUint16(6,en.verNeed,true);cdd.setUint16(8,en.flags&0xFFF7,true);cdd.setUint16(10,isT?8:en.method,true);
+    cdd.setUint16(12,en.time,true);cdd.setUint16(14,en.date,true);cdd.setUint32(16,isT?nc:en.crc,true);cdd.setUint32(20,isT?nd.length:en.cs,true);cdd.setUint32(24,isT?nu.length:en.us,true);
+    cdd.setUint16(28,nm.length,true);cdd.setUint16(30,en.cdEl,true);cdd.setUint16(32,en.cdCl,true);cdd.setUint32(38,en.extAttrs,true);cdd.setUint32(42,myOff,true);
+    cr.set(nm,46);cr.set(u8.subarray(en.cdOff+46+nm.length,en.cdOff+46+nm.length+en.cdEl),46+nm.length);
+    if(en.cdCl)cr.set(u8.subarray(en.cdOff+46+nm.length+en.cdEl,en.cdOff+46+nm.length+en.cdEl+en.cdCl),46+nm.length+en.cdEl);
+    cds.push(cr)}
+  let cdSize=0;for(const c of cds)cdSize+=c.length;
+  const eo=new Uint8Array(22);const ed=new DataView(eo.buffer);
+  ed.setUint32(0,0x06054b50,true);ed.setUint16(8,es.length,true);ed.setUint16(10,es.length,true);ed.setUint32(12,cdSize,true);ed.setUint32(16,pos,true);
+  return ediCat(parts.concat(cds).concat([eo]))}
+async function ediTpl(file){let buf=null;
+  try{const C=globalThis.caches;if(C){const ca=await C.open('dgi-modeles-v1');const r=await ca.match(file);if(r)buf=await r.arrayBuffer()}}catch(e){}
+  if(!buf){if(typeof fetch!=='function')throw new Error('Modèle DGI non disponible hors ligne — connectez-vous une fois à internet (ensuite il restera en mémoire)');
+    const r=await fetch(file);if(!r.ok)throw new Error('Modèle DGI introuvable sur le serveur ('+r.status+')');
+    buf=await r.arrayBuffer();
+    try{const C=globalThis.caches;if(C){const ca=await C.open('dgi-modeles-v1');await ca.put(file,new Response(buf))}}catch(e){}}
+  return buf}
+const ediCellEsc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function ediSetCell(xml,ref,val){const m=xml.match(new RegExp('<c r="'+ref+'"([^>]*?)(/>|>[\\s\\S]*?</c>)'));
+  if(!m)return xml;
+  if(m[2][0]==='>'&&m[2].indexOf('<f')>=0)return xml;
+  const sp=m[1].match(/s="(\d+)"/);const sa=sp?' s="'+sp[1]+'"':'';
+  let c;
+  if(val===null||val==='')c='<c r="'+ref+'"'+sa+'/>';
+  else if(typeof val==='number')c='<c r="'+ref+'"'+sa+'><v>'+val+'</v></c>';
+  else c='<c r="'+ref+'"'+sa+' t="inlineStr"><is><t>'+ediCellEsc(val)+'</t></is></c>';
+  return xml.replace(m[0],c)}
+function ediInjectRow(xml,r,data){const m=xml.match(new RegExp('<row r="'+r+'"[^>]*>[\\s\\S]*?</row>'));
+  if(!m)throw new Error('ligne '+r+' absente du modèle DGI');
+  let row=m[0];
+  for(const col in data){const v=data[col];if(v==null||v==='')continue;
+    const cm=row.match(new RegExp('<c r="'+col+r+'"([^>]*?)(/>|>[\\s\\S]*?</c>)'));
+    if(cm&&cm[2][0]==='>'&&cm[2].indexOf('<f')>=0)continue;
+    const sp=cm?cm[1].match(/s="(\d+)"/):null;const sa=sp?' s="'+sp[1]+'"':'';
+    const c=typeof v==='number'?'<c r="'+col+r+'"'+sa+'><v>'+v+'</v></c>':'<c r="'+col+r+'"'+sa+' t="inlineStr"><is><t>'+ediCellEsc(v)+'</t></is></c>';
+    if(cm)row=row.replace(cm[0],c);
+    else{const an=row.match(new RegExp('<c r="[S-Z]'+r+'"'));
+      if(an)row=row.slice(0,an.index)+c+row.slice(an.index);else row=row.replace('</row>',c+'</row>')}}
+  return xml.replace(m[0],row)}
+App.ediITSXl=async period=>{period=period||S.payPeriod||monthISO();
   const F=SETS.fiscal||{};
   if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire','bad');
+  if(typeof CompressionStream==='undefined')return toast('Votre navigateur ne gère pas la génération du fichier DGI — mettez-le à jour (Chrome/Edge récent)','bad');
   const runs=await DB.list('pay_runs',{eq:{period:period}});
   const run=runs.filter(r=>r.status==='closed')[0];
   if(!run)return toast('Aucune paie clôturée pour '+monthLabel(period)+' — générez puis clôturez la paie d\'abord','bad');
   const slips=await DB.list('pay_slips',{eq:{run_id:run.id}});
   if(!slips.length)return toast('Aucun bulletin pour cette période','bad');
-  const emps=await DB.list('employees');
-  const empOf=id=>emps.filter(x=>x.id===id)[0]||{};
+  const emps=await DB.list('employees');const empOf=id=>emps.filter(x=>x.id===id)[0]||{};
   const [yy,mm]=period.split('-');
-  const R=[];R[3]=['','','','','','','ITS'];R[5]=['','','','','','','Impôts sur les traitements et salaires - secteur privé'];
-  R[7]=['','','','NCC :','','','',F.ncc];R[9]=['','','','Exercice :','','','',Number(yy)];
-  R[11]=['','','',"Mois d'imposition :",'','','',EDI_MOIS[Number(mm)-1]];
-  R[13]=['','#','N° CNPS','Nom et prénoms','Type de travailleur','Emploi ou Qualité','Code Emploi','Régime Général G ou Agricole A','Sexe','Nationalité','Local/Expatrié','Situation de famille la plus favorable (au 1er janvier ou au 31 décembre)','','Nombre de parts',"Nombre de jours d'application des paiements",'Montant des salaires et rémunérations accessoires','Montant des avantages en nature suivant barème réglementaire','Montant des avantages en nature selon valeur réelle','Rémuneration total brut','Révenus non imposables','Rémunération brut imposable',"Réduction d'impôt pour charges de famille (RICF)",'ITS Salariés','',"Indemnités pour frais d'emploi considérées comme exonérées",''];
-  R[14]=['','','','','','','','','','','','Etat civil',"Nombre d'enfants à charge",'','','','','','','','','','Brut','Net','Montant','Désignation'];
+  try{toast('⏳ Génération du fichier DGI officiel (logos, calculs, macro)…');
+  const buf=await ediTpl('dgi-ITS.xlsm');
+  let xml=await ediZipRead(buf,'xl/worksheets/sheet2.xml');
+  xml=ediSetCell(xml,'G8',F.ncc);xml=ediSetCell(xml,'G10',Number(yy));xml=ediSetCell(xml,'G12',EDI_MOIS[Number(mm)-1]);
   let n=0,sansCnps=0;
   slips.forEach(s=>{const e=empOf(s.employee_id);
-    if(!e.cnps){sansCnps++;return;}
-    n++;R[14+n]=['',n,String(e.cnps),EDI_DEACC(s.employee_name),'Salarié',EDI_DEACC(s.position||e.position),e.code_emploi||EDI_CE[e.position]||'EQ',e.regime||'G',e.sexe||'M',e.nationalite||'I',e.loc_exp||'L',e.situation||'C',Number(e.enfants)||0,Number(e.tax_shares!=null?e.tax_shares:2)||2,30,Math.round(Number(s.brut_ap||0)),0,Math.round(Number(s.housing||0)),Math.round(Number(s.brut_ap||0)+Number(s.housing||0)),Math.round(Number(s.transport_exo||0)),Math.round(Number(s.taxable||0)),Math.round(Number(s.ricf||0)),Math.round(Number(s.its_gross||0)),Math.round(Number(s.its||0)),Math.round(Number(s.transport_exo||0)),s.transport_exo?'TRANSPORT':''];});
+    if(!e.cnps){sansCnps++;return}
+    n++;
+    xml=ediInjectRow(xml,16+n,{B:n,C:String(e.cnps),D:EDI_DEACC(s.employee_name),E:'Salarié',F:EDI_DEACC(s.position||e.position),G:e.code_emploi||EDI_CE[e.position]||'EQ',H:e.regime||'G',
+      I:e.sexe||'M',J:e.nationalite||'I',K:e.loc_exp||'L',L:e.situation||'C',M:Number(e.enfants)||0,N:Number(e.tax_shares)||2,O:30,
+      P:Math.round(Number(s.brut_ap)||0),Q:0,R:0,T:0,Y:0,AA:Math.round(Number(s.transport_exo)||0),AB:Number(s.transport_exo)?'TRANSPORT':''})});
   if(!n)return toast('Aucun salarié avec n° CNPS renseigné — complétez les fiches employés (champ N° CNPS)','bad');
-  for(let i=0;i<=14+n;i++)if(!R[i])R[i]=[];
-  makeXlsx([{name:'SAISIE',rows:R,widths:[4,14,32,14,24,10,12,6,12,12,10,10,8,12,16,18,18,16,14,16,14,12,12,12,14]},
-    {name:"MODE D'EMPLOI",rows:EDI_MODE_EMPLOI,widths:[110]}],'DGI_Saisie_Etat301_'+period+'.xlsx');
-  toast('📄 Feuille SAISIE État 301 ('+n+' salariés'+(sansCnps?' · ⚠ '+sansCnps+' sans n° CNPS ignoré(s)':'')+') — collez-la dans votre fichier DGI officiel dès la ligne 16, puis bouton « Génération du XML »','ok');};
-App.ediTVADgiSheet=async period=>{period=period||S.expPeriod||monthISO();
+  const out=await ediZipReplace(buf,'xl/worksheets/sheet2.xml',xml);
+  download('DGI_Etat301_'+period+'.xlsm',new Blob([out],{type:'application/vnd.ms-excel.sheet.macroEnabled.12'}));
+  toast('📊 Fichier DGI État 301 généré ('+n+' salariés'+(sansCnps?' · ⚠ '+sansCnps+' sans n° CNPS ignoré(s)':'')+') — le fichier officiel DGI avec logos, formules et macro : vérifiez la feuille SAISIE puis cliquez le bouton orange « Génération du XML »','ok');
+  }catch(err){toast('Génération DGI impossible : '+err.message,'bad')}};
+App.ediTVAXl=async period=>{period=period||S.expPeriod||monthISO();
   const F=SETS.fiscal||{};
   if(!F.ncc)return toast('Renseignez votre NCC (n° de compte contribuable) dans Réglages → Fiscalité — obligatoire','bad');
+  if(typeof CompressionStream==='undefined')return toast('Votre navigateur ne gère pas la génération du fichier DGI — mettez-le à jour (Chrome/Edge récent)','bad');
   const achats=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===period&&a.amount).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
   const [yy,mm]=period.split('-');
-  const R=[];R[5]=['','','','Code Impôt :','TVA'];R[7]=['','','','Libellé impôt :','Taxe sur la valeur ajoutée (hors CME/DGE)'];
-  R[9]=['','','','NCC :',F.ncc];R[11]=['','','',"Année d'imposition :",Number(yy)];R[13]=['','','',"Mois d'imposition :",EDI_MOIS[Number(mm)-1]];
-  R[16]=['',"TYPE D'OPERATION (OUVRANT DROIT A REDUCTION)",'SPECIFICATION',"DATE DE LA FACTURE OU DE L'IMPORTATION",'FOURNISSEUR','','',"REFERENCE DE LA FACTURE NORMALISEE OU N° DE LA DECLARATION",'NATURE DES BIENS OU SERVICES (OUVRANT DROIT A REDUCTION)','DATE DE REGLEMENT','MONTANT','','MONTANT DE LA TVA','TYPE DE REDEVABLE','PRORATA DE DEDUCTION','MONTANT DE LA TAXE DEDUCTIBLE'];
-  R[17]=['','','','','RAISON SOCIALE','NCC ',"PAYS D'ORIGINE",'','','','MONTANT HT','VALEUR EN DOUANE (4)'];
+  try{toast('⏳ Génération du fichier DGI officiel (logos, calculs, macro)…');
+  const buf=await ediTpl('dgi-tva.xlsm');
+  let xml=await ediZipRead(buf,'xl/worksheets/sheet2.xml');
+  xml=ediSetCell(xml,'D10',F.ncc);xml=ediSetCell(xml,'D12',Number(yy));xml=ediSetCell(xml,'D14',EDI_MOIS[Number(mm)-1]);
   achats.forEach((a,i)=>{let ht=Math.round(Number(a.amount)),tva=0;
-    if(F.tva){ht=Math.round(Number(a.amount)/1.18);tva=Math.round(Number(a.amount))-ht;}
-    R[19+i]=['','Achats_locaux','Achats de marchandises et matières prémières locales',EDI_XLDATE(a.date),a.supplier||'',a.ncc_suppl||'','',String(a.id||'').slice(-6),a.note||'',(a.pay_method&&a.pay_method!=='later')?EDI_XLDATE(a.date):'',ht,'',tva,'REDEVABLE TOTAL',1,tva];});
-  for(let i=0;i<19+achats.length;i++)if(!R[i])R[i]=[];
-  makeXlsx([{name:'DETAIL_TVA_S',rows:R,widths:[4,26,38,14,30,14,12,22,34,12,14,14,14,16,12,16]},
-    {name:"MODE D'EMPLOI",rows:EDI_MODE_EMPLOI,widths:[110]}],'DGI_Detail_TVA_'+period+'.xlsx');
-  toast('📄 Feuille DETAIL_TVA_S ('+achats.length+' opération(s)) — collez-la dans votre fichier DGI officiel dès la ligne 20, puis bouton « Génération du XML »','ok');};
+    if(F.tva){ht=Math.round(Number(a.amount)/1.18);tva=Math.round(Number(a.amount))-ht}
+    xml=ediInjectRow(xml,20+i,{B:'Achats_locaux',C:'Achats de marchandises et matières prémières locales',
+      E:EDI_DEACC(a.supplier||''),F:a.ncc_suppl||'',G:'',H:String(a.id||'').slice(-6),I:EDI_DEACC(a.note||''),
+      J:EDI_XLDATE(a.date),K:ht,L:'',M:tva,N:'REDEVABLE TOTAL',O:1})});
+  const out=await ediZipReplace(buf,'xl/worksheets/sheet2.xml',xml);
+  download('DGI_TVA_'+period+'.xlsm',new Blob([out],{type:'application/vnd.ms-excel.sheet.macroEnabled.12'}));
+  toast('📊 Fichier DGI Annexe TVA généré ('+achats.length+' opération(s)) — le fichier officiel DGI avec logos, formules et macro : complétez si besoin puis bouton orange « Génération du XML »','ok');
+  }catch(err){toast('Génération DGI impossible : '+err.message,'bad')}};
 App.expVentes=async()=>{
   const{from,to}=App.expFilterRange();
   const sales=(await DB.list('sales')).filter(s=>(!from||s.date>=from)&&(!to||s.date<=to)).sort((a,b)=>(a.date||'').localeCompare(b.date||''));

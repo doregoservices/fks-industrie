@@ -94,47 +94,62 @@ const h=$('#main').innerHTML;
 if(h.indexOf('XML e-Impôts — État 301 (EDI)')<0||h.indexOf('XML e-Impôts — Annexe TVA (EDI)')<0)throw new Error('boutons XML e-Impôts absents');
 console.log('✓ Écran Exports : boutons 📋 XML e-Impôts présents');
 
-/* 7 · feuille SAISIE DGI — réplique conforme à coller dans le classeur officiel (État 301) */
-const _mk2=makeXlsx;let capD=null;makeXlsx=(sheets,fname)=>{capD={sheets,fname};};
-await App.ediITSDgiSheet(per);
-if(!capD||capD.fname!=='DGI_Saisie_Etat301_'+per+'.xlsx')throw new Error('nom fichier SAISIE DGI: '+(capD&&capD.fname));
-const SI=capD.sheets[0];
-if(SI.name!=='SAISIE')throw new Error('la feuille doit s appeler SAISIE comme le fichier DGI');
-if(!capD.sheets[1]||capD.sheets[1].name.indexOf('MODE D')<0)throw new Error('feuille MODE D EMPLOI absente');
-const c=(r,i)=>(SI.rows[r-1]||[])[i];
-if(c(4,6)!=='ITS'||c(8,7)!=='1900000X'||String(c(10,7))!==yy||c(12,7)!=='Septembre')throw new Error('tête DGI (code impôt/NCC/exercice/mois) incorrecte');
-if(c(14,1)!=='#'||c(14,2)!=='N° CNPS'||c(14,3)!=='Nom et prénoms'||c(14,22)!=='ITS Salariés')throw new Error('en-têtes ligne 14 non conformes au DGI');
-if(c(15,11)!=='Etat civil'||c(15,22)!=='Brut'||c(15,23)!=='Net'||c(15,25)!=='Désignation')throw new Error('sous-en-têtes ligne 15 non conformes au DGI');
-const l16=SI.rows[15];
-if(l16[1]!==1||l16[2]!=='188021640501'||l16[3]!=='BAKARY TRAORE'||l16[4]!=='Salarié'||l16[5]!=='TORREFACTEUR'||l16[6]!=='EQ')throw new Error('ligne 16 (Bakary) incorrecte : '+JSON.stringify(l16.slice(0,8)));
-if(l16[14]!==30||l16[15]!==150000||l16[20]!==150000||l16[21]!==11000||l16[22]!==12000||l16[23]!==1000||l16[24]!==10000||l16[25]!=='TRANSPORT')throw new Error('montants ligne 16 incorrects : '+JSON.stringify(l16.slice(14)));
-if(SI.rows.length!==20)throw new Error('attendu 5 salariés (lignes 16-20), obtenu '+(SI.rows.length-15));
-console.log('✓ Saisie DGI État 301 : feuille SAISIE réplique conforme (tête NCC/exercice/mois, en-têtes lignes 14-15, données dès ligne 16, montants P/V/W/X/Y/Z) + MODE D\'EMPLOI de collage');
+/* 7 · fichier DGI OFFICIEL État 301 — logos, formules, macro (chirurgie ZIP) */
+const fs7=require('fs');
+const _f7=global.fetch;
+global.fetch=async u=>new Response(fs7.readFileSync(String(u).indexOf('tva')>=0?'/home/user/usine-cafe/dgi-tva.xlsm':'/home/user/usine-cafe/dgi-ITS.xlsm'));
+const caps7={};const _dl7=download;download=(n,b)=>{caps7[n]=b;};
+await App.ediITSXl(per);
+download=_dl7;global.fetch=_f7;
+const nmITS=Object.keys(caps7).filter(k=>k==='DGI_Etat301_'+per+'.xlsm')[0];
+if(!nmITS)throw new Error('fichier DGI_Etat301 non téléchargé: '+JSON.stringify(Object.keys(caps7)));
+const u8ITS=new Uint8Array(await caps7[nmITS].arrayBuffer());
+if(u8ITS[0]!==0x50||u8ITS[1]!==0x4b)throw new Error('le fichier généré n est pas un classeur Excel');
+const binITS=Buffer.from(u8ITS);
+for(const entry of ['xl/vbaProject.bin','xl/media/image1.png','xl/media/image2.png','xl/worksheets/sheet2.xml','xl/worksheets/sheet3.xml'])
+  if(binITS.indexOf(Buffer.from(entry))<0)throw new Error(entry+' absent du fichier DGI généré (logos/macro perdus)');
+const xmlITS=await ediZipRead(u8ITS,'xl/worksheets/sheet2.xml');
+if(xmlITS.indexOf('1900000X')<0)throw new Error('NCC absent (G8)');
+if(!new RegExp('<c r="G10"[^>]*><v>'+yy+'</v>').test(xmlITS))throw new Error('exercice absent (G10)');
+if(xmlITS.indexOf('Septembre')<0)throw new Error('mois absent (G12)');
+if(xmlITS.indexOf('BAKARY TRAORE')<0)throw new Error('salarié Bakary absent');
+if(xmlITS.indexOf('188021640501')<0)throw new Error('n° CNPS Bakary absent (colonne C)');
+if(xmlITS.indexOf('IF(U17=0,0,AJ17)')<0)throw new Error('formule officielle ITS (W17) perdue');
+if(xmlITS.indexOf('AK17')<0)throw new Error('formule officielle RICF (AK17) perdue');
+if(xmlITS.indexOf('TRANSPORT')<0)throw new Error('désignation indemnité (AB) absente');
+if(xmlITS.indexOf('SUM(P17:P15016)')<0)throw new Error('totaux officiels ligne 16 perdus');
+const mSet=new Set([].concat([...xmlITS.matchAll(/<f t="shared"[^>]*si="(\d+)"[^>]*ref=/g)].map(m=>m[1]),[...xmlITS.matchAll(/<f t="shared" ref="[^"]+"[^>]*si="(\d+)"/g)].map(m=>m[1])));
+const orph=[...new Set([...xmlITS.matchAll(/<f t="shared" si="(\d+)"\/>/g)].map(m=>m[1]))].filter(si=>!mSet.has(si));
+if(orph.length)throw new Error('formules partagées orphelines (fichier corrompu pour Excel): '+orph.join(','));
+console.log('✓ Fichier DGI État 301 officiel généré par l app : vrai classeur DGI (2 logos, macro vbaProject.bin, barème ITS/RICF, totaux ligne 16, TradXML) pré-rempli ('+nEmp+' salariés) — formules partagées intactes');
 
-/* 8 · feuille DETAIL_TVA_S DGI (à coller) */
-capD=null;
-await App.ediTVADgiSheet(per);
-if(!capD||capD.fname!=='DGI_Detail_TVA_'+per+'.xlsx')throw new Error('nom fichier TVA DGI: '+(capD&&capD.fname));
-const ST=capD.sheets[0];
-if(ST.name!=='DETAIL_TVA_S')throw new Error('la feuille doit s appeler DETAIL_TVA_S comme le fichier DGI');
-const t=(r,i)=>(ST.rows[r-1]||[])[i];
-if(t(6,4)!=='TVA'||t(10,4)!=='1900000X'||String(t(12,4))!==yy||t(14,4)!=='Septembre')throw new Error('tête DGI TVA incorrecte');
-if(String(t(17,1)).indexOf('TYPE D')<0||t(18,4)!=='RAISON SOCIALE'||t(18,10)!=='MONTANT HT')throw new Error('en-têtes TVA lignes 17-18 non conformes au DGI');
-const achatsPer=(await DB.list('purchases')).filter(a=>(a.date||'').slice(0,7)===per&&a.amount).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-if(ST.rows.length!==19+achatsPer.length)throw new Error('lignes TVA: attendu '+achatsPer.length+' opérations dès la ligne 20, obtenu '+(ST.rows.length-19));
-const l20=ST.rows[19];
-if(l20[1]!=='Achats_locaux'||l20[2]!=='Achats de marchandises et matières prémières locales')throw new Error('type/spécification officiels attendus');
-if(l20[3]!==EDI_XLDATE(achatsPer[0].date))throw new Error('date facture attendue en série Excel ('+EDI_XLDATE(achatsPer[0].date)+'), obtenu '+l20[3]);
-if(l20[4]!==achatsPer[0].supplier)throw new Error('fournisseur attendu: '+achatsPer[0].supplier);
-if(l20[13]!=='REDEVABLE TOTAL'||l20[14]!==1)throw new Error('redevable/prorata officiels attendus');
-const ligCC=ST.rows.filter(r=>r&&r[4]==='Café & Co (Abidjan)')[0];
-if(!ligCC||ligCC[5]!=='0175265N')throw new Error('achat Café & Co avec NCC fournisseur attendu dans la feuille — lignes: '+JSON.stringify(ST.rows.slice(19).map(r=>r&&r.slice(0,6))));
-if(ligCC[2]!=='Achats de marchandises et matières prémières locales'||ligCC[3]!==EDI_XLDATE(todayISO()))throw new Error('spécification/date de l achat incorrectes');
-console.log('✓ Saisie DGI Annexe TVA : feuille DETAIL_TVA_S réplique conforme (tête, en-têtes 17-18, données dès ligne 20, dates en série Excel, référentiels)');
+/* 8 · fichier DGI OFFICIEL Annexe TVA */
+const _f8=global.fetch;
+global.fetch=async u=>new Response(fs7.readFileSync('/home/user/usine-cafe/dgi-tva.xlsm'));
+const caps8={};download=(n,b)=>{caps8[n]=b;};
+await App.ediTVAXl(per);
+download=_dl7;global.fetch=_f8;
+const nmT=Object.keys(caps8).filter(k=>k==='DGI_TVA_'+per+'.xlsm')[0];
+if(!nmT)throw new Error('fichier DGI_TVA non téléchargé: '+JSON.stringify(Object.keys(caps8)));
+const u8T=new Uint8Array(await caps8[nmT].arrayBuffer());
+const binT=Buffer.from(u8T);
+if(binT[0]!==0x50||binT[1]!==0x4b)throw new Error('TVA: pas un classeur Excel');
+if(binT.indexOf(Buffer.from('xl/vbaProject.bin'))<0)throw new Error('macro absente du fichier TVA');
+if(binT.indexOf(Buffer.from('xl/media/image1.png'))<0)throw new Error('logos absents du fichier TVA');
+const xmlT=await ediZipRead(u8T,'xl/worksheets/sheet2.xml');
+if(xmlT.indexOf('1900000X')<0||xmlT.indexOf('Septembre')<0)throw new Error('tête TVA (NCC/mois) incorrecte');
+if(xmlT.indexOf('Achats_locaux')<0)throw new Error('type d opération officiel absent');
+if(xmlT.indexOf('COOPERATIVE DE MAN')<0)throw new Error('fournisseur (majuscules sans accents) absent');
+if(xmlT.indexOf('REDEVABLE TOTAL')<0)throw new Error('redevable officiel absent');
+if(xmlT.indexOf('J20')<0)throw new Error('formule officielle date (D20=+J20) perdue');
+if(xmlT.indexOf('M20*O20')<0)throw new Error('formule officielle TVA (P20=M20*O20) perdue');
+const mTSet=new Set([].concat([...xmlT.matchAll(/<f t="shared"[^>]*si="(\d+)"[^>]*ref=/g)].map(m=>m[1]),[...xmlT.matchAll(/<f t="shared" ref="[^"]+"[^>]*si="(\d+)"/g)].map(m=>m[1])));
+const orphT=[...new Set([...xmlT.matchAll(/<f t="shared" si="(\d+)"\/>/g)].map(m=>m[1]))].filter(si=>!mTSet.has(si));
+if(orphT.length)throw new Error('TVA: formules partagées orphelines: '+orphT.join(','));
+console.log('✓ Fichier DGI Annexe TVA officiel généré par l app : vrai classeur DGI (logos, macro, formules date/TVA) — tête '+yy+'/Septembre, fournisseurs pré-remplis');
 
 /* 9 · boutons */
-if(h.indexOf('Saisie DGI — État 301 (à coller)')<0||h.indexOf('Saisie DGI — Annexe TVA (à coller)')<0)throw new Error('boutons Saisie DGI absents de l écran Exports');
-makeXlsx=_mk2;
+if(h.indexOf('Fichier DGI — État 301 (officiel')<0||h.indexOf('Fichier DGI — Annexe TVA (officiel')<0)throw new Error('boutons Fichier DGI officiel absents de l écran Exports');
 
 /* 10 · fiche employé : nouveaux champs DGI (CNPS, sexe, nationalité, loc/exp, situation, enfants, code emploi) */
 $('#eN').value='TEST DGI';$('#eP').value='Comptable';$('#eM').value='';$('#eH').value=todayISO();$('#eS').value='monthly';$('#eB').value='200000';$('#eTr').value='0';$('#eHo').value='0';$('#eSh').value='3';$('#eZ').value='abidjan';
@@ -146,6 +161,6 @@ if(eDgi.cnps!=='199912345678'||eDgi.sexe!=='F'||eDgi.nationalite!=='AA'||eDgi.lo
 console.log('✓ Fiche employé : N° CNPS, sexe, nationalité, local/expatrié, situation, enfants, code emploi enregistrés');
 
 download=_dl;toast=_t;
-console.log('✓ Écran Exports : boutons « 📄 Saisie DGI (à coller) » aux côtés des XML directs');
-console.log('TEDI: TOUT PASSE — conformité stricte au générateur officiel DGI + feuilles à coller');
+console.log('✓ Écran Exports : boutons « 📊 Fichier DGI (officiel) » aux côtés des XML directs');
+console.log('TEDI: TOUT PASSE — conformité stricte au générateur officiel DGI + FICHIER DGI OFFICIEL (logos, formules, macro) généré par l app');
 })().catch(e=>{console.log('ECHEC TEDI:',e.message);process.exit(1);});
