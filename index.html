@@ -3694,7 +3694,7 @@ async function scParametres(){
   +fld('TVA applicable','<select id="fiTva"><option value="1"'+(F.tva?' selected':'')+'>Oui — répercussion et déclaration mensuelle</option><option value="0"'+(F.tva?'':' selected')+'>Non (par défaut)</option></select>')
   +fld('Taux TVA (%)','<input id="fiTvaR" type="number" step="0.1" inputmode="numeric" value="'+(F.tva_rate!=null?F.tva_rate:18)+'">')
   +fld('N° Identifiant Fiscal (NIF) — fichiers EDI DGI','<input id="fiNif" value="'+esc(F.nif||'')+'" placeholder="ex. 1943xxxX">')
-  +fld('N° de Compte Contribuable (NCC) — fichiers XML e-Impôts (EDI)','<input id="fiNcc" value="'+esc(F.ncc||'')+'" placeholder="ex : 1213017L — obligatoire pour l État 301 et l annexe TVA XML">')+'</div>'
+  +fld('N° de Compte Contribuable (NCC) — fichiers XML e-Impôts (EDI)','<input id="fiNcc" value="'+esc(F.ncc||'')+'" placeholder="ex : 1900000X — obligatoire pour l État 301 et l annexe TVA XML">')+'</div>'
   +'<div class="help" style="margin:6px 0 10px"><b>BIC</b> (bénéfice industriel et commercial) ou <b>TEE</b> (taxe forfaitaire d\'activité) : appliqué au compte d\'exploitation. La <b>TVA</b>, si applicable, calcule la déclaration mensuelle (collectée − déductible) et génère le fichier EDI <b>Annexe TVA</b> de la DGI (écran Exploitation). L\'EDI <b>Annexe ITS</b> (paie) se génère depuis l\'écran Paie.</div>'
   +'<button class="btn sm" onclick="App.saveFiscal()">Enregistrer la fiscalité</button>'
   +'<div class="hr"></div><h3>🔒 Accès</h3>'

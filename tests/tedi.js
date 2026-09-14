@@ -15,7 +15,7 @@ if(caps['Edi_Annexe_TVA_'+per+'.xml'])throw new Error('XML TVA généré sans NC
 console.log('✓ Sans NCC : les deux XML sont refusés avec le message « Renseignez votre NCC… »');
 
 /* 2 · NCC renseigné + paie clôturée → État 301 XML */
-await setSetting('fiscal',Object.assign({},SETS.fiscal,{ncc:'1213017L'}));
+await setSetting('fiscal',Object.assign({},SETS.fiscal,{ncc:'1900000X'}));
 location.hash='#/paie';S.route='paie';S.tab={paie:'run'};await render();
 await App.runGen(per);
 const run=(await DB.list('pay_runs',{eq:{period:per}})).filter(r=>r.status==='closed')[0]||(await DB.list('pay_runs'))[0];
@@ -25,7 +25,7 @@ const kI='Edi_Etat301_ITS_'+per+'.xml';
 if(!caps[kI])throw new Error('État 301 non généré');
 const xI=caps[kI].parts.join('');
 const ITS_CODES=['numero_cnps','identite','emploi_qualite','code_emploi','regime_general','sexe','nationalite','loc_exp','situation_famille','nbre_enfants_charge_nat_cas','nbre_parts_igr','nbre_jours_app_paiements','mnt_sala_remune_acs','mnt_avtgs_nat_reglm','mnt_avtgs_nat_reele','sal_ttl_brut','rev_non_imposable','rev_brut_imposable','ricf','its_sal_brut','its_sal_net','mnt_indemnites','designation_indemnites'];
-if(!xI.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>etat_301_mensuel</type><ncc>1213017L</ncc><codeTaxe>ITS</codeTaxe><mois>'+Number(mm)+'</mois><exercice>'+yy+'</exercice></informations>'))throw new Error('en-tête XML non conforme: '+xI.slice(0,180));
+if(!xI.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>etat_301_mensuel</type><ncc>1900000X</ncc><codeTaxe>ITS</codeTaxe><mois>'+Number(mm)+'</mois><exercice>'+yy+'</exercice></informations>'))throw new Error('en-tête XML non conforme: '+xI.slice(0,180));
 if(!xI.endsWith('</donnees></tableau></tableaux></EDI>'))throw new Error('pied XML non conforme');
 const lig=/<ligne>(?:(?!<ligne>).)*?Bakary Traoré.*?<\/ligne>/.exec(xI);
 if(!lig)throw new Error('Bakary absent de l État 301');
@@ -46,7 +46,7 @@ const kT='Edi_Annexe_TVA_'+per+'.xml';
 if(!caps[kT])throw new Error('Annexe TVA non générée');
 const xT=caps[kT].parts.join('');
 const TVA_CODES=['type_operation_odr','specification','date_facture','raison_sociale_fournisseur','ncc_fournisseur','pays_fournisseur','ref_facture','nature_bien_odr','date_reglement','montant_ht','montant_val_douane','montant_tva','type_redevable','prorata_deduction','montant_taxe_deductible'];
-if(!xT.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>TVA</type><ncc>1213017L</ncc><codeTaxe>TVA</codeTaxe>'))throw new Error('en-tête TVA non conforme');
+if(!xT.startsWith('<?xml version="1.0" encoding="UTF-8"?><EDI><informations><type>TVA</type><ncc>1900000X</ncc><codeTaxe>TVA</codeTaxe>'))throw new Error('en-tête TVA non conforme');
 const ligT=/<ligne>.*?<\/ligne>/.exec(xT);
 if(!ligT)throw new Error('annexe TVA vide');
 const codesT=(ligT[0].match(/<code>([^<]+)<\/code>/g)||[]).map(c=>c.slice(6,-7));
