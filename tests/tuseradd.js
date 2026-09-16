@@ -89,7 +89,7 @@ global.fetch=async(u,o)=>{const url=String(u);
 $('#lgEmail').value='awa@fks.ci';$('#lgPass').value='pass123';
 await App.login();
 if(!mod60||mod60.t.indexOf('non confirmé')<0)throw new Error('modal Email not confirmed absente : '+(mod60&&mod60.t));
-if(mod60.b.indexOf('Confirm email')<0||mod60.b.indexOf('Créer / recréer le login')<0)throw new Error('solution pas à pas absente du modal');
+if(mod60.b.indexOf('Users')<0||mod60.b.indexOf('Confirm')<0||mod60.b.indexOf('Confirm email')<0||mod60.b.indexOf('ne confirme PAS')<0)throw new Error('solution pas à pas absente du modal : '+mod60.b.slice(0,150));
 if($('#lgBtn').disabled)throw new Error('bouton connexion laissé bloqué');
 console.log('✓ v35.60 : e-mail non confirmé → message clair + solution (désactiver Confirm email + recréer le login), bouton débloqué');
 /* identifiants invalides → français */
@@ -123,5 +123,43 @@ await App.authCreate('neuf@fks.ci','fks123456','Neuf','caissier');
 if(!mod60||mod60.b.indexOf('actif immédiatement')<0||mod60.b.indexOf('Confirm email')<0)throw new Error('consigne renforcée absente : '+(mod60&&mod60.b.slice(0,80)));
 modal=_modal60;
 console.log('✓ v35.60 : login créé non confirmé → consigne complète (désactiver Confirm email puis 🔑 recréer — actif immédiatement)');
+
+/* 13 · v35.61 : 🔍 Diagnostiquer — dit exactement où le login en est (sans session) */
+CFG.mode='supabase';CFG.url='https://fake.supabase.co';CFG.anon='fakekey';
+S.user={name:'test',role:'manager'};/* gestionnaire connecté — le diagnostic ne doit JAMAIS l'écraser */
+if(!(SETS.users||[]).some(x=>x.email==='neuf@fks.ci')){const arr=(SETS.users||[]).slice();arr.push({name:'Neuf',role:'caissier',pin:'7777',email:'neuf@fks.ci'});await setSetting('users',arr);}
+const iN=(SETS.users||[]).findIndex(x=>x.email==='neuf@fks.ci');
+let mod61=null;const _m61=modal;modal=(t,b)=>{mod61={t:t,b:String(b)};};
+App.authModal(iN);$('#auP').value='fks123456';/* champ mot de passe du modal 🔑 */
+/* cas A : login actif */
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/token')>=0)return new Response(JSON.stringify({access_token:'ok'}),{status:200});
+  return new Response(JSON.stringify([]),{status:200});};
+await App.authDiag(iN);
+if(!mod61||mod61.t.indexOf('actif')<0)throw new Error('diag cas actif : '+(mod61&&mod61.t));
+if(mod61.b.indexOf('peut se connecter')<0)throw new Error('diag cas actif : message incomplet');
+console.log('✓ v35.61 : diagnostic « login actif » — connexion réussie, identifiants affichés');
+/* cas B : e-mail non confirmé → solution Authentication → Users → Confirm */
+App.authModal(iN);$('#auP').value='fks123456';/* rouvert : le diagnostic ferme le modal */
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/token')>=0)return new Response(JSON.stringify({error:'invalid_grant',error_description:'Email not confirmed'}),{status:400});
+  return new Response(JSON.stringify([]),{status:200});};
+await App.authDiag(iN);
+if(!mod61||mod61.t.indexOf('non confirmé')<0)throw new Error('diag cas non confirmé : '+(mod61&&mod61.t));
+if(mod61.b.indexOf('Users')<0||mod61.b.indexOf('Confirm')<0||mod61.b.indexOf('ne confirme PAS')<0)throw new Error('diag non confirmé : solution Users→Confirm absente');
+console.log('✓ v35.61 : diagnostic « e-mail non confirmé » → solution exacte (Authentication → Users → Confirm) avec avertissement que recréer ne suffit pas');
+/* cas C : confirmé mais autre mot de passe */
+App.authModal(iN);$('#auP').value='fks123456';
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/token')>=0)return new Response(JSON.stringify({error:'invalid_grant',error_description:'Invalid login credentials'}),{status:400});
+  return new Response(JSON.stringify([]),{status:200});};
+await App.authDiag(iN);
+if(!mod61||mod61.t.indexOf('autre mot de passe')<0)throw new Error('diag cas autre mot de passe : '+(mod61&&mod61.t));
+if(mod61.b.indexOf('confirmé')<0||mod61.b.indexOf('Delete user')<0)throw new Error('diag autre mot de passe : solution absente');
+console.log('✓ v35.61 : diagnostic « confirmé mais autre mot de passe » → explication + procédure de remise à neuf');
+/* la session du gestionnaire n\'a pas été touchée */
+if(!S.user||S.user.role!=='manager')throw new Error('diag : session gestionnaire écrasée !');
+modal=_m61;
+console.log('✓ v35.61 : diagnostic sans session — le gestionnaire reste connecté');
 console.log('TUSERADD: TOUT PASSE');
 })().catch(e=>{console.log('ECHEC TUSERADD:',e.message);process.exit(1);});
