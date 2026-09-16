@@ -75,5 +75,53 @@ if(String(SETS.admin_pin)!=='1234')throw new Error('PIN trop court accepté');
 $('#stPin').value='9876';await App.savePin();
 if(String(SETS.admin_pin)!=='9876')throw new Error('PIN valide refusé');
 console.log('✓ Anti-doublons : même e-mail ou même PIN refusés (jamais deux personnes sur un compte)');
+
+/* 10 · v35.60 : « Email not confirmed » → solution pas à pas (fini le refus brut) */
+let mod60=null;const _modal60=modal;modal=(t,b)=>{mod60={t:t,b:String(b)};};
+CFG.mode='supabase';CFG.url='https://fake.supabase.co';CFG.anon='fakekey';
+location.hash='#/login';S.route='login';S.user=null;await render();
+const htmlLogin=document.querySelector('#app').innerHTML;
+if(htmlLogin.indexOf('lgBtn')<0)throw new Error('écran connexion en ligne absent');
+if(htmlLogin.indexOf('mode local')<0)throw new Error('bouton « mode local » absent de l écran en ligne');
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/token')>=0)return new Response(JSON.stringify({error:'invalid_grant',error_description:'Email not confirmed'}),{status:400});
+  return new Response(JSON.stringify([]),{status:200});};
+$('#lgEmail').value='awa@fks.ci';$('#lgPass').value='pass123';
+await App.login();
+if(!mod60||mod60.t.indexOf('non confirmé')<0)throw new Error('modal Email not confirmed absente : '+(mod60&&mod60.t));
+if(mod60.b.indexOf('Confirm email')<0||mod60.b.indexOf('Créer / recréer le login')<0)throw new Error('solution pas à pas absente du modal');
+if($('#lgBtn').disabled)throw new Error('bouton connexion laissé bloqué');
+console.log('✓ v35.60 : e-mail non confirmé → message clair + solution (désactiver Confirm email + recréer le login), bouton débloqué');
+/* identifiants invalides → français */
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/token')>=0)return new Response(JSON.stringify({error:'invalid_grant',error_description:'Invalid login credentials'}),{status:400});
+  return new Response(JSON.stringify([]),{status:200});};
+let t60=null;const _t60=toast;toast=m=>{t60=m;};
+$('#lgEmail').value='x@fks.ci';$('#lgPass').value='mauvais';
+await App.login();
+if(t60!=='E-mail ou mot de passe incorrect')throw new Error('message identifiants : '+t60);
+toast=_t60;
+console.log('✓ v35.60 : identifiants invalides → message en français');
+
+/* 11 · v35.60 : mode local rétabli depuis l'écran en ligne */
+await App.goLocal();
+if(CFG.mode!=='local')throw new Error('goLocal : mode non basculé');
+await new Promise(r=>setTimeout(r,10));
+const htmlLocal=document.querySelector('#app').innerHTML;
+if(htmlLocal.indexOf('lgPin')<0)throw new Error('écran local (PIN) non affiché après bascule');
+if(htmlLocal.indexOf('Mode local')<0)throw new Error('indicateur Mode local absent');
+if(htmlLocal.indexOf('Connexion Supabase')<0)throw new Error('retour Supabase non proposé en mode local');
+console.log('✓ v35.60 : « 📱 Utiliser l app en mode local » depuis l écran en ligne — PIN + retour Supabase possibles');
+
+/* 12 · v35.60 : création non confirmée → consigne renforcée */
+CFG.mode='supabase';CFG.url='https://fake.supabase.co';CFG.anon='k';
+mod60=null;
+global.fetch=async(u,o)=>{const url=String(u);
+  if(url.indexOf('/auth/v1/signup')>=0)return new Response(JSON.stringify({user:{email:'neuf@fks.ci'}}),{status:200});
+  return new Response(JSON.stringify([]),{status:200});};
+await App.authCreate('neuf@fks.ci','fks123456','Neuf','caissier');
+if(!mod60||mod60.b.indexOf('actif immédiatement')<0||mod60.b.indexOf('Confirm email')<0)throw new Error('consigne renforcée absente : '+(mod60&&mod60.b.slice(0,80)));
+modal=_modal60;
+console.log('✓ v35.60 : login créé non confirmé → consigne complète (désactiver Confirm email puis 🔑 recréer — actif immédiatement)');
 console.log('TUSERADD: TOUT PASSE');
 })().catch(e=>{console.log('ECHEC TUSERADD:',e.message);process.exit(1);});
